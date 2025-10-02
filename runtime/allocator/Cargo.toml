@@ -1,0 +1,18 @@
+[package]
+name = "kaal-allocator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+log.workspace = true
+static_assertions.workspace = true
+
+# seL4 bindings
+sel4-sys.workspace = true
+sel4.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true

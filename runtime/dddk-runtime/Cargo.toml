@@ -1,0 +1,10 @@
+[package]
+name = "dddk-runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+cap-broker = { path = "../cap_broker" }
+thiserror.workspace = true

@@ -1,0 +1,148 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "start-qemu-x86",
+            "type": "shell",
+            "command": "qemu-system-x86_64",
+            "args": [
+                "-kernel", "${workspaceFolder}/target/x86_64-unknown-none/debug/kaal",
+                "-s", "-S",
+                "-nographic",
+                "-serial", "stdio"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$",
+                    "file": 1,
+                    "location": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "."
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "start-qemu-aarch64",
+            "type": "shell",
+            "command": "qemu-system-aarch64",
+            "args": [
+                "-machine", "virt",
+                "-cpu", "cortex-a57",
+                "-kernel", "${workspaceFolder}/target/aarch64-unknown-none/debug/kaal",
+                "-s", "-S",
+                "-nographic",
+                "-serial", "stdio"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$",
+                    "file": 1,
+                    "location": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "."
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "build-x86_64",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--target", "x86_64-unknown-none",
+                "--workspace"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "build-aarch64",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--target", "aarch64-unknown-none",
+                "--workspace"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "test-all",
+            "type": "cargo",
+            "command": "test",
+            "args": [
+                "--workspace",
+                "--all-features"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "clippy",
+            "type": "cargo",
+            "command": "clippy",
+            "args": [
+                "--workspace",
+                "--",
+                "-D", "warnings"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "format-check",
+            "type": "cargo",
+            "command": "fmt",
+            "args": [
+                "--workspace",
+                "--",
+                "--check"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "pre-commit",
+            "dependsOn": [
+                "test-all",
+                "clippy",
+                "format-check"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [],
+            "group": "build"
+        }
+    ]
+}

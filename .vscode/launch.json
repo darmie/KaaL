@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "Debug KaaL (x86_64 in QEMU)",
+            "targetCreateCommands": [
+                "target create ${workspaceFolder}/target/x86_64-unknown-none/debug/kaal"
+            ],
+            "processCreateCommands": [
+                "gdb-remote localhost:1234"
+            ],
+            "preLaunchTask": "start-qemu-x86"
+        },
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "Debug KaaL (AArch64 in QEMU)",
+            "targetCreateCommands": [
+                "target create ${workspaceFolder}/target/aarch64-unknown-none/debug/kaal"
+            ],
+            "processCreateCommands": [
+                "gdb-remote localhost:1234"
+            ],
+            "preLaunchTask": "start-qemu-aarch64"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Unit Tests (Native)",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--workspace"
+                ],
+                "filter": {
+                    "name": "kaal",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

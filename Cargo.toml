@@ -1,0 +1,60 @@
+[workspace]
+members = [
+    "runtime/cap_broker",
+    "runtime/ipc",
+    "runtime/allocator",
+    "runtime/dddk",
+    "runtime/dddk-runtime",
+    "components/vfs",
+    "components/posix",
+    "components/network",
+    "components/drivers",
+    "tools/sel4-compose",
+    "examples/serial-driver",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/kaal"
+
+[workspace.dependencies]
+# ⚠️ PHASE 1: Using MOCK seL4 implementations
+# TODO PHASE 2: Replace with real seL4 from https://github.com/seL4/rust-sel4
+sel4-sys = { path = "runtime/sel4-mock" }
+sel4 = { path = "runtime/sel4-rust-mock" }
+
+# Common dependencies
+thiserror = "2.0.17"
+log = "0.4"
+bitflags = "2.4"
+static_assertions = "1.1"
+
+# Async/concurrency
+crossbeam = "0.8"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+
+# Testing
+criterion = "0.7.0"
+
+[profile.dev]
+opt-level = 0
+debug = true
+panic = "abort"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+strip = true
+codegen-units = 1
+
+[profile.test]
+opt-level = 2
+debug = true

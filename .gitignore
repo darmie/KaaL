@@ -1,0 +1,115 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Coverage
+coverage/
+*.profraw
+*.profdata
+tarpaulin-report.html
+cobertura.xml
+
+# Benchmarks
+/target/criterion/
+/benches/target/
+
+# Flamegraphs
+flamegraph.svg
+perf.data*
+
+# QEMU
+qemu.log
+*.img
+*.iso
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.bin
+*.elf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# seL4 specific
+build/
+install/
+*.cmake
+CMakeCache.txt
+CMakeFiles/
+
+# Logs
+*.log
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Test artifacts
+test-results/
+*.test
+
+# Documentation build
+/book/
+/docs/_build/
+
+# Environment
+.env
+.env.local
+
+# Platform-specific build outputs
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Editors
+.vscode-server/
+.history/
+*.code-workspace
+
+# Cache
+.cache/
+
+
+.CLAUDE
