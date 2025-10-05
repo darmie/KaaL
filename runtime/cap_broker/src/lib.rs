@@ -38,11 +38,13 @@ mod bootinfo;
 mod mmio;
 mod irq;
 mod vspace;
+mod tcb;
 
 pub use bootinfo::{BootInfo, DeviceInfo, UntypedDescriptor};
 pub use mmio::{MmioMapper, PAGE_SIZE, align_up, align_down, pages_needed};
 pub use irq::{IrqHandlerImpl, IrqAllocator, IrqInfo};
 pub use vspace::VSpaceManager;
+pub use tcb::{TcbManager, TcbConfig, Priority, DEFAULT_PRIORITY, MAX_PRIORITY};
 
 use thiserror::Error;
 

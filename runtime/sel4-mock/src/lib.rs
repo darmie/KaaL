@@ -236,6 +236,93 @@ pub unsafe fn seL4_IRQHandler_Clear(_irq_handler: seL4_CPtr) -> seL4_Error {
     seL4_NoError
 }
 
+// ========== TCB Management ==========
+
+/// User context structure for register state (x86_64)
+#[cfg(target_arch = "x86_64")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct seL4_UserContext {
+    pub rip: u64,
+    pub rsp: u64,
+    pub rflags: u64,
+    pub rax: u64,
+    pub rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub rbp: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+    pub fs_base: u64,
+    pub gs_base: u64,
+}
+
+/// Mock TCB_SetSpace - configure TCB's CSpace and VSpace
+/// TODO PHASE 2: Replace with real seL4_TCB_SetSpace
+pub unsafe fn seL4_TCB_SetSpace(
+    _tcb: seL4_CPtr,
+    _fault_ep: seL4_CPtr,
+    _cspace_root: seL4_CPtr,
+    _cspace_root_data: seL4_Word,
+    _vspace_root: seL4_CPtr,
+    _vspace_root_data: seL4_Word,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_SetIPCBuffer - set IPC buffer for TCB
+/// TODO PHASE 2: Replace with real seL4_TCB_SetIPCBuffer
+pub unsafe fn seL4_TCB_SetIPCBuffer(
+    _tcb: seL4_CPtr,
+    _buffer_addr: seL4_Word,
+    _buffer_frame: seL4_CPtr,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_SetPriority - set TCB priority
+/// TODO PHASE 2: Replace with real seL4_TCB_SetPriority
+pub unsafe fn seL4_TCB_SetPriority(
+    _tcb: seL4_CPtr,
+    _authority: seL4_CPtr,
+    _priority: u8,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_WriteRegisters - write CPU registers for TCB
+/// TODO PHASE 2: Replace with real seL4_TCB_WriteRegisters
+#[cfg(target_arch = "x86_64")]
+pub unsafe fn seL4_TCB_WriteRegisters(
+    _tcb: seL4_CPtr,
+    _resume: seL4_Word,
+    _arch_flags: u8,
+    _count: usize,
+    _regs: *mut seL4_UserContext,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_Resume - start/resume TCB execution
+/// TODO PHASE 2: Replace with real seL4_TCB_Resume
+pub unsafe fn seL4_TCB_Resume(_tcb: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_Suspend - suspend TCB execution
+/// TODO PHASE 2: Replace with real seL4_TCB_Suspend
+pub unsafe fn seL4_TCB_Suspend(_tcb: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
