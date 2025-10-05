@@ -14,9 +14,12 @@ use crate::Result;
 // TODO PHASE 2: Import real seL4 bootinfo types
 // use sel4::BootInfo;
 
-/// Bootinfo structure (Phase 1 stub)
+/// Bootinfo structure (Phase 1 stub, Phase 2 enhanced)
 ///
-/// TODO PHASE 2: Replace with sel4::BootInfo
+/// This structure mirrors seL4's bootinfo layout with critical capabilities
+/// and memory regions needed for system initialization.
+///
+/// TODO PHASE 2: Replace with sel4::BootInfo when integrating real seL4 Rust bindings
 pub struct BootInfo {
     /// Range of empty CSlots available for allocation
     pub empty: SlotRegion,
@@ -32,6 +35,35 @@ pub struct BootInfo {
 
     /// Extra bootinfo (device tree, ACPI tables)
     pub extra_len: usize,
+
+    // ========== PHASE 2: Critical capability slots ==========
+    /// CSpace root capability slot (points to root task's capability space)
+    pub cspace_root: usize,
+
+    /// VSpace root capability slot (points to root task's page directory)
+    pub vspace_root: usize,
+
+    /// TCB (Thread Control Block) of initial thread
+    pub tcb: usize,
+
+    /// IRQ control capability
+    pub irq_control: usize,
+
+    /// ASID control capability (for address space management)
+    pub asid_control: usize,
+
+    /// ASID pool capability
+    pub asid_pool: usize,
+
+    /// IO port control capability (x86/x64 only)
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    pub io_port_control: Option<usize>,
+
+    /// IOSpace control capabilities (IOMMU management)
+    pub iospace: Vec<usize>,
+
+    /// Scheduling context (for MCS kernel)
+    pub sched_control: Option<usize>,
 }
 
 /// CSlot region [start, end)
@@ -88,6 +120,17 @@ impl BootInfo {
         // Phase 1: Return mock bootinfo
         // Phase 2: Replace with real seL4 call
 
+        // seL4 capability slot constants (from seL4 API)
+        // These are fixed by the seL4 kernel for the root task
+        const SEL4_CNODE: usize = 1;        // CSpace root
+        const SEL4_VSPACE: usize = 2;       // VSpace root (page directory)
+        const SEL4_TCB: usize = 3;          // Initial TCB
+        const SEL4_IRQ_CONTROL: usize = 4;  // IRQ control
+        const SEL4_ASID_CONTROL: usize = 5; // ASID control
+        const SEL4_ASID_POOL: usize = 6;    // ASID pool
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        const SEL4_IO_PORT_CONTROL: usize = 7; // IO port control (x86 only)
+
         Ok(Self {
             empty: SlotRegion {
                 start: 100,
@@ -110,6 +153,18 @@ impl BootInfo {
             device_untyped: vec![],
             user_image_frames: SlotRegion { start: 50, end: 60 },
             extra_len: 0,
+
+            // Critical capability slots
+            cspace_root: SEL4_CNODE,
+            vspace_root: SEL4_VSPACE,
+            tcb: SEL4_TCB,
+            irq_control: SEL4_IRQ_CONTROL,
+            asid_control: SEL4_ASID_CONTROL,
+            asid_pool: SEL4_ASID_POOL,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            io_port_control: Some(SEL4_IO_PORT_CONTROL),
+            iospace: vec![],
+            sched_control: None,
         })
     }
 

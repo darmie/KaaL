@@ -421,6 +421,12 @@ pub struct DefaultCapBroker {
 
     /// IRQ allocator for interrupt handling
     irq_allocator: irq::IrqAllocator,
+
+    /// CSpace root capability (from bootinfo)
+    cspace_root: CSlot,
+
+    /// VSpace root capability (from bootinfo)
+    vspace_root: CSlot,
 }
 
 impl DefaultCapBroker {
@@ -431,29 +437,26 @@ impl DefaultCapBroker {
     /// # Safety
     /// Must be called exactly once, in the root task context
     pub unsafe fn init() -> Result<Self> {
-        // TODO PHASE 2: Get bootinfo from seL4 kernel
-        // For Phase 1, we'll use hardcoded values
+        // PHASE 2: Get bootinfo from seL4 kernel
+        let bootinfo = BootInfo::get()?;
 
-        let cspace = CSpaceAllocator::new(100, 4096); // Reserve first 100 slots for kernel
+        // Initialize CSpace allocator using bootinfo's empty slot region
+        let cspace = CSpaceAllocator::new(
+            bootinfo.empty.start,
+            bootinfo.empty.end
+        );
 
-        // TODO PHASE 2: Parse bootinfo to get actual untyped regions
-        // For now, create mock untyped regions
-        let untyped_regions = vec![
-            UntypedRegion {
-                cap: 1,
-                base_paddr: 0x1000_0000,
-                size_bits: 20, // 1MB
+        // Parse untyped regions from bootinfo
+        let untyped_regions: Vec<UntypedRegion> = bootinfo.all_untyped()
+            .map(|ut| UntypedRegion {
+                cap: ut.cap,
+                base_paddr: ut.paddr,
+                size_bits: ut.size_bits as usize,
                 allocated: 0,
-            },
-            UntypedRegion {
-                cap: 2,
-                base_paddr: 0x2000_0000,
-                size_bits: 24, // 16MB
-                allocated: 0,
-            },
-        ];
+            })
+            .collect();
 
-        // TODO PHASE 2: Parse device tree or ACPI tables
+        // TODO PHASE 2: Parse device tree or ACPI tables from bootinfo.extra
         // For Phase 1, hardcode common devices
         let devices = vec![
             // Serial port (COM1)
@@ -477,9 +480,8 @@ impl DefaultCapBroker {
             },
         ];
 
-        // TODO PHASE 2: Get IRQ control capability from bootinfo
-        // For Phase 1, use mock IRQ control
-        let irq_control_cap = 5; // Mock capability slot
+        // Use IRQ control capability from bootinfo
+        let irq_control_cap = bootinfo.irq_control;
 
         Ok(Self {
             cspace,
@@ -487,6 +489,8 @@ impl DefaultCapBroker {
             devices,
             mmio_mapper: mmio::MmioMapper::new(0x8000_0000, 256 * 1024 * 1024), // 256MB MMIO region
             irq_allocator: irq::IrqAllocator::new(irq_control_cap),
+            cspace_root: bootinfo.cspace_root,
+            vspace_root: bootinfo.vspace_root,
         })
     }
 
@@ -542,8 +546,6 @@ impl CapabilityBroker for DefaultCapBroker {
         if mmio_size > 0 {
             // Get untyped cap for device memory region
             let untyped_cap = self.find_untyped_for_region(mmio_base, mmio_size)?;
-            let vspace_root = 2; // TODO PHASE 2: Get from bootinfo
-            let cspace_root = 1; // TODO PHASE 2: Get from bootinfo
 
             // Use MMIO mapper to map the device memory
             let region = self.mmio_mapper.map_region(
@@ -551,8 +553,8 @@ impl CapabilityBroker for DefaultCapBroker {
                 mmio_size,
                 &mut || self.cspace.allocate(),
                 untyped_cap,
-                vspace_root,
-                cspace_root,
+                self.vspace_root,
+                self.cspace_root,
             )?;
 
             mmio_regions.push(region);
@@ -615,10 +617,9 @@ impl CapabilityBroker for DefaultCapBroker {
         // Allocate capability slots for IRQ handler and notification
         let handler_cap = self.cspace.allocate()?;
         let notification_cap = self.cspace.allocate()?;
-        let cspace_root = 1; // TODO PHASE 2: Get from bootinfo
 
         // Use IRQ allocator to create the IRQ handler
-        let irq_impl = self.irq_allocator.allocate(irq, handler_cap, notification_cap, cspace_root)?;
+        let irq_impl = self.irq_allocator.allocate(irq, handler_cap, notification_cap, self.cspace_root)?;
 
         Ok(IrqHandler {
             _cap: irq_impl.irq_num() as u64,
