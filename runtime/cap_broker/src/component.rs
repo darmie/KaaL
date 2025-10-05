@@ -53,6 +53,9 @@ pub struct ComponentSpawner {
     /// CSpace root capability
     cspace_root: CSlot,
 
+    /// VSpace root capability
+    vspace_root: CSlot,
+
     /// List of spawned components
     components: Vec<ComponentInfo>,
 }
@@ -129,7 +132,7 @@ pub struct Component {
     notification: CSlot,
 
     /// Device resources (if any)
-    device_bundle: Option<DeviceBundle>,
+    pub(crate) device_bundle: Option<DeviceBundle>,
 }
 
 impl Component {
@@ -177,6 +180,7 @@ impl ComponentSpawner {
             tcb_manager: TcbManager::new(),
             vspace_manager: VSpaceManager::new(vspace_root, vaddr_base, vaddr_size),
             cspace_root,
+            vspace_root,
             components: Vec::new(),
         }
     }
@@ -320,14 +324,58 @@ impl ComponentSpawner {
             is_running: false,
         });
 
+        // 9. Allocate device if requested
+        // Note: Device allocation would be done by the capability broker
+        // We just track whether this component will have device access
+        let device_bundle = None; // TODO: Accept broker reference to allocate device
+
         // 10. Return component handle
         Ok(Component {
             name: config.name,
             tcb_cap,
             endpoint,
             notification,
-            device_bundle: None, // TODO: Allocate device if requested
+            device_bundle,
         })
+    }
+
+    /// Spawn a component with device access
+    ///
+    /// This is a higher-level method that integrates with the capability broker
+    /// to allocate both the component AND its device resources.
+    ///
+    /// # Arguments
+    /// * `config` - Component configuration (must have device specified)
+    /// * `cspace_allocator` - Function to allocate capability slots
+    /// * `untyped_cap` - Untyped memory for allocations
+    /// * `broker` - Capability broker for device allocation
+    ///
+    /// # Returns
+    /// Component handle with device bundle
+    ///
+    /// # Errors
+    /// Returns error if spawning or device allocation fails
+    pub fn spawn_component_with_device<F, B>(
+        &mut self,
+        config: ComponentConfig,
+        mut cspace_allocator: F,
+        untyped_cap: CSlot,
+        broker: &mut B,
+    ) -> Result<Component>
+    where
+        F: FnMut() -> Result<CSlot>,
+        B: crate::CapabilityBroker,
+    {
+        // First spawn the basic component
+        let mut component = self.spawn_component(config.clone(), &mut cspace_allocator, untyped_cap)?;
+
+        // Then allocate device if specified
+        if let Some(device_id) = config.device {
+            let device_bundle = broker.request_device(device_id)?;
+            component.device_bundle = Some(device_bundle);
+        }
+
+        Ok(component)
     }
 
     /// Start a spawned component

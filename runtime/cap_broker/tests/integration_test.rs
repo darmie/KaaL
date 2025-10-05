@@ -371,3 +371,161 @@ fn test_complete_system_workflow() {
 
     // System is now running with isolated components!
 }
+
+/// Test spawning a component with device access
+#[test]
+fn test_spawn_component_with_device() {
+    // Initialize capability broker
+    let mut broker = unsafe {
+        DefaultCapBroker::init().expect("Failed to init broker")
+    };
+
+    // Create component spawner
+    let mut spawner = ComponentSpawner::new(
+        1,  // cspace_root
+        2,  // vspace_root
+        0x4000_0000,
+        256 * 1024 * 1024,
+    );
+
+    // Configure component with device
+    let config = ComponentConfig {
+        name: "serial_driver",
+        entry_point: 0x400000,
+        stack_size: 64 * 1024,
+        priority: 150,
+        device: Some(DeviceId::Serial { port: 0 }),
+        fault_ep: None,
+    };
+
+    // Allocator
+    let mut next_slot = 100;
+    let mut allocator = || {
+        let slot = next_slot;
+        next_slot += 1;
+        Ok(slot)
+    };
+
+    // Spawn component with device
+    let component = spawner
+        .spawn_component_with_device(config, allocator, 10, &mut broker)
+        .expect("Failed to spawn component with device");
+
+    // Verify component has device bundle
+    assert!(component.device_bundle().is_some());
+
+    let device_bundle = component.device_bundle().unwrap();
+
+    // Verify device resources
+    // Serial port has IRQ 4
+    assert_eq!(device_bundle.irq.irq_num(), 4);
+
+    // Start the component
+    spawner
+        .start_component(&component)
+        .expect("Failed to start component");
+
+    assert_eq!(spawner.running_component_count(), 1);
+}
+
+/// Test full driver workflow: spawn with device, start, communicate
+#[test]
+fn test_full_driver_workflow() {
+    // This demonstrates the complete lifecycle of a hardware driver component
+
+    // 1. Initialize system
+    let mut broker = unsafe {
+        DefaultCapBroker::init().expect("Failed to init broker")
+    };
+
+    let mut spawner = ComponentSpawner::new(1, 2, 0x4000_0000, 512 * 1024 * 1024);
+
+    let mut next_slot = 100;
+    let mut allocator = || {
+        let slot = next_slot;
+        next_slot += 1;
+        Ok(slot)
+    };
+
+    // 2. Spawn serial driver
+    let serial_config = ComponentConfig {
+        name: "serial_driver",
+        entry_point: 0x400000,
+        stack_size: 64 * 1024,
+        priority: 150,
+        device: Some(DeviceId::Serial { port: 0 }),
+        fault_ep: None,
+    };
+
+    let serial_driver = spawner
+        .spawn_component_with_device(serial_config, &mut allocator, 10, &mut broker)
+        .expect("Failed to spawn serial driver");
+
+    // 3. Spawn network driver
+    let network_config = ComponentConfig {
+        name: "network_driver",
+        entry_point: 0x500000,
+        stack_size: 128 * 1024,
+        priority: 140,
+        device: Some(DeviceId::Pci {
+            vendor: 0x8086,
+            device: 0x100E,
+        }),
+        fault_ep: None,
+    };
+
+    let network_driver = spawner
+        .spawn_component_with_device(network_config, &mut allocator, 11, &mut broker)
+        .expect("Failed to spawn network driver");
+
+    // 4. Spawn filesystem (no device)
+    let fs_config = ComponentConfig {
+        name: "filesystem",
+        entry_point: 0x600000,
+        stack_size: 256 * 1024,
+        priority: 100,
+        device: None,
+        fault_ep: None,
+    };
+
+    let filesystem = spawner
+        .spawn_component(fs_config, &mut allocator, 12)
+        .expect("Failed to spawn filesystem");
+
+    // 5. Verify components
+    assert_eq!(spawner.component_count(), 3);
+
+    // Serial driver has device
+    assert!(serial_driver.device_bundle().is_some());
+    assert_eq!(serial_driver.device_bundle().unwrap().irq.irq_num(), 4);
+
+    // Network driver has device
+    assert!(network_driver.device_bundle().is_some());
+    assert_eq!(network_driver.device_bundle().unwrap().irq.irq_num(), 11);
+
+    // Filesystem has no device
+    assert!(filesystem.device_bundle().is_none());
+
+    // 6. Start all drivers
+    spawner.start_component(&serial_driver).unwrap();
+    spawner.start_component(&network_driver).unwrap();
+    spawner.start_component(&filesystem).unwrap();
+
+    assert_eq!(spawner.running_component_count(), 3);
+
+    // 7. IPC endpoints available for communication
+    let serial_ep = serial_driver.endpoint();
+    let network_ep = network_driver.endpoint();
+    let fs_ep = filesystem.endpoint();
+
+    // All components have unique endpoints
+    assert_ne!(serial_ep, network_ep);
+    assert_ne!(network_ep, fs_ep);
+    assert_ne!(serial_ep, fs_ep);
+
+    // System is fully operational with:
+    // - Isolated components
+    // - Device access
+    // - IPC endpoints
+    // - Running drivers
+}
