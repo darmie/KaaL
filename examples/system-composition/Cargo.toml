@@ -1,0 +1,20 @@
+[package]
+name = "system-composition"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core runtime
+cap-broker = { path = "../../runtime/cap_broker" }
+dddk-runtime = { path = "../../runtime/dddk-runtime" }
+kaal-ipc = { path = "../../runtime/ipc" }
+
+# Use this syntax for dependencies from workspace
+# (workspace dependencies configured in root Cargo.toml)
+log.workspace = true
+
+[[bin]]
+name = "system-composition"
+path = "src/main.rs"

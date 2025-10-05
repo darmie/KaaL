@@ -11,7 +11,7 @@ log.workspace = true
 bitflags.workspace = true
 static_assertions.workspace = true
 
-# seL4 bindings
+# seL4 bindings (currently mocks, will be real seL4 when workspace updated)
 sel4-sys.workspace = true
 sel4.workspace = true
 
@@ -20,4 +20,7 @@ criterion.workspace = true
 
 [features]
 default = []
+# Feature flag to enable seL4-specific code paths
+# Currently both default and sel4-real use same mock
+# When workspace is updated to real seL4, this will enable real syscalls
 sel4-real = []

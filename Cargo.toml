@@ -13,6 +13,7 @@ members = [
     "tools/sel4-compose",
     "examples/serial-driver",
     "examples/root-task-example",
+    "examples/system-composition",
 ]
 resolver = "2"
 
