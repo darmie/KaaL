@@ -39,12 +39,14 @@ mod mmio;
 mod irq;
 mod vspace;
 mod tcb;
+mod component;
 
 pub use bootinfo::{BootInfo, DeviceInfo, UntypedDescriptor};
 pub use mmio::{MmioMapper, PAGE_SIZE, align_up, align_down, pages_needed};
 pub use irq::{IrqHandlerImpl, IrqAllocator, IrqInfo};
 pub use vspace::VSpaceManager;
 pub use tcb::{TcbManager, TcbConfig, Priority, DEFAULT_PRIORITY, MAX_PRIORITY};
+pub use component::{ComponentSpawner, ComponentConfig, Component, DEFAULT_STACK_SIZE, IPC_BUFFER_SIZE};
 
 use thiserror::Error;
 
