@@ -47,7 +47,7 @@ impl Default for RootTaskConfig {
     fn default() -> Self {
         Self {
             heap_size: 4 * 1024 * 1024,      // 4MB heap
-            cspace_size: 4096,                // 4K capability slots
+            cspace_size: 4096,               // 4K capability slots
             vspace_size: 1024 * 1024 * 1024, // 1GB virtual address space
         }
     }
@@ -94,8 +94,7 @@ impl RootTask {
     /// - No other code has modified the initial state
     pub unsafe fn init(config: RootTaskConfig) -> Result<Self, RootTaskError> {
         // Step 1: Get bootinfo from seL4 kernel
-        let bootinfo = BootInfo::get()
-            .map_err(|_| RootTaskError::BootinfoFailed)?;
+        let bootinfo = BootInfo::get().map_err(|_| RootTaskError::BootinfoFailed)?;
 
         // Step 2: Validate bootinfo
         if bootinfo.empty.start >= bootinfo.empty.end {
@@ -103,8 +102,7 @@ impl RootTask {
         }
 
         // Step 3: Initialize capability broker
-        let broker = DefaultCapBroker::init()
-            .map_err(|_| RootTaskError::BrokerInitFailed)?;
+        let broker = DefaultCapBroker::init().map_err(|_| RootTaskError::BrokerInitFailed)?;
 
         Ok(Self {
             broker,
@@ -133,36 +131,59 @@ impl RootTask {
         &self.config
     }
 
-    /// Run the root task main loop
+    /// Run the root task with custom component initialization
     ///
-    /// This function never returns. It initializes system services and
-    /// enters an idle loop waiting for events.
-    pub fn run(mut self) -> ! {
-        // TODO PHASE 2: Initialize system services
-        // - VFS
-        // - Network stack
-        // - Device drivers
+    /// This is the **composable** way to build your KaaL system.
+    /// Pass a closure that spawns your components, and the system does the rest!
+    ///
+    /// # Getting Started
+    ///
+    /// 1. Define what components you want
+    /// 2. Pass a closure to spawn them
+    /// 3. KaaL handles the rest!
+    ///
+    /// # Example: Minimal System
+    /// ```no_run
+    /// let root = unsafe { RootTask::init(RootTaskConfig::default())? };
+    /// root.run_with(|broker| {
+    ///     // Spawn your components here
+    ///     spawn_hello_component(broker);
+    ///     spawn_my_driver(broker);
+    /// });
+    /// ```
+    ///
+    /// # Arguments
+    /// * `init_fn` - Closure that receives the capability broker and spawns components
+    pub fn run_with<F>(mut self, init_fn: F) -> !
+    where
+        F: FnOnce(&mut DefaultCapBroker),
+    {
+        // Call user's initialization function
+        init_fn(&mut self.broker);
 
-        // TODO PHASE 2: Spawn initial components
-        // - Serial driver
-        // - Network driver
-        // - Filesystem driver
-
-        // TODO PHASE 2: Enter idle loop
-        // For Phase 1, just loop forever
+        // Enter idle loop (wait for component events)
         loop {
             #[cfg(feature = "sel4-real")]
             unsafe {
-                // Wait for any notification
+                // Wait for any notification from components
                 sel4_sys::seL4_Yield();
             }
 
             #[cfg(not(feature = "sel4-real"))]
             {
-                // Phase 1: No-op loop
+                // Mock mode: idle loop
                 core::hint::spin_loop();
             }
         }
+    }
+
+    /// Run the root task with default (empty) initialization
+    ///
+    /// For systems that don't need any components initially.
+    pub fn run(self) -> ! {
+        self.run_with(|_| {
+            // No components - just idle
+        })
     }
 }
 
@@ -295,7 +316,10 @@ impl ComponentSpawner {
     ///
     /// The entry point must be a valid function pointer and the component
     /// must not violate memory safety.
-    pub unsafe fn spawn(&mut self, info: ComponentInfo) -> Result<sel4_sys::seL4_CPtr, RootTaskError> {
+    pub unsafe fn spawn(
+        &mut self,
+        info: ComponentInfo,
+    ) -> Result<sel4_sys::seL4_CPtr, RootTaskError> {
         // TODO PHASE 2: Allocate TCB capability
         let tcb_cap = self.cnode.allocate()?;
 

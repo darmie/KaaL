@@ -3,7 +3,7 @@
 //! This module demonstrates inter-component communication using
 //! the KaaL IPC layer (shared memory ring buffers + notifications).
 
-use kaal_ipc::{SharedRing, IpcError};
+use kaal_ipc::{IpcError, SharedRing};
 
 /// Demonstration of serial → filesystem communication
 ///
@@ -26,7 +26,7 @@ pub fn demonstrate_serial_to_fs_ipc() {
 
     for &byte in test_data {
         match ring.push(byte) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(IpcError::BufferFull { .. }) => {
                 println!("  ⚠️  Ring buffer full, waiting for consumer...");
                 break;
@@ -146,7 +146,10 @@ pub fn demonstrate_batch_ipc() {
 
     println!("  ✓ Consumer: Read {} items", count);
     println!("  ✓ Consumer: Sum = {}", sum);
-    println!("\n  💡 Performance: Single notification for {} items", count);
+    println!(
+        "\n  💡 Performance: Single notification for {} items",
+        count
+    );
     println!("  💡 Latency: <1μs per batch vs ~10μs per seL4_Call");
 }
 

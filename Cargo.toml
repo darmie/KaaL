@@ -14,6 +14,7 @@ members = [
     "examples/serial-driver",
     "examples/root-task-example",
     "examples/system-composition",
+    "examples/minimal-component",
 ]
 resolver = "2"
 
