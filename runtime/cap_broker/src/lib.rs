@@ -37,10 +37,12 @@ extern crate alloc as alloc_crate;
 mod bootinfo;
 mod mmio;
 mod irq;
+mod vspace;
 
 pub use bootinfo::{BootInfo, DeviceInfo, UntypedDescriptor};
 pub use mmio::{MmioMapper, PAGE_SIZE, align_up, align_down, pages_needed};
 pub use irq::{IrqHandlerImpl, IrqAllocator, IrqInfo};
+pub use vspace::VSpaceManager;
 
 use thiserror::Error;
 
