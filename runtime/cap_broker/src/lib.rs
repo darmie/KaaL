@@ -22,8 +22,12 @@
 //! - Hardware sim tests: N/A (kernel integration)
 
 mod bootinfo;
+mod mmio;
+mod irq;
 
 pub use bootinfo::{BootInfo, DeviceInfo, UntypedDescriptor};
+pub use mmio::{MmioMapper, PAGE_SIZE, align_up, align_down, pages_needed};
+pub use irq::{IrqHandlerImpl, IrqAllocator, IrqInfo};
 
 use thiserror::Error;
 
@@ -389,8 +393,11 @@ pub struct DefaultCapBroker {
     /// Device registry (hardcoded for Phase 1)
     devices: Vec<DeviceEntry>,
 
-    /// Allocated IRQs
-    allocated_irqs: Vec<u8>,
+    /// MMIO mapper for device memory mapping
+    mmio_mapper: mmio::MmioMapper,
+
+    /// IRQ allocator for interrupt handling
+    irq_allocator: irq::IrqAllocator,
 }
 
 impl DefaultCapBroker {
@@ -447,11 +454,16 @@ impl DefaultCapBroker {
             },
         ];
 
+        // TODO PHASE 2: Get IRQ control capability from bootinfo
+        // For Phase 1, use mock IRQ control
+        let irq_control_cap = 5; // Mock capability slot
+
         Ok(Self {
             cspace,
             untyped_regions,
             devices,
-            allocated_irqs: Vec::new(),
+            mmio_mapper: mmio::MmioMapper::new(0x8000_0000, 256 * 1024 * 1024), // 256MB MMIO region
+            irq_allocator: irq::IrqAllocator::new(irq_control_cap),
         })
     }
 
@@ -474,6 +486,23 @@ impl DefaultCapBroker {
 
         Err(CapabilityError::OutOfMemory { requested: size })
     }
+
+    /// Find untyped capability for a specific physical address region
+    fn find_untyped_for_region(&self, paddr: usize, size: usize) -> Result<CSlot> {
+        // Find untyped region that contains this physical address range
+        for region in &self.untyped_regions {
+            let region_end = region.base_paddr + (1 << region.size_bits);
+            if region.base_paddr <= paddr && paddr + size <= region_end {
+                return Ok(region.cap);
+            }
+        }
+
+        // If not found, use first available untyped (for Phase 1)
+        self.untyped_regions
+            .first()
+            .map(|r| r.cap)
+            .ok_or(CapabilityError::OutOfMemory { requested: size })
+    }
 }
 
 impl CapabilityBroker for DefaultCapBroker {
@@ -488,14 +517,20 @@ impl CapabilityBroker for DefaultCapBroker {
         // Allocate MMIO regions
         let mut mmio_regions = Vec::new();
         if mmio_size > 0 {
-            // TODO PHASE 2: Use seL4_Untyped_Retype to create frame capabilities
-            // TODO PHASE 2: Use seL4_ARCH_Page_Map to map frames into VSpace
-            // For Phase 1, we just track the regions
-            mmio_regions.push(MappedRegion {
-                vaddr: mmio_base, // TODO: Should be mapped virtual address
-                paddr: mmio_base,
-                size: mmio_size,
-            });
+            // Get untyped cap for device memory region
+            let untyped_cap = self.find_untyped_for_region(mmio_base, mmio_size)?;
+            let vspace_root = 2; // TODO PHASE 2: Get from bootinfo
+
+            // Use MMIO mapper to map the device memory
+            let region = self.mmio_mapper.map_region(
+                mmio_base,
+                mmio_size,
+                &mut || self.cspace.allocate(),
+                untyped_cap,
+                vspace_root,
+            )?;
+
+            mmio_regions.push(region);
         }
 
         // Allocate IRQ handler
@@ -552,22 +587,17 @@ impl CapabilityBroker for DefaultCapBroker {
     }
 
     fn request_irq(&mut self, irq: u8) -> Result<IrqHandler> {
-        // Check if IRQ is already allocated
-        if self.allocated_irqs.contains(&irq) {
-            return Err(CapabilityError::IrqAlreadyAllocated { irq });
-        }
+        // Allocate capability slots for IRQ handler and notification
+        let handler_cap = self.cspace.allocate()?;
+        let notification_cap = self.cspace.allocate()?;
+        let cspace_root = 1; // TODO PHASE 2: Get from bootinfo
 
-        // Allocate capability slot for IRQ handler
-        let cap_slot = self.cspace.allocate()?;
-
-        // TODO PHASE 2: Use seL4_IRQControl_Get to get IRQ handler capability
-        // For Phase 1, just track the allocation
-
-        self.allocated_irqs.push(irq);
+        // Use IRQ allocator to create the IRQ handler
+        let irq_impl = self.irq_allocator.allocate(irq, handler_cap, notification_cap, cspace_root)?;
 
         Ok(IrqHandler {
-            _cap: cap_slot as u64,
-            irq_num: irq,
+            _cap: irq_impl.irq_num() as u64,
+            irq_num: irq_impl.irq_num(),
         })
     }
 
@@ -730,7 +760,7 @@ mod tests {
         unsafe {
             let broker = DefaultCapBroker::init().unwrap();
             assert_eq!(broker.devices.len(), 2); // Serial + E1000
-            assert_eq!(broker.allocated_irqs.len(), 0);
+            // IRQs are now tracked by irq_allocator internally
         }
     }
 
