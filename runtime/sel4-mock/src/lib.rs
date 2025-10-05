@@ -153,10 +153,87 @@ pub const seL4_EndpointObject: usize = 2;
 pub const seL4_NotificationObject: usize = 3;
 pub const seL4_CapTableObject: usize = 4;
 
+// Architecture-specific page sizes
+pub const seL4_ARCH_4KPage: usize = 5;
+pub const seL4_ARCH_LargePage: usize = 6;
+pub const seL4_ARCH_HugePage: usize = 7;
+
+// Memory attributes
+pub const seL4_ARCH_Uncached: usize = 0;
+pub const seL4_ARCH_WriteCombining: usize = 1;
+pub const seL4_ARCH_WriteThrough: usize = 2;
+pub const seL4_ARCH_WriteBack: usize = 3;
+
 /// Mock GetBootInfo - returns null for now
 /// TODO PHASE 2: This must return real bootinfo from seL4 kernel
 pub unsafe fn seL4_GetBootInfo() -> *const seL4_BootInfo {
     core::ptr::null()
+}
+
+/// Mock Untyped_Retype - converts untyped memory to typed objects
+/// TODO PHASE 2: Replace with real seL4_Untyped_Retype
+pub unsafe fn seL4_Untyped_Retype(
+    _untyped: seL4_CPtr,
+    _type: usize,
+    _size_bits: usize,
+    _root: seL4_CPtr,
+    _node_index: usize,
+    _node_depth: usize,
+    _node_offset: seL4_CPtr,
+    _num_objects: usize,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock ARCH_Page_Map - maps a page into a VSpace
+/// TODO PHASE 2: Replace with real seL4_ARCH_Page_Map
+pub unsafe fn seL4_ARCH_Page_Map(
+    _page: seL4_CPtr,
+    _vspace: seL4_CPtr,
+    _vaddr: usize,
+    _rights: seL4_Word,
+    _attr: usize,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock ARCH_Page_Unmap - unmaps a page from a VSpace
+/// TODO PHASE 2: Replace with real seL4_ARCH_Page_Unmap
+pub unsafe fn seL4_ARCH_Page_Unmap(_page: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock IRQControl_Get - gets an IRQ handler capability
+/// TODO PHASE 2: Replace with real seL4_IRQControl_Get
+pub unsafe fn seL4_IRQControl_Get(
+    _irq_control: seL4_CPtr,
+    _irq: usize,
+    _root: seL4_CPtr,
+    _index: seL4_CPtr,
+    _depth: usize,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock IRQHandler_SetNotification - binds IRQ to notification
+/// TODO PHASE 2: Replace with real seL4_IRQHandler_SetNotification
+pub unsafe fn seL4_IRQHandler_SetNotification(
+    _irq_handler: seL4_CPtr,
+    _notification: seL4_CPtr,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock IRQHandler_Ack - acknowledges an IRQ
+/// TODO PHASE 2: Replace with real seL4_IRQHandler_Ack
+pub unsafe fn seL4_IRQHandler_Ack(_irq_handler: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock IRQHandler_Clear - clears IRQ handler binding
+/// TODO PHASE 2: Replace with real seL4_IRQHandler_Clear
+pub unsafe fn seL4_IRQHandler_Clear(_irq_handler: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
 }
 
 #[cfg(test)]
