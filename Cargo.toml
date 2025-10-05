@@ -24,8 +24,14 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/your-org/kaal"
 
 [workspace.dependencies]
-# ⚠️ PHASE 1: Using MOCK seL4 implementations
-# TODO PHASE 2: Replace with real seL4 from https://github.com/seL4/rust-sel4
+# seL4 bindings strategy:
+# - Default: Use local mocks (sel4-sys points to runtime/sel4-mock)
+# - Future: Replace these paths with real seL4 Git dependency when ready for kernel integration
+#
+# To use real seL4 (when ready):
+# 1. Change the paths below to git repos
+# 2. Build seL4 kernel image
+# 3. Link with seL4 kernel
 sel4-sys = { path = "runtime/sel4-mock" }
 sel4 = { path = "runtime/sel4-rust-mock" }
 
