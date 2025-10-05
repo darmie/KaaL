@@ -543,6 +543,7 @@ impl CapabilityBroker for DefaultCapBroker {
             // Get untyped cap for device memory region
             let untyped_cap = self.find_untyped_for_region(mmio_base, mmio_size)?;
             let vspace_root = 2; // TODO PHASE 2: Get from bootinfo
+            let cspace_root = 1; // TODO PHASE 2: Get from bootinfo
 
             // Use MMIO mapper to map the device memory
             let region = self.mmio_mapper.map_region(
@@ -551,6 +552,7 @@ impl CapabilityBroker for DefaultCapBroker {
                 &mut || self.cspace.allocate(),
                 untyped_cap,
                 vspace_root,
+                cspace_root,
             )?;
 
             mmio_regions.push(region);

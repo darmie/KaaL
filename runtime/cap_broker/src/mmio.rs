@@ -7,7 +7,7 @@
 //! - Phase 1: Returns mock mapped regions without actual mapping
 //! - Phase 2: Uses seL4_Untyped_Retype and seL4_ARCH_Page_Map for real mapping
 
-use crate::{Result, CapabilityError, MappedRegion, CSlot};
+use crate::{CSlot, CapabilityError, MappedRegion, Result};
 
 // TODO PHASE 2: Import real seL4 constants
 // use sel4_sys::{seL4_ARCH_4KPage, seL4_CanRead, seL4_CanWrite, seL4_ARCH_Uncached};
@@ -65,6 +65,7 @@ impl MmioMapper {
         cspace_allocator: &mut dyn FnMut() -> Result<CSlot>,
         untyped_cap: CSlot,
         vspace_root: CSlot,
+        cspace_root: CSlot,
     ) -> Result<MappedRegion> {
         // Align to page boundaries
         let start_offset = paddr % PAGE_SIZE;
@@ -74,7 +75,7 @@ impl MmioMapper {
         // Check if we have enough virtual address space
         if self.next_vaddr + aligned_size > self.mmio_base + self.mmio_size {
             return Err(CapabilityError::OutOfMemory {
-                requested: aligned_size
+                requested: aligned_size,
             });
         }
 
@@ -106,7 +107,7 @@ impl MmioMapper {
                         untyped_cap,
                         sel4_sys::seL4_ARCH_4KPage,
                         0, // size_bits (0 for 4K pages)
-                        0, // root
+                        cspace_root, // CSpace root for object creation
                         0, // node_index
                         0, // node_depth
                         frame_cap,
@@ -114,9 +115,10 @@ impl MmioMapper {
                     );
 
                     if ret != sel4_sys::seL4_NoError {
-                        return Err(CapabilityError::Sel4Error(
-                            format!("seL4_Untyped_Retype failed: {}", ret)
-                        ));
+                        return Err(CapabilityError::Sel4Error(alloc::format!(
+                            "seL4_Untyped_Retype failed: {}",
+                            ret
+                        )));
                     }
                 }
 
@@ -131,9 +133,10 @@ impl MmioMapper {
                     );
 
                     if ret != sel4_sys::seL4_NoError {
-                        return Err(CapabilityError::Sel4Error(
-                            format!("seL4_ARCH_Page_Map failed: {}", ret)
-                        ));
+                        return Err(CapabilityError::Sel4Error(alloc::format!(
+                            "seL4_ARCH_Page_Map failed: {}",
+                            ret
+                        )));
                     }
                 }
             }
@@ -229,13 +232,16 @@ mod tests {
         };
 
         // Map a 64KB region
-        let region = mapper.map_region(
-            0xFEBC0000,
-            65536,
-            &mut allocator,
-            50, // untyped_cap
-            10, // vspace_root
-        ).unwrap();
+        let region = mapper
+            .map_region(
+                0xFEBC0000,
+                65536,
+                &mut allocator,
+                50, // untyped_cap
+                10, // vspace_root
+                11, // cspace_root
+            )
+            .unwrap();
 
         assert_eq!(region.paddr, 0xFEBC0000);
         assert_eq!(region.size, 65536);
@@ -254,13 +260,9 @@ mod tests {
         };
 
         // Map unaligned region (starts at 0x100)
-        let region = mapper.map_region(
-            0xFEBC0100,
-            4000,
-            &mut allocator,
-            50,
-            10,
-        ).unwrap();
+        let region = mapper
+            .map_region(0xFEBC0100, 4000, &mut allocator, 50, 10, 11)
+            .unwrap();
 
         assert_eq!(region.paddr, 0xFEBC0100);
         assert_eq!(region.size, 4000);
@@ -281,22 +283,14 @@ mod tests {
         };
 
         // Map first region
-        let region1 = mapper.map_region(
-            0xFEBC0000,
-            4096,
-            &mut allocator,
-            50,
-            10,
-        ).unwrap();
+        let region1 = mapper
+            .map_region(0xFEBC0000, 4096, &mut allocator, 50, 10, 11)
+            .unwrap();
 
         // Map second region
-        let region2 = mapper.map_region(
-            0xFEBD0000,
-            8192,
-            &mut allocator,
-            51,
-            10,
-        ).unwrap();
+        let region2 = mapper
+            .map_region(0xFEBD0000, 8192, &mut allocator, 51, 10, 11)
+            .unwrap();
 
         // Regions should not overlap
         assert!(region1.vaddr + region1.size <= region2.vaddr);
@@ -314,13 +308,7 @@ mod tests {
         };
 
         // Try to map 2 pages
-        let result = mapper.map_region(
-            0xFEBC0000,
-            8192,
-            &mut allocator,
-            50,
-            10,
-        );
+        let result = mapper.map_region(0xFEBC0000, 8192, &mut allocator, 50, 10, 11);
 
         assert!(matches!(result, Err(CapabilityError::OutOfMemory { .. })));
     }
