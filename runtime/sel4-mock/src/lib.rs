@@ -265,6 +265,49 @@ pub struct seL4_UserContext {
     pub gs_base: u64,
 }
 
+/// User context structure for register state (aarch64 / ARM64)
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct seL4_UserContext {
+    pub pc: u64,  // Program counter
+    pub sp: u64,  // Stack pointer
+    pub spsr: u64, // Saved program status register
+    pub x0: u64,
+    pub x1: u64,
+    pub x2: u64,
+    pub x3: u64,
+    pub x4: u64,
+    pub x5: u64,
+    pub x6: u64,
+    pub x7: u64,
+    pub x8: u64,
+    pub x9: u64,
+    pub x10: u64,
+    pub x11: u64,
+    pub x12: u64,
+    pub x13: u64,
+    pub x14: u64,
+    pub x15: u64,
+    pub x16: u64,
+    pub x17: u64,
+    pub x18: u64,
+    pub x19: u64,
+    pub x20: u64,
+    pub x21: u64,
+    pub x22: u64,
+    pub x23: u64,
+    pub x24: u64,
+    pub x25: u64,
+    pub x26: u64,
+    pub x27: u64,
+    pub x28: u64,
+    pub x29: u64,  // Frame pointer
+    pub x30: u64,  // Link register
+    pub tpidr_el0: u64, // Thread ID register
+    pub tpidrro_el0: u64, // Read-only thread ID
+}
+
 /// Mock TCB_SetSpace - configure TCB's CSpace and VSpace
 /// TODO PHASE 2: Replace with real seL4_TCB_SetSpace
 pub unsafe fn seL4_TCB_SetSpace(
@@ -300,7 +343,7 @@ pub unsafe fn seL4_TCB_SetPriority(
 
 /// Mock TCB_WriteRegisters - write CPU registers for TCB
 /// TODO PHASE 2: Replace with real seL4_TCB_WriteRegisters
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub unsafe fn seL4_TCB_WriteRegisters(
     _tcb: seL4_CPtr,
     _resume: seL4_Word,

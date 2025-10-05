@@ -225,18 +225,14 @@ impl TcbManager {
             }
 
             // Set registers (entry point and stack)
-            // Note: This is architecture-specific. Here's x86_64 example:
+            // Architecture-specific register setup
             #[cfg(target_arch = "x86_64")]
             {
                 let mut regs: seL4_UserContext = core::mem::zeroed();
 
-                // Set instruction pointer (entry point)
+                // x86_64: Set instruction pointer (RIP) and stack pointer (RSP)
                 regs.rip = config.entry_point as u64;
-
-                // Set stack pointer
                 regs.rsp = config.stack_pointer as u64;
-
-                // Set initial flags (interrupts enabled)
                 regs.rflags = 0x200; // IF (interrupt enable) flag
 
                 let ret = unsafe {
@@ -257,10 +253,38 @@ impl TcbManager {
                 }
             }
 
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(target_arch = "aarch64")]
+            unsafe {
+                let mut regs: seL4_UserContext = core::mem::zeroed();
+
+                // aarch64 (Mac Silicon, ARM64): Set program counter (PC) and stack pointer (SP)
+                regs.pc = config.entry_point as u64;
+                regs.sp = config.stack_pointer as u64;
+
+                // Set processor state (PSTATE)
+                // EL0t (user mode), interrupts enabled
+                regs.spsr = 0x0; // Default user mode flags
+
+                let ret = seL4_TCB_WriteRegisters(
+                    tcb_cap,
+                    0, // resume (0 = don't start yet)
+                    0, // arch_flags
+                    core::mem::size_of::<seL4_UserContext>(),
+                    &mut regs as *mut seL4_UserContext,
+                );
+
+                if ret != seL4_NoError {
+                    return Err(CapabilityError::Sel4Error(alloc::format!(
+                        "seL4_TCB_WriteRegisters failed: {}",
+                        ret
+                    )));
+                }
+            }
+
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
             {
-                // TODO: Add ARM64, RISC-V register setup
-                compile_error!("TCB register setup not implemented for this architecture");
+                // TODO: Add RISC-V register setup when needed
+                compile_error!("TCB register setup not implemented for this architecture. Supported: x86_64, aarch64");
             }
         }
 
