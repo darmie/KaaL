@@ -1,7 +1,7 @@
 # KaaL Project Status Report
 
-**Last Updated:** 2025-10-02
-**Phase:** 1 Complete ✅ | Phase 2 Foundation Ready 🚀
+**Last Updated:** 2025-10-05
+**Phase:** 1 Complete ✅ | Phase 2 In Progress 🚧
 
 ## Executive Summary
 
@@ -15,13 +15,15 @@ KaaL (seL4 Kernel-as-a-Library) is a revolutionary OS development framework that
 
 | Component | Lines of Code | Test Coverage | Status |
 |-----------|--------------|---------------|---------|
-| Capability Broker | ~450 | 18 tests ✅ | Complete |
+| Capability Broker | ~810 | 29 tests ✅ | Phase 2 Infrastructure ✅ |
+| MMIO Mapper | ~327 | 7 tests ✅ | Phase 2 Ready ✅ |
+| IRQ Allocator | ~300 | 4 tests ✅ | Phase 2 Ready ✅ |
 | Shared Memory IPC | ~600 | 11 tests ✅ | Complete |
 | DDDK Runtime | ~200 | 2 tests ✅ | Complete |
 | DDDK Macros | ~250 | N/A | Complete |
 | Bootinfo Parser | ~200 | 5 tests ✅ | Complete |
 | Serial Driver Example | ~200 | Integration ✅ | Complete |
-| **Total** | **~1,900** | **36 tests** | **✅** |
+| **Total** | **~2,887** | **58 tests** | **✅** |
 
 ### Documentation
 
@@ -119,38 +121,58 @@ pub struct E1000Driver {
 - [x] Phase 2 migration path documented
 - [x] Mac Silicon development environment functional
 
-## Phase 2 Foundation (🚀 Ready)
+## Phase 2 In Progress (🚧 40% Complete)
 
-### Prepared Components
+### ✅ Completed Components
 
-#### 1. Migration Documentation
-- **PHASE2_MIGRATION.md**: Step-by-step migration guide
-- **SEL4_INTEGRATION.md**: Detailed seL4 integration documentation
-- **TODO Comments**: 50+ Phase 2 markers in code
+#### 1. MMIO Mapping Infrastructure (`runtime/cap_broker/src/mmio.rs`)
+- **MmioMapper**: Page-aligned MMIO region mapping
+- **Frame Derivation**: seL4_Untyped_Retype for frame capabilities
+- **VSpace Mapping**: seL4_ARCH_Page_Map integration
+- **Conditional Compilation**: Phase 1 (mock) vs Phase 2 (real seL4)
+- **Tests**: 7 comprehensive tests for alignment, mapping, errors
+- **Status**: ✅ Complete (327 LOC)
 
-#### 2. Bootinfo Infrastructure
-- **Parser Module**: Ready for real seL4 bootinfo
-- **Device Discovery**: Stubbed for device tree/ACPI parsing
-- **Untyped Tracking**: Framework for real capability derivation
+#### 2. IRQ Handling Infrastructure (`runtime/cap_broker/src/irq.rs`)
+- **IrqAllocator**: IRQ handler lifecycle management
+- **Notification Binding**: seL4_IRQHandler_SetNotification
+- **Wait/Acknowledge**: seL4_Wait and seL4_IRQHandler_Ack
+- **Platform Info**: Edge vs level-triggered interrupts
+- **Tests**: 4 tests for allocation and conflict detection
+- **Status**: ✅ Complete (300 LOC)
 
-#### 3. Build System
-- **CMake Template**: Commented out seL4-specific sections
-- **Linker Scripts**: Target specifications prepared
-- **Environment Variables**: SEL4_DIR, SEL4_PLATFORM documented
+#### 3. Capability Broker Integration
+- **MmioMapper Integration**: request_device() uses real MMIO mapping
+- **IrqAllocator Integration**: request_irq() uses notification binding
+- **Helper Methods**: find_untyped_for_region() for capability lookup
+- **All Tests Passing**: 29 tests ✅
+- **Status**: ✅ Complete (80 lines updated)
+
+### 🚧 In Progress
+
+#### 4. Migration Documentation
+- **PHASE2_MIGRATION.md**: Step-by-step migration guide ✅
+- **SEL4_INTEGRATION.md**: Detailed seL4 integration documentation ✅
+- **TODO Comments**: 50+ Phase 2 markers in code ✅
+
+#### 5. Build System
+- **CMake Template**: Commented out seL4-specific sections ✅
+- **Linker Scripts**: Target specifications prepared ✅
+- **Environment Variables**: SEL4_DIR, SEL4_PLATFORM documented ✅
 
 ### Remaining Phase 2 Tasks
 
-| Task | Effort | Dependencies |
-|------|--------|--------------|
-| Replace mock seL4 bindings | 1 week | seL4 Rust bindings |
-| Implement MMIO mapping | 1 week | Bootinfo + seL4 |
-| Implement IRQ handling | 1 week | seL4 notifications |
-| Add root task entry point | 3 days | seL4 runtime |
-| Device tree parsing | 1 week | libfdt or ACPI lib |
-| Integration testing | 1 week | QEMU setup |
-| Hardware testing | 2 weeks | Physical hardware |
+| Task | Effort | Status | Dependencies |
+|------|--------|--------|--------------|
+| ~~Implement MMIO mapping~~ | ~~1 week~~ | ✅ Complete | - |
+| ~~Implement IRQ handling~~ | ~~1 week~~ | ✅ Complete | - |
+| Replace mock seL4 bindings | 1 week | 🔜 Next | seL4 Rust bindings |
+| Add root task entry point | 3 days | 📋 Planned | seL4 runtime |
+| Device tree parsing | 1 week | 📋 Planned | libfdt or ACPI lib |
+| Integration testing | 1 week | 📋 Planned | QEMU setup |
+| Hardware testing | 2 weeks | 📋 Planned | Physical hardware |
 
-**Estimated Phase 2 Completion:** 6-8 weeks
+**Estimated Phase 2 Completion:** 4-6 weeks (revised from 6-8 weeks)
 
 ## Architecture Highlights
 
