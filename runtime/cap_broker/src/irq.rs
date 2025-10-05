@@ -3,6 +3,7 @@
 //! This module handles IRQ allocation and binding to seL4 notification objects.
 //! Each IRQ is associated with a notification that can be waited on by drivers.
 
+use alloc::vec::Vec;
 use crate::{CSlot, CapabilityError, Result};
 
 // TODO PHASE 2: Import real seL4 types

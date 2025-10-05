@@ -21,6 +21,12 @@
 //! - Integration tests: Producer-consumer patterns, cross-component
 //! - Hardware sim tests: Performance benchmarks, stress tests
 
+#![no_std]
+
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
 use core::sync::atomic::{AtomicUsize, Ordering};
 use thiserror::Error;
 

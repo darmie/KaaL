@@ -21,6 +21,19 @@
 //! - Integration tests: Device bundle requests
 //! - Hardware sim tests: N/A (kernel integration)
 
+#![no_std]
+
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
+extern crate alloc;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+#[macro_use]
+extern crate alloc as alloc_crate;
+
 mod bootinfo;
 mod mmio;
 mod irq;
@@ -112,18 +125,28 @@ impl IrqHandler {
     ///
     /// # Safety
     /// Handler will be called in interrupt context. Must be fast and non-blocking.
+    ///
+    /// # Phase 1 Note
+    /// This is a stub for Phase 1. Real IRQ handling will be implemented in Phase 2
+    /// using the IrqHandlerImpl from the irq module.
     pub unsafe fn register<F>(&self, _handler: F) -> Result<()>
     where
         F: Fn() + Send + 'static,
     {
-        // TODO: Implement IRQ registration
-        todo!("Implement IRQ registration")
+        // Phase 1: No-op stub
+        // Phase 2: Use IrqHandlerImpl::wait() and call handler
+        Ok(())
     }
 
     /// Acknowledge the IRQ
+    ///
+    /// # Phase 1 Note
+    /// This is a stub for Phase 1. Real IRQ ack will be implemented in Phase 2
+    /// using the IrqHandlerImpl from the irq module.
     pub fn acknowledge(&self) -> Result<()> {
-        // TODO: Implement IRQ acknowledgment
-        todo!("Implement IRQ acknowledgment")
+        // Phase 1: No-op stub
+        // Phase 2: Use IrqHandlerImpl::acknowledge()
+        Ok(())
     }
 }
 

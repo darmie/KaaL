@@ -1,0 +1,12 @@
+[package]
+name = "kaal-root-task"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sel4-sys = { path = "../sel4-mock" }
+cap-broker = { path = "../cap_broker" }
+
+[features]
+default = []
+sel4-real = []

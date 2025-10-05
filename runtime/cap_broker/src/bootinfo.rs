@@ -8,7 +8,8 @@
 //!
 //! This module parses bootinfo and makes it available to the Capability Broker.
 
-use crate::{Result, CapabilityError};
+use alloc::vec::Vec;
+use crate::Result;
 
 // TODO PHASE 2: Import real seL4 bootinfo types
 // use sel4::BootInfo;

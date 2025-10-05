@@ -1,0 +1,16 @@
+[package]
+name = "root-task-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "root-task-example"
+path = "src/main.rs"
+
+[dependencies]
+kaal-root-task = { path = "../../runtime/root-task" }
+sel4-sys = { path = "../../runtime/sel4-mock" }
+
+[features]
+default = []
+sel4-real = ["kaal-root-task/sel4-real"]

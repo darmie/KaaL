@@ -17,3 +17,7 @@ sel4.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+
+[features]
+default = []
+sel4-real = []

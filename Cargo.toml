@@ -5,12 +5,14 @@ members = [
     "runtime/allocator",
     "runtime/dddk",
     "runtime/dddk-runtime",
+    "runtime/root-task",
     "components/vfs",
     "components/posix",
     "components/network",
     "components/drivers",
     "tools/sel4-compose",
     "examples/serial-driver",
+    "examples/root-task-example",
 ]
 resolver = "2"
 
