@@ -44,9 +44,7 @@ ENV SEL4_PLATFORM=qemu-arm-virt
 ENV SEL4_PREFIX=/opt/seL4/build
 ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
 
-# Stage 2: Build project
-# Note: Build context should be the KaaL repo root (../..)
-# Run from project dir: docker build -f Dockerfile -t kaal-app ../..
+# Stage 2: Build KaaL root task
 COPY . /kaal
 WORKDIR /kaal/examples/my-kaal-system
 RUN cargo build --release \
@@ -56,4 +54,17 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-CMD ["cat", "/kaal/target/aarch64-unknown-none/release/my-kaal-system"]
+# Stage 3: Rebuild seL4 kernel with our root task
+WORKDIR /opt/seL4/build-final
+RUN cmake -G Ninja \
+        -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
+        -DKernelPlatform=qemu-arm-virt \
+        -DKernelSel4Arch=aarch64 \
+        -DKernelDebugBuild=TRUE \
+        -DKernelPrinting=TRUE \
+        -DElfloaderImage=/kaal/examples/my-kaal-system/target/aarch64-unknown-none/release/my-kaal-system \
+        .. && \
+    ninja
+
+# Extract the final bootable image
+CMD ["cat", "/opt/seL4/build-final/images/sel4-image"]

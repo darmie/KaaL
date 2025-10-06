@@ -170,9 +170,7 @@ ENV SEL4_PLATFORM=qemu-arm-virt
 ENV SEL4_PREFIX=/opt/seL4/build
 ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
 
-# Stage 2: Build project
-# Note: Build context should be the KaaL repo root (../..)
-# Run from project dir: docker build -f Dockerfile -t kaal-app ../..
+# Stage 2: Build KaaL root task
 COPY . /kaal
 WORKDIR /kaal/examples/{name}
 RUN cargo build --release \
@@ -182,7 +180,20 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-CMD ["cat", "/kaal/examples/{name}/target/aarch64-unknown-none/release/{name}"]
+# Stage 3: Rebuild seL4 kernel with our root task
+WORKDIR /opt/seL4/build-final
+RUN cmake -G Ninja \
+        -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
+        -DKernelPlatform=qemu-arm-virt \
+        -DKernelSel4Arch=aarch64 \
+        -DKernelDebugBuild=TRUE \
+        -DKernelPrinting=TRUE \
+        -DElfloaderImage=/kaal/examples/{name}/target/aarch64-unknown-none/release/{name} \
+        .. && \
+    ninja
+
+# Extract the final bootable image
+CMD ["cat", "/opt/seL4/build-final/images/sel4-image"]
 "#,
         name = name
     );
@@ -266,16 +277,16 @@ fn build_project(release: bool) -> anyhow::Result<()> {
             anyhow::bail!("Docker build failed");
         }
 
-        // Extract binary
-        println!("\n{} Extracting binary...", "📦".green());
+        // Extract bootable image
+        println!("\n{} Extracting bootable seL4 image...", "📦".green());
         let output = Command::new("docker")
             .args(["run", "--rm", "kaal-app"])
             .output()?;
 
         fs::create_dir_all("build")?;
-        fs::write("build/system.elf", output.stdout)?;
+        fs::write("build/sel4-image.elf", output.stdout)?;
 
-        println!("{} Build complete: build/system.elf", "✅".green());
+        println!("{} Build complete: build/sel4-image.elf", "✅".green());
     } else {
         // Native build
         let mode = if release { "--release" } else { "" };
@@ -306,8 +317,8 @@ fn build_project(release: bool) -> anyhow::Result<()> {
 fn run_qemu(debug: bool) -> anyhow::Result<()> {
     println!("{} Starting QEMU...", "🚀".green());
 
-    if !Path::new("build/system.elf").exists() {
-        anyhow::bail!("No binary found. Run 'kaal build' first.");
+    if !Path::new("build/sel4-image.elf").exists() {
+        anyhow::bail!("No image found. Run 'kaal build' first.");
     }
 
     let mut args = vec![
@@ -319,7 +330,7 @@ fn run_qemu(debug: bool) -> anyhow::Result<()> {
         "-m",
         "512M",
         "-kernel",
-        "build/system.elf",
+        "build/sel4-image.elf",
     ];
 
     if debug {
