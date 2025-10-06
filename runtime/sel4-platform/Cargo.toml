@@ -16,7 +16,7 @@ sel4-mock-sys = { workspace = true, optional = true }
 [features]
 # Default: Mock mode for development/testing on all platforms (including macOS)
 # For real seL4: cargo build --no-default-features --features runtime
-default = ["mock"]
+default = ["runtime"]
 
 # Backend selection (mutually exclusive - use --no-default-features to switch)
 mock = ["sel4-mock", "sel4-mock-sys"]
@@ -25,11 +25,11 @@ runtime = ["sel4"]
 # Architecture/Platform selection (for runtime mode)
 # Board config comes from SEL4_PREFIX env var + gen_config.json, not Cargo features
 # These are just for documentation and build-time selection
-board-qemu-virt-aarch64 = []  # ARM64 QEMU
-board-qemu-virt-riscv64 = []  # RISC-V QEMU
-board-pc99 = []                # x86_64 PC
+board-qemu-virt-aarch64 = [] # ARM64 QEMU
+board-qemu-virt-riscv64 = [] # RISC-V QEMU
+board-pc99 = []              # x86_64 PC
 
 # Architecture families
-arch-aarch64 = []  # ARM 64-bit
-arch-riscv64 = []  # RISC-V 64-bit
-arch-x86_64 = []   # x86 64-bit
+arch-aarch64 = [] # ARM 64-bit
+arch-riscv64 = [] # RISC-V 64-bit
+arch-x86_64 = []  # x86 64-bit

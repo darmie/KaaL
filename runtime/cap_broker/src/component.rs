@@ -239,7 +239,7 @@ impl ComponentSpawner {
         // 5. Map stack memory
         // TODO PHASE 2: Create stack frame from untyped and map it
         // For Phase 1, we just track the addresses
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             // Create frame for stack
             // Map frame into VSpace at stack_vaddr
@@ -247,26 +247,26 @@ impl ComponentSpawner {
         }
 
         // 6. Map IPC buffer
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             // Create frame for IPC buffer
             // Map frame into VSpace at ipc_buffer_vaddr
         }
 
         // 7. Create endpoints and notification
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
             // Create endpoint
             let ret = unsafe {
                 seL4_Untyped_Retype(
-                    untyped_cap,
-                    seL4_EndpointObject,
+                    untyped_cap as u64,
+                    seL4_EndpointObject as u64,
                     0,
-                    self.cspace_root,
+                    self.cspace_root as u64,
                     0, 0,
-                    endpoint,
+                    endpoint as u64,
                     1,
                 )
             };
@@ -281,12 +281,12 @@ impl ComponentSpawner {
             // Create notification
             let ret = unsafe {
                 seL4_Untyped_Retype(
-                    untyped_cap,
-                    seL4_NotificationObject,
+                    untyped_cap as u64,
+                    seL4_NotificationObject as u64,
                     0,
-                    self.cspace_root,
+                    self.cspace_root as u64,
                     0, 0,
-                    notification,
+                    notification as u64,
                     1,
                 )
             };

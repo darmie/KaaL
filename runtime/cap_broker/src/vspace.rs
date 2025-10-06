@@ -136,9 +136,9 @@ impl VSpaceManager {
             return Err(CapabilityError::InvalidCap);
         }
 
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
             // Determine rights
             let mut rights = seL4_CanRead;
@@ -154,7 +154,7 @@ impl VSpaceManager {
             };
 
             // Map the page
-            let ret = seL4_ARCH_Page_Map(frame_cap, self.vspace_root, vaddr, rights, attr);
+            let ret = seL4_ARCH_Page_Map(frame_cap as u64, self.vspace_root as u64, vaddr as u64, rights, attr);
 
             if ret != seL4_NoError {
                 return Err(CapabilityError::Sel4Error(alloc::format!(
@@ -164,7 +164,7 @@ impl VSpaceManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: No-op for mock
             let _ = (frame_cap, writable, cacheable);
@@ -184,11 +184,11 @@ impl VSpaceManager {
     /// # Errors
     /// Returns error if unmap fails
     pub fn unmap_page(&self, frame_cap: CSlot) -> Result<()> {
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
-            let ret = unsafe { seL4_ARCH_Page_Unmap(frame_cap) };
+            let ret = unsafe { seL4_ARCH_Page_Unmap(frame_cap as u64) };
 
             if ret != seL4_NoError {
                 return Err(CapabilityError::Sel4Error(alloc::format!(
@@ -198,7 +198,7 @@ impl VSpaceManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: No-op for mock
             let _ = frame_cap;

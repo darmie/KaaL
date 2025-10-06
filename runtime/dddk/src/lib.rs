@@ -25,7 +25,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Data, Fields, Attribute, Meta, Lit, Expr};
+use syn::{parse_macro_input, Attribute, Data, DeriveInput, Expr, Fields, Lit, Meta};
 
 /// Device identifier parsed from attributes
 #[derive(Debug)]
@@ -68,7 +68,10 @@ fn parse_pci_attr(attr: &Attribute) -> Option<DeviceIdent> {
         });
 
         if let (Some(v), Some(d)) = (vendor, device) {
-            return Some(DeviceIdent::Pci { vendor: v, device: d });
+            return Some(DeviceIdent::Pci {
+                vendor: v,
+                device: d,
+            });
         }
     }
     None

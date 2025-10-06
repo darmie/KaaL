@@ -10,7 +10,7 @@
 use crate::{CSlot, CapabilityError, MappedRegion, Result};
 
 // TODO PHASE 2: Import real seL4 constants
-// use sel4_sys::{seL4_ARCH_4KPage, seL4_CanRead, seL4_CanWrite, seL4_ARCH_Uncached};
+// use sel4_platform::adapter::{seL4_ARCH_4KPage, seL4_CanRead, seL4_CanWrite, seL4_ARCH_Uncached};
 
 /// Page size (4KB)
 pub const PAGE_SIZE: usize = 4096;
@@ -84,7 +84,7 @@ impl MmioMapper {
 
         // TODO PHASE 2: Implement actual frame mapping
         // For Phase 1, we just return a mock mapped region
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             self.next_vaddr += aligned_size;
             return Ok(MappedRegion {
@@ -95,7 +95,7 @@ impl MmioMapper {
         }
 
         // PHASE 2: Real implementation
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             for i in 0..num_pages {
                 // Allocate capability slot for frame
@@ -103,18 +103,18 @@ impl MmioMapper {
 
                 // Retype untyped to frame
                 unsafe {
-                    let ret = sel4_sys::seL4_Untyped_Retype(
-                        untyped_cap,
-                        sel4_sys::seL4_ARCH_4KPage,
+                    let ret = sel4_platform::adapter::seL4_Untyped_Retype(
+                        untyped_cap as u64,
+                        sel4_platform::adapter::seL4_ARCH_4KPage as u64,
                         0, // size_bits (0 for 4K pages)
-                        cspace_root, // CSpace root for object creation
+                        cspace_root as u64, // CSpace root for object creation
                         0, // node_index
                         0, // node_depth
-                        frame_cap,
+                        frame_cap as u64,
                         1, // num_objects
                     );
 
-                    if ret != sel4_sys::seL4_NoError {
+                    if ret != sel4_platform::adapter::seL4_NoError {
                         return Err(CapabilityError::Sel4Error(alloc::format!(
                             "seL4_Untyped_Retype failed: {}",
                             ret
@@ -124,15 +124,15 @@ impl MmioMapper {
 
                 // Map frame into VSpace
                 unsafe {
-                    let ret = sel4_sys::seL4_ARCH_Page_Map(
-                        frame_cap,
-                        vspace_root,
-                        vaddr + i * PAGE_SIZE,
-                        sel4_sys::seL4_CanRead | sel4_sys::seL4_CanWrite,
-                        sel4_sys::seL4_ARCH_Uncached, // Important for MMIO!
+                    let ret = sel4_platform::adapter::seL4_ARCH_Page_Map(
+                        frame_cap as u64,
+                        vspace_root as u64,
+                        (vaddr + i * PAGE_SIZE) as u64,
+                        sel4_platform::adapter::seL4_CanRead | sel4_platform::adapter::seL4_CanWrite,
+                        sel4_platform::adapter::seL4_ARCH_Uncached, // Important for MMIO!
                     );
 
-                    if ret != sel4_sys::seL4_NoError {
+                    if ret != sel4_platform::adapter::seL4_NoError {
                         return Err(CapabilityError::Sel4Error(alloc::format!(
                             "seL4_ARCH_Page_Map failed: {}",
                             ret

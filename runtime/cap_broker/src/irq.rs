@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::{CSlot, CapabilityError, Result};
 
 // TODO PHASE 2: Import real seL4 types
-// use sel4_sys::{seL4_IRQControl_Get, seL4_IRQHandler_SetNotification, seL4_IRQHandler_Ack};
+// use sel4_platform::adapter::{seL4_IRQControl_Get, seL4_IRQHandler_SetNotification, seL4_IRQHandler_Ack};
 
 /// IRQ handler with notification binding
 pub struct IrqHandlerImpl {
@@ -52,17 +52,17 @@ impl IrqHandlerImpl {
     /// # Phase 2
     /// Uses seL4_Wait on notification object
     pub fn wait(&self) -> Result<()> {
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: Would block forever, so just return error
             Err(CapabilityError::InvalidCap)
         }
 
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            let mut badge: usize = 0;
+            let mut badge: u64 = 0;
             unsafe {
-                sel4_sys::seL4_Wait(self.notification_cap, &mut badge as *mut usize);
+                sel4_platform::adapter::seL4_Wait(self.notification_cap as u64, &mut badge as *mut u64);
             }
             Ok(())
         }
@@ -75,17 +75,17 @@ impl IrqHandlerImpl {
     /// # Phase 2
     /// Uses seL4_IRQHandler_Ack
     pub fn acknowledge(&self) -> Result<()> {
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: No-op
             Ok(())
         }
 
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             unsafe {
-                let ret = sel4_sys::seL4_IRQHandler_Ack(self.handler_cap);
-                if ret != sel4_sys::seL4_NoError {
+                let ret = sel4_platform::adapter::seL4_IRQHandler_Ack(self.handler_cap as u64);
+                if ret != sel4_platform::adapter::seL4_NoError {
                     return Err(CapabilityError::Sel4Error(format!(
                         "seL4_IRQHandler_Ack failed: {}",
                         ret
@@ -146,26 +146,26 @@ impl IrqAllocator {
             return Err(CapabilityError::IrqAlreadyAllocated { irq });
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: Just track allocation
             self.allocated_irqs.push(irq);
             Ok(IrqHandlerImpl::new(irq, handler_cap, notification_cap))
         }
 
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             // Get IRQ handler capability
             unsafe {
-                let ret = sel4_sys::seL4_IRQControl_Get(
-                    self.irq_control,
-                    irq as usize,
-                    cspace_root,
-                    handler_cap,
+                let ret = sel4_platform::adapter::seL4_IRQControl_Get(
+                    self.irq_control as u64,
+                    irq as u64,
+                    cspace_root as u64,
+                    handler_cap as u64,
                     32, // depth (seL4_WordBits)
                 );
 
-                if ret != sel4_sys::seL4_NoError {
+                if ret != sel4_platform::adapter::seL4_NoError {
                     return Err(CapabilityError::Sel4Error(format!(
                         "seL4_IRQControl_Get failed for IRQ {}: {}",
                         irq, ret
@@ -175,9 +175,9 @@ impl IrqAllocator {
 
             // Bind notification to IRQ handler
             unsafe {
-                let ret = sel4_sys::seL4_IRQHandler_SetNotification(handler_cap, notification_cap);
+                let ret = sel4_platform::adapter::seL4_IRQHandler_SetNotification(handler_cap as u64, notification_cap as u64);
 
-                if ret != sel4_sys::seL4_NoError {
+                if ret != sel4_platform::adapter::seL4_NoError {
                     return Err(CapabilityError::Sel4Error(format!(
                         "seL4_IRQHandler_SetNotification failed: {}",
                         ret

@@ -114,20 +114,20 @@ impl TcbManager {
         cspace_root: CSlot,
         name: &'static str,
     ) -> Result<CSlot> {
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
             // Create TCB object from untyped memory
             let ret = unsafe {
                 seL4_Untyped_Retype(
-                    untyped_cap,
-                    seL4_TCBObject,
+                    untyped_cap as u64,
+                    seL4_TCBObject as u64,
                     0, // size_bits (0 for fixed-size objects like TCB)
-                    cspace_root,
+                    cspace_root as u64,
                     0, // node_index
                     0, // node_depth
-                    tcb_cap,
+                    tcb_cap as u64,
                     1, // num_objects
                 )
             };
@@ -140,7 +140,7 @@ impl TcbManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: Mock - just track the allocation
             let _ = (untyped_cap, cspace_root);
@@ -169,18 +169,18 @@ impl TcbManager {
     /// # Errors
     /// Returns error if configuration fails
     pub fn configure_tcb(&mut self, tcb_cap: CSlot, config: &TcbConfig) -> Result<()> {
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
             // Set CSpace root
             let ret = unsafe {
                 seL4_TCB_SetSpace(
-                    tcb_cap,
+                    tcb_cap as u64,
                     0, // fault_ep (0 = none, or use config.fault_ep)
-                    config.cspace_root,
+                    config.cspace_root as u64,
                     0, // cspace_root_data (CSpace guard)
-                    config.vspace_root,
+                    config.vspace_root as u64,
                     0, // vspace_root_data
                 )
             };
@@ -195,9 +195,9 @@ impl TcbManager {
             // Set IPC buffer
             let ret = unsafe {
                 seL4_TCB_SetIPCBuffer(
-                    tcb_cap,
-                    config.ipc_buffer_vaddr,
-                    config.ipc_buffer_frame,
+                    tcb_cap as u64,
+                    config.ipc_buffer_vaddr as u64,
+                    config.ipc_buffer_frame as u64,
                 )
             };
 
@@ -211,9 +211,9 @@ impl TcbManager {
             // Set priority
             let ret = unsafe {
                 seL4_TCB_SetPriority(
-                    tcb_cap,
-                    tcb_cap, // authority (use self for now)
-                    config.priority,
+                    tcb_cap as u64,
+                    tcb_cap as u64, // authority (use self for now)
+                    config.priority as u64,
                 )
             };
 
@@ -237,10 +237,10 @@ impl TcbManager {
 
                 let ret = unsafe {
                     seL4_TCB_WriteRegisters(
-                        tcb_cap,
+                        tcb_cap as u64,
                         0, // resume (0 = don't start yet)
                         0, // arch_flags
-                        core::mem::size_of::<seL4_UserContext>(),
+                        core::mem::size_of::<seL4_UserContext>() as u64,
                         &mut regs as *mut seL4_UserContext,
                     )
                 };
@@ -266,10 +266,10 @@ impl TcbManager {
                 regs.spsr = 0x0; // Default user mode flags
 
                 let ret = seL4_TCB_WriteRegisters(
-                    tcb_cap,
+                    tcb_cap as u64,
                     0, // resume (0 = don't start yet)
                     0, // arch_flags
-                    core::mem::size_of::<seL4_UserContext>(),
+                    core::mem::size_of::<seL4_UserContext>() as u64,
                     &mut regs as *mut seL4_UserContext,
                 );
 
@@ -288,7 +288,7 @@ impl TcbManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             // Phase 1: Mock - just validate parameters
             let _ = config;
@@ -313,11 +313,11 @@ impl TcbManager {
     /// # Errors
     /// Returns error if resume fails
     pub fn resume_tcb(&mut self, tcb_cap: CSlot) -> Result<()> {
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
-            let ret = unsafe { seL4_TCB_Resume(tcb_cap) };
+            let ret = unsafe { seL4_TCB_Resume(tcb_cap as u64) };
 
             if ret != seL4_NoError {
                 return Err(CapabilityError::Sel4Error(alloc::format!(
@@ -327,7 +327,7 @@ impl TcbManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             let _ = tcb_cap;
         }
@@ -348,11 +348,11 @@ impl TcbManager {
     /// # Returns
     /// Ok(()) on success
     pub fn suspend_tcb(&mut self, tcb_cap: CSlot) -> Result<()> {
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
-            use sel4_sys::*;
+            use sel4_platform::adapter::*;
 
-            let ret = unsafe { seL4_TCB_Suspend(tcb_cap) };
+            let ret = unsafe { seL4_TCB_Suspend(tcb_cap as u64) };
 
             if ret != seL4_NoError {
                 return Err(CapabilityError::Sel4Error(alloc::format!(
@@ -362,7 +362,7 @@ impl TcbManager {
             }
         }
 
-        #[cfg(not(feature = "sel4-real"))]
+        #[cfg(not(feature = "runtime"))]
         {
             let _ = tcb_cap;
         }

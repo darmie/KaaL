@@ -22,7 +22,7 @@ sel4-platform = { path = "../sel4-platform", optional = true, default-features =
 criterion.workspace = true
 
 [features]
-default = ["std"]
+default = ["runtime"]
 # Standard library support (includes thiserror and mock sel4-platform for testing)
 std = ["dep:thiserror", "dep:sel4-platform", "sel4-platform?/mock"]
 # Runtime backend - uses seL4 runtime environment with full syscalls

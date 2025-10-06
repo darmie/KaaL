@@ -21,9 +21,7 @@ members = [
 ]
 # Exclude rust-sel4 submodule - it has platform-specific code (x86 asm) that fails on macOS ARM
 # We only use specific crates from it via [workspace.dependencies]
-exclude = [
-    "external/rust-sel4",
-]
+exclude = ["external/rust-sel4"]
 resolver = "2"
 
 [workspace.package]
@@ -75,7 +73,7 @@ criterion = "0.7.0"
 [workspace.metadata.sel4]
 # Dual-mode configuration metadata
 # Features are managed by individual crates via sel4-platform
-modes = ["microkit", "runtime", "mock"]
+modes = ["runtime", "mock"]
 default-mode = "microkit"
 
 # Note: Workspace manifests cannot have [features]
