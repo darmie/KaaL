@@ -92,6 +92,9 @@ name = "{name}"
 version = "0.1.0"
 edition = "2021"
 
+# This is a standalone project, not part of a workspace
+[workspace]
+
 [dependencies]
 cap-broker = {{ git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }}
 sel4-platform = {{ git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }}
