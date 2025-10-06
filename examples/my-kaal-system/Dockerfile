@@ -54,17 +54,11 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-# Stage 3: Rebuild seL4 kernel with our root task
-WORKDIR /opt/seL4/build-final
-RUN cmake -G Ninja \
-        -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
-        -DKernelPlatform=qemu-arm-virt \
-        -DKernelSel4Arch=aarch64 \
-        -DKernelDebugBuild=TRUE \
-        -DKernelPrinting=TRUE \
-        -DElfloaderImage=/kaal/examples/my-kaal-system/target/aarch64-unknown-none/release/my-kaal-system \
-        .. && \
-    ninja
+# Stage 3: Extract kernel and root task binaries
+# QEMU can load both kernel and our KaaL root task separately
+WORKDIR /output
+RUN cp /opt/seL4/build/kernel.elf kernel.elf && \
+    cp /kaal/examples/my-kaal-system/target/aarch64-unknown-none/release/my-kaal-system roottask.elf
 
-# Extract the final bootable image
-CMD ["cat", "/opt/seL4/build-final/images/sel4-image"]
+# Output both binaries for QEMU multiboot
+CMD ["sh", "-c", "cat kernel.elf && cat roottask.elf"]

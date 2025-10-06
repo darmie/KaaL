@@ -180,20 +180,25 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-# Stage 3: Rebuild seL4 kernel with our root task
-WORKDIR /opt/seL4/build-final
+# Stage 3: Install elfloader tool and create bootable image
+WORKDIR /opt
+RUN git clone --depth 1 https://github.com/seL4/seL4_tools.git
+
+# Create bootable image by combining kernel + root task
+# For qemu-arm-virt, we need to embed the root task in the kernel image
+WORKDIR /opt/seL4_tools/elfloader-tool
 RUN cmake -G Ninja \
         -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
-        -DKernelPlatform=qemu-arm-virt \
+        -DKernelARMPlatform=qemu-arm-virt \
         -DKernelSel4Arch=aarch64 \
-        -DKernelDebugBuild=TRUE \
-        -DKernelPrinting=TRUE \
         -DElfloaderImage=/kaal/examples/{name}/target/aarch64-unknown-none/release/{name} \
-        .. && \
-    ninja
+        -DElfloaderKernelBinary=/opt/seL4/build/kernel.elf \
+        . && \
+    ninja && \
+    cp elfloader /output-image
 
 # Extract the final bootable image
-CMD ["cat", "/opt/seL4/build-final/images/sel4-image"]
+CMD ["cat", "/opt/seL4_tools/elfloader-tool/elfloader"]
 "#,
         name = name
     );
