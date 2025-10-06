@@ -17,7 +17,11 @@ You're about to build your own operating system on top of the formally verified 
 
 ```bash
 cd kaal
-cargo run --bin minimal-component
+# Build with Microkit (default - production seL4)
+cargo build --bin minimal-component
+
+# For quick testing on macOS, use mock mode
+cargo run --features mock-sel4 --bin minimal-component
 ```
 
 **You'll see:**
@@ -272,9 +276,23 @@ log::error!("Failed: {:?}", err);
 ### Test in QEMU
 
 ```bash
-# (Future) With real seL4:
-qemu-system-x86_64 -kernel my-kernel -initrd my-rootfs
+# 1. Build components (Microkit mode - default)
+cargo build --release
+
+# 2. Create system.xml for Microkit
+# See examples/system-composition/system.xml
+
+# 3. Generate bootable image
+microkit build system.xml
+
+# 4. Run in QEMU
+qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel loader.img -nographic
 ```
+
+**Note:** Microkit requires Linux. On macOS:
+- Use Docker: `docker run -it --rm -v $(pwd):/kaal rustlang/rust:nightly`
+- Use Lima: `lima cargo build`
+- Or use mocks for testing: `cargo test --features mock-sel4`
 
 ## Examples to Study
 
@@ -317,9 +335,12 @@ qemu-system-x86_64 -kernel my-kernel -initrd my-rootfs
 
 ## Resources
 
-- **[QUICK_START.md](QUICK_START.md)** - 5-minute overview
+- **[SEL4_INTEGRATION.md](SEL4_INTEGRATION.md)** - Dual-mode seL4 deployment (Microkit/Runtime)
 - **[SYSTEM_COMPOSITION.md](SYSTEM_COMPOSITION.md)** - Complete integration guide
-- **[SEL4_INTEGRATION_ROADMAP.md](SEL4_INTEGRATION_ROADMAP.md)** - Real seL4 integration
+- **Build Scripts:**
+  - `./scripts/build-microkit.sh` - Production deployment (default)
+  - `./scripts/build-runtime.sh` - Advanced Rust seL4 runtime
+  - `./scripts/build-mock.sh` - Unit tests only
 
 ## Join the Community
 

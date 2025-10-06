@@ -32,6 +32,9 @@ extern crate std;
 
 use cap_broker::{BootInfo, DefaultCapBroker};
 
+// Use seL4 platform adapter (supports mock/microkit/runtime modes)
+use sel4_platform::adapter as sel4_sys;
+
 /// Root task configuration
 #[derive(Debug, Clone)]
 pub struct RootTaskConfig {

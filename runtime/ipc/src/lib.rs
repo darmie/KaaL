@@ -30,8 +30,8 @@ extern crate std;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use thiserror::Error;
 
-// TODO PHASE 2: Use real seL4 types
-use sel4_sys::{seL4_CPtr, seL4_MessageInfo, seL4_Signal, seL4_Wait};
+// Use seL4 platform adapter (supports mock/microkit/runtime modes)
+use sel4_platform::adapter::{CPtr as seL4_CPtr, MessageInfo as seL4_MessageInfo, signal as seL4_Signal, wait as seL4_Wait};
 
 /// IPC error types
 #[derive(Debug, Error)]

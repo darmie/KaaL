@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  kaal-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kaal-dev:latest
+    container_name: kaal-dev
+    volumes:
+      # Mount source code for live editing
+      - .:/workspace
+      # Persist Rust build cache
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - SEL4_PREFIX=/seL4
+      - RUST_BACKTRACE=1
+    # Keep container running
+    tty: true
+    stdin_open: true
+
+  # QEMU testing service
+  qemu-test:
+    image: kaal-dev:latest
+    container_name: kaal-qemu
+    depends_on:
+      - kaal-dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      qemu-system-aarch64
+        -machine virt,virtualization=on
+        -cpu cortex-a53
+        -nographic
+        -m 2G
+        -kernel /workspace/target/release/kaal-root-task
+
+volumes:
+  cargo-cache:
+  target-cache:

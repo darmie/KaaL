@@ -10,16 +10,16 @@
 
 #![no_std]
 
-pub use sel4_sys;
+pub use sel4_mock_sys as sel4_sys;
 
 /// TODO PHASE 2: Replace with real seL4 Rust types
 pub mod types {
-    pub use sel4_sys::*;
+    pub use sel4_mock_sys::*;
 }
 
 /// TODO PHASE 2: Replace with real capability management
 pub mod cap {
-    use sel4_sys::*;
+    use sel4_mock_sys::*;
 
     pub struct Capability {
         cptr: seL4_CPtr,
@@ -38,7 +38,7 @@ pub mod cap {
 
 /// TODO PHASE 2: Replace with real IPC implementation
 pub mod ipc {
-    use sel4_sys::*;
+    use sel4_mock_sys::*;
 
     pub fn send(dest: seL4_CPtr, msg: seL4_MessageInfo) {
         unsafe { seL4_Send(dest, msg) }

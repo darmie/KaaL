@@ -6,6 +6,9 @@ members = [
     "runtime/dddk",
     "runtime/dddk-runtime",
     "runtime/root-task",
+    "runtime/sel4-platform",
+    "runtime/sel4-mock",
+    "runtime/sel4-rust-mock",
     "components/vfs",
     "components/posix",
     "components/network",
@@ -16,6 +19,11 @@ members = [
     "examples/system-composition",
     "examples/minimal-component",
 ]
+# Exclude rust-sel4 submodule - it has platform-specific code (x86 asm) that fails on macOS ARM
+# We only use specific crates from it via [workspace.dependencies]
+exclude = [
+    "external/rust-sel4",
+]
 resolver = "2"
 
 [workspace.package]
@@ -24,18 +32,29 @@ edition = "2021"
 authors = ["KaaL Team"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/your-org/kaal"
+description = "Kernel-as-a-Library: A composable OS development framework built on seL4"
+keywords = ["seL4", "microkernel", "framework", "composable", "capability"]
+categories = ["embedded", "no-std", "os"]
 
 [workspace.dependencies]
-# seL4 bindings strategy:
-# - Default: Use local mocks (sel4-sys points to runtime/sel4-mock)
-# - Future: Replace these paths with real seL4 Git dependency when ready for kernel integration
+# seL4 Dual-Mode Integration:
+# - Mode 1 (Default): Mock bindings for development/testing on all platforms
+# - Mode 2 (Production): Direct Rust seL4 runtime with full syscalls
 #
-# To use real seL4 (when ready):
-# 1. Change the paths below to git repos
-# 2. Build seL4 kernel image
-# 3. Link with seL4 kernel
-sel4-sys = { path = "runtime/sel4-mock" }
-sel4 = { path = "runtime/sel4-rust-mock" }
+# Switch modes with features:
+# - cargo build                                    # Mock mode (default for dev/test)
+# - cargo build --no-default-features --features runtime  # Real seL4 runtime
+#
+# Real seL4 bindings from rust-sel4 project
+sel4 = { path = "external/rust-sel4/crates/sel4", default-features = false }
+sel4-sys = { path = "external/rust-sel4/crates/sel4/sys" }
+sel4-config = { path = "external/rust-sel4/crates/sel4/config" }
+sel4-logging = { path = "external/rust-sel4/crates/sel4-logging" }
+sel4-shared-ring-buffer = { path = "external/rust-sel4/crates/sel4-shared-ring-buffer" }
+
+# Mock bindings (for testing only - renamed to avoid conflicts)
+sel4-mock-sys = { path = "runtime/sel4-mock" }
+sel4-mock = { path = "runtime/sel4-rust-mock" }
 
 # Common dependencies
 thiserror = "2.0.17"
@@ -52,6 +71,15 @@ bincode = "1.3"
 
 # Testing
 criterion = "0.7.0"
+
+[workspace.metadata.sel4]
+# Dual-mode configuration metadata
+# Features are managed by individual crates via sel4-platform
+modes = ["microkit", "runtime", "mock"]
+default-mode = "microkit"
+
+# Note: Workspace manifests cannot have [features]
+# Individual crates use sel4-platform with features: mock, microkit, runtime
 
 [profile.dev]
 opt-level = 0

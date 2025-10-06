@@ -331,12 +331,11 @@ pub unsafe fn seL4_TCB_SetIPCBuffer(
     seL4_NoError
 }
 
-/// Mock TCB_SetPriority - set TCB priority
-/// TODO PHASE 2: Replace with real seL4_TCB_SetPriority
+/// Mock TCB_SetPriority - matches seL4 signature (priority is seL4_Word, not u8)
 pub unsafe fn seL4_TCB_SetPriority(
     _tcb: seL4_CPtr,
     _authority: seL4_CPtr,
-    _priority: u8,
+    _priority: seL4_Word,
 ) -> seL4_Error {
     seL4_NoError
 }
@@ -381,4 +380,41 @@ mod tests {
         assert_eq!(seL4_NoError, 0);
         assert_ne!(seL4_InvalidArgument, seL4_NoError);
     }
+}
+
+/// Mock TCB_Configure
+pub unsafe fn seL4_TCB_Configure(
+    _tcb: seL4_CPtr,
+    _fault_ep: seL4_CPtr,
+    _cspace_root: seL4_CPtr,
+    _cspace_root_data: seL4_Word,
+    _vspace_root: seL4_CPtr,
+    _vspace_root_data: seL4_Word,
+    _buffer: usize,
+    _buffer_frame: seL4_CPtr,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_SetSchedParams
+pub unsafe fn seL4_TCB_SetSchedParams(
+    _tcb: seL4_CPtr,
+    _authority: seL4_CPtr,
+    _mcp: seL4_Word,
+    _priority: seL4_Word,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_BindNotification
+pub unsafe fn seL4_TCB_BindNotification(
+    _tcb: seL4_CPtr,
+    _notification: seL4_CPtr,
+) -> seL4_Error {
+    seL4_NoError
+}
+
+/// Mock TCB_UnbindNotification
+pub unsafe fn seL4_TCB_UnbindNotification(_tcb: seL4_CPtr) -> seL4_Error {
+    seL4_NoError
 }

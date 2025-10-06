@@ -48,27 +48,29 @@ pub use vspace::VSpaceManager;
 pub use tcb::{TcbManager, TcbConfig, Priority, DEFAULT_PRIORITY, MAX_PRIORITY};
 pub use component::{ComponentSpawner, ComponentConfig, Component, DEFAULT_STACK_SIZE, IPC_BUFFER_SIZE};
 
+#[cfg(feature = "std")]
 use thiserror::Error;
 
 /// Error types for capability operations
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Error))]
 pub enum CapabilityError {
-    #[error("Out of capability slots")]
+    #[cfg_attr(feature = "std", error("Out of capability slots"))]
     OutOfSlots,
 
-    #[error("Out of untyped memory (requested: {requested} bytes)")]
+    #[cfg_attr(feature = "std", error("Out of untyped memory (requested: {requested} bytes)"))]
     OutOfMemory { requested: usize },
 
-    #[error("Device not found: {device_id:?}")]
+    #[cfg_attr(feature = "std", error("Device not found: {device_id:?}"))]
     DeviceNotFound { device_id: DeviceId },
 
-    #[error("IRQ {irq} already allocated")]
+    #[cfg_attr(feature = "std", error("IRQ {irq} already allocated"))]
     IrqAlreadyAllocated { irq: u8 },
 
-    #[error("Invalid capability")]
+    #[cfg_attr(feature = "std", error("Invalid capability"))]
     InvalidCap,
 
-    #[error("seL4 error: {0}")]
+    #[cfg_attr(feature = "std", error("seL4 error: {0}"))]
     Sel4Error(String),
 }
 

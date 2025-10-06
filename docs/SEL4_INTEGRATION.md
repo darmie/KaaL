@@ -1,6 +1,14 @@
-# seL4 Integration Guide
+# seL4 Integration - Dual-Mode Production Approach
 
-This guide explains how KaaL integrates with the seL4 microkernel and how to set up a development environment for seL4-based development.
+## Philosophy
+
+KaaL provides **two production-ready seL4 deployment modes**:
+
+1. **Microkit Mode (Default)**: Pre-configured, production-ready seL4 deployment
+2. **Runtime Mode (Advanced)**: Direct Rust seL4 runtime for full control
+3. **Mock Mode (Testing)**: Fast unit tests only
+
+**Mocks are for testing only.** Real development uses real seL4.
 
 ## Architecture Overview
 
@@ -17,17 +25,315 @@ This guide explains how KaaL integrates with the seL4 microkernel and how to set
 │                    Capability Broker                         │
 │              (Manages seL4 Capabilities)                     │
 ├─────────────────────────────────────────────────────────────┤
-│                    seL4 Rust Bindings                        │
-│                  (sel4, sel4-sys crates)                     │
+│              seL4 Platform Abstraction Layer                 │
+│           (Microkit | Runtime | Mock for testing)            │
 ├─────────────────────────────────────────────────────────────┤
 │                    seL4 Microkernel                          │
 │                     (10K LOC C)                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## seL4 Kernel Capabilities
+## Deployment Modes
 
-KaaL leverages seL4's capability-based security model:
+### Mode 1: Microkit (Default - Recommended)
+
+The [seL4 Microkit](https://github.com/seL4/microkit) is ideal for KaaL:
+
+```bash
+# Build (default mode)
+cargo build
+
+# Or explicitly
+./scripts/build-microkit.sh
+
+# Creates components that run on seL4 Microkit
+```
+
+**Why Microkit?**
+- ✅ No kernel build needed (uses pre-built seL4)
+- ✅ Component-based architecture (matches KaaL design)
+- ✅ Pre-configured for QEMU and hardware
+- ✅ Production-ready and well-tested
+- ✅ Simple system.xml configuration
+
+**System Composition:**
+
+```xml
+<!-- system.xml -->
+<system>
+    <memory_region name="serial_mmio" size="0x1000" phys_addr="0x10000000"/>
+
+    <protection_domain name="serial_driver" priority="200">
+        <program_image path="serial_driver.elf"/>
+        <map mr="serial_mmio" vaddr="0x10000000" perms="rw"/>
+        <irq irq="33" id="1"/>
+    </protection_domain>
+
+    <protection_domain name="filesystem" priority="100">
+        <program_image path="filesystem.elf"/>
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1"/>
+        <end pd="filesystem" id="2"/>
+    </channel>
+</system>
+```
+
+**Build and Run:**
+
+```bash
+# 1. Build KaaL components
+cargo build --release
+
+# 2. Generate system image
+microkit build system.xml
+
+# 3. Run in QEMU
+qemu-system-aarch64 -M virt -cpu cortex-a53 \
+    -kernel loader.img -nographic
+```
+
+### Mode 2: Rust seL4 Runtime (Advanced)
+
+For users who need full control over seL4:
+
+```bash
+# Build with runtime mode
+./scripts/build-runtime.sh
+
+# Or explicitly
+cargo build --no-default-features --features sel4-runtime-mode
+```
+
+**Dependencies:**
+
+```toml
+# Cargo.toml (already configured)
+[dependencies]
+sel4 = { git = "https://github.com/seL4/rust-sel4" }
+sel4-runtime = { git = "https://github.com/seL4/rust-sel4" }
+sel4-root-task = { git = "https://github.com/seL4/rust-sel4" }
+```
+
+**Root Task Entry:**
+
+```rust
+#[no_mangle]
+pub extern "C" fn _start(bootinfo: &sel4::BootInfoPtr) -> ! {
+    // Parse bootinfo
+    let untyped_objects = bootinfo.untyped();
+
+    // Initialize KaaL root task
+    let root = unsafe {
+        RootTask::init_from_bootinfo(bootinfo, config)?
+    };
+
+    // Run with custom components
+    root.run_with(|broker| {
+        spawn_system_components(broker);
+    });
+}
+```
+
+**Build Configuration:**
+
+```json
+// x86_64-sel4.json
+{
+  "llvm-target": "x86_64-unknown-none-elf",
+  "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+  "arch": "x86_64",
+  "target-endian": "little",
+  "target-pointer-width": "64",
+  "os": "none",
+  "executables": true,
+  "linker": "rust-lld",
+  "panic-strategy": "abort",
+  "disable-redzone": true,
+  "features": "-mmx,-sse,+soft-float"
+}
+```
+
+### Mode 3: Mock (Unit Testing Only)
+
+Mocks are **only for unit testing**, not development:
+
+```bash
+# Run unit tests with mocks
+cargo test --features mock-sel4
+
+# Or use the script
+./scripts/build-mock.sh
+```
+
+**When to use mocks:**
+- ✅ Unit testing capability broker logic
+- ✅ Testing IPC message handling
+- ✅ CI/CD automated tests
+- ❌ NOT for driver development
+- ❌ NOT for system composition
+- ❌ NOT for feature development
+
+## Platform Abstraction Layer
+
+KaaL uses feature flags to select the seL4 mode:
+
+```rust
+// runtime/sel4-platform/src/lib.rs
+pub mod config {
+    pub fn platform_mode() -> &'static str {
+        #[cfg(feature = "microkit")]
+        return "microkit";
+
+        #[cfg(feature = "runtime")]
+        return "runtime";
+
+        #[cfg(feature = "mock")]
+        return "mock";  // Testing only
+    }
+}
+
+pub mod types {
+    #[cfg(feature = "microkit")]
+    pub use sel4_microkit::*;
+
+    #[cfg(feature = "runtime")]
+    pub use sel4_runtime::*;
+
+    #[cfg(feature = "mock")]
+    pub use sel4_sys::*;  // Testing only
+}
+```
+
+## Build Workflow
+
+### Development Workflow (Microkit - Default)
+
+```bash
+# 1. Build components
+cargo build
+
+# 2. Create system.xml (see examples/system-composition/)
+# 3. Generate bootable image
+microkit build system.xml
+
+# 4. Test in QEMU
+qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel loader.img -nographic
+```
+
+### Advanced Workflow (Runtime)
+
+```bash
+# 1. Build with runtime mode
+cargo build --no-default-features --features sel4-runtime-mode
+
+# 2. Link with seL4 kernel
+rust-lld -T linker.ld -o kaal-image \
+    target/*/release/kaal-root-task \
+    external/sel4/kernel-x86_64.elf
+
+# 3. Run in QEMU
+qemu-system-x86_64 -kernel kaal-image -nographic
+```
+
+### Testing Workflow (Mock)
+
+```bash
+# Run all unit tests with mocks
+cargo test --features mock-sel4
+
+# CI/CD integration
+- run: cargo test --features mock-sel4 --all
+```
+
+## macOS Development
+
+Microkit doesn't support macOS natively. Options:
+
+### Option 1: Docker (Recommended)
+
+```bash
+# Pull Rust container with seL4 tools
+docker pull rustlang/rust:nightly
+
+# Build in container
+docker run -it --rm -v $(pwd):/kaal rustlang/rust:nightly \
+    bash -c "cd /kaal && cargo build"
+```
+
+### Option 2: Lima VM
+
+```bash
+# Install Lima
+brew install lima
+
+# Create seL4 development VM
+limactl start --name kaal-dev template://ubuntu
+
+# Build in VM
+lima cargo build
+```
+
+### Option 3: Cross-Compilation
+
+```bash
+# Install cross-compilation tools
+cargo install cross
+
+# Build for Linux target
+cross build --target x86_64-unknown-linux-gnu
+```
+
+### Unit Testing on macOS
+
+```bash
+# Mocks work natively on macOS for testing
+cargo test --features mock-sel4
+```
+
+## Quick Start
+
+### For Hobbyists (Microkit - Easy)
+
+```bash
+# 1. Clone KaaL
+git clone https://github.com/your-org/kaal
+cd kaal
+
+# 2. Build (uses Microkit by default)
+cargo build
+
+# 3. Create your system
+cp examples/system-composition/system.xml .
+
+# 4. Generate image (Linux/Docker)
+microkit build system.xml
+
+# 5. Run in QEMU
+qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel loader.img -nographic
+```
+
+### For Advanced Users (Runtime)
+
+```bash
+# 1. Clone KaaL
+git clone https://github.com/your-org/kaal
+cd kaal
+
+# 2. Build with runtime mode
+./scripts/build-runtime.sh
+
+# 3. Configure seL4 kernel
+# (Follow rust-sel4 documentation)
+
+# 4. Link and run
+# (Custom build process)
+```
+
+## Capability-Based Security
+
+seL4's capability model provides strong isolation:
 
 ### Capability Types Used
 
@@ -51,11 +357,7 @@ KaaL leverages seL4's capability-based security model:
    - Used for RPC-style communication
    - Created from Untyped memory
 
-## Capability Broker Integration
-
-The Capability Broker is KaaL's interface to seL4 capabilities:
-
-### Initialization Flow
+### Capability Broker Integration
 
 ```rust
 // 1. Root task starts with initial capabilities in bootinfo
@@ -79,399 +381,6 @@ let serial_bundle = broker.request_device(DeviceId::Serial { port: 0 })?;
 // - DMA pool (allocated from untyped)
 ```
 
-### Resource Allocation Flow
-
-```
-Driver Request
-      ↓
-Capability Broker
-      ↓
-  ┌───┴────┬──────────┬──────────┐
-  ↓        ↓          ↓          ↓
-MMIO    IRQ      DMA Pool    I/O Ports
-  ↓        ↓          ↓          ↓
-Frames   IRQHandler  Frames    (x86 only)
-  ↓        ↓          ↓
-seL4_Untyped_Retype
-  ↓
-Untyped Memory (from bootinfo)
-```
-
-## Boot Process
-
-### 1. Kernel Boot
-
-```
-GRUB/UEFI → seL4 Kernel → Root Task (KaaL)
-```
-
-The seL4 kernel:
-- Sets up initial address space
-- Creates root task with initial capabilities
-- Passes bootinfo structure to root task
-- Transfers control to root task entry point
-
-### 2. Root Task Initialization
-
-**File:** `src/root_task.rs` (to be created in Phase 2)
-
-```rust
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    // Get bootinfo from seL4
-    let bootinfo = unsafe { sel4::get_bootinfo() };
-
-    // Initialize capability broker
-    let mut broker = unsafe {
-        DefaultCapBroker::from_bootinfo(bootinfo)
-            .expect("Failed to initialize capability broker")
-    };
-
-    // Initialize IPC system
-    let ipc_manager = IpcManager::new(&mut broker)
-        .expect("Failed to initialize IPC");
-
-    // Spawn driver components
-    spawn_serial_driver(&mut broker, &ipc_manager);
-    spawn_network_driver(&mut broker, &ipc_manager);
-
-    // Spawn system services
-    spawn_vfs_service(&ipc_manager);
-    spawn_network_stack(&ipc_manager);
-
-    // Spawn POSIX server
-    spawn_posix_server(&ipc_manager);
-
-    // Main event loop
-    event_loop();
-}
-```
-
-### 3. Component Spawning
-
-Each component runs in its own seL4 thread with:
-- Private VSpace (address space)
-- CSpace (capability space)
-- TCB (Thread Control Block)
-- Stack and IPC buffer
-
-```rust
-fn spawn_component(
-    broker: &mut dyn CapabilityBroker,
-    name: &str,
-    entry_point: fn() -> !,
-) -> Result<ComponentHandle> {
-    // Allocate capabilities
-    let tcb_cap = broker.allocate_tcb()?;
-    let vspace_cap = broker.allocate_vspace()?;
-    let cspace_cap = broker.allocate_cspace()?;
-
-    // Configure TCB
-    unsafe {
-        sel4_sys::seL4_TCB_Configure(
-            tcb_cap,
-            cspace_cap,
-            vspace_cap,
-            0, // fault_ep
-            IPC_BUFFER_VADDR,
-            ipc_buffer_cap,
-        )?;
-
-        // Set registers (entry point, stack pointer)
-        sel4_sys::seL4_TCB_WriteRegisters(
-            tcb_cap,
-            false, // resume
-            0,     // arch_flags
-            2,     // count
-            &mut [
-                entry_point as usize, // rip
-                STACK_TOP,            // rsp
-            ],
-        )?;
-
-        // Resume thread
-        sel4_sys::seL4_TCB_Resume(tcb_cap)?;
-    }
-
-    Ok(ComponentHandle { tcb_cap, name })
-}
-```
-
-## Memory Management
-
-### Virtual Memory Layout
-
-```
-0xFFFF_FFFF_FFFF_FFFF ┌────────────────────┐
-                      │   Kernel Space     │
-                      │    (seL4 kernel)   │
-0xFFFF_8000_0000_0000 ├────────────────────┤
-                      │   Component VSpace │
-                      │                    │
-                      │  ┌──────────────┐  │
-                      │  │ Stack        │  │
-0x0000_7FFF_FFFF_F000 │  ├──────────────┤  │
-                      │  │ Heap         │  │
-0x0000_0000_4000_0000 │  ├──────────────┤  │
-                      │  │ MMIO Devices │  │
-0x0000_0000_2000_0000 │  ├──────────────┤  │
-                      │  │ IPC Buffers  │  │
-0x0000_0000_1000_0000 │  ├──────────────┤  │
-                      │  │ Code + Data  │  │
-0x0000_0000_0040_0000 │  └──────────────┘  │
-                      │                    │
-0x0000_0000_0000_0000 └────────────────────┘
-```
-
-### DMA Memory
-
-DMA regions require:
-1. **Physical contiguity** - Allocated from large untyped regions
-2. **Identity mapping** - Vaddr == Paddr for device access
-3. **Cache attributes** - Uncached or write-combining
-
-```rust
-impl DmaPool {
-    pub fn allocate_dma(&mut self, size: usize) -> Result<DmaRegion> {
-        // Find contiguous untyped region
-        let untyped = self.find_contiguous_untyped(size)?;
-
-        // Retype to frames
-        let num_frames = (size + 4095) / 4096;
-        let frames = self.retype_to_frames(untyped, num_frames)?;
-
-        // Map with identity mapping (vaddr == paddr)
-        let paddr = untyped.base_paddr;
-        for (i, frame) in frames.iter().enumerate() {
-            unsafe {
-                sel4_sys::seL4_ARCH_Page_Map(
-                    *frame,
-                    self.vspace_root,
-                    paddr + i * 4096, // vaddr == paddr
-                    sel4_sys::seL4_CanRead | sel4_sys::seL4_CanWrite,
-                    sel4_sys::seL4_ARCH_Uncached, // Important for DMA!
-                )?;
-            }
-        }
-
-        Ok(DmaRegion {
-            vaddr: paddr,
-            paddr,
-            size,
-        })
-    }
-}
-```
-
-## Interrupt Handling
-
-### IRQ Registration Flow
-
-```rust
-// 1. Driver requests IRQ
-let irq_handler = broker.request_irq(4)?; // COM1 IRQ
-
-// 2. Broker creates notification and binds to IRQ
-unsafe {
-    // Get IRQ handler capability
-    sel4_sys::seL4_IRQControl_Get(
-        sel4_sys::seL4_CapIRQControl,
-        4, // IRQ number
-        cspace_root,
-        irq_cap,
-        depth,
-    )?;
-
-    // Create notification
-    let notif_cap = create_notification()?;
-
-    // Bind IRQ to notification
-    sel4_sys::seL4_IRQHandler_SetNotification(
-        irq_cap,
-        notif_cap,
-    )?;
-}
-
-// 3. Driver waits for interrupts
-loop {
-    unsafe {
-        sel4_sys::seL4_Wait(notif_cap, &mut badge);
-    }
-
-    // Handle interrupt
-    handle_serial_interrupt();
-
-    // Acknowledge IRQ
-    unsafe {
-        sel4_sys::seL4_IRQHandler_Ack(irq_cap)?;
-    }
-}
-```
-
-### Interrupt Thread Model
-
-Each device driver runs in its own thread and blocks on its IRQ notification:
-
-```
-┌──────────┐        ┌──────────┐        ┌──────────┐
-│ Serial   │        │ Network  │        │  Timer   │
-│ Driver   │        │ Driver   │        │ Driver   │
-│          │        │          │        │          │
-│ Wait on  │        │ Wait on  │        │ Wait on  │
-│ IRQ 4    │        │ IRQ 11   │        │ IRQ 0    │
-└────┬─────┘        └────┬─────┘        └────┬─────┘
-     │                   │                   │
-     │ seL4_Wait()       │ seL4_Wait()       │ seL4_Wait()
-     │                   │                   │
-     ↓                   ↓                   ↓
-┌────────────────────────────────────────────────┐
-│            seL4 Notification Objects            │
-└────────────────────────────────────────────────┘
-     ↑                   ↑                   ↑
-     │                   │                   │
-   IRQ 4               IRQ 11              IRQ 0
-     │                   │                   │
-┌────────────────────────────────────────────────┐
-│               Hardware Interrupts               │
-└────────────────────────────────────────────────┘
-```
-
-## IPC Mechanisms
-
-KaaL uses two IPC mechanisms:
-
-### 1. Shared Memory IPC (High Throughput)
-
-Used for bulk data transfer (network packets, file I/O):
-
-```rust
-// Create shared ring buffer in mapped memory
-let shared_mem = broker.allocate_memory(4096)?;
-let ring: &mut SharedRing<Packet, 256> = unsafe {
-    &mut *(shared_mem.vaddr as *mut SharedRing<Packet, 256>)
-};
-
-// Create notification pair for signaling
-let (producer_notify, consumer_notify) = broker.create_notification_pair()?;
-
-// Initialize ring with notifications
-*ring = SharedRing::with_notifications(consumer_notify, producer_notify);
-
-// Producer sends data
-ring.push(packet)?; // Automatically signals consumer
-
-// Consumer receives data
-let packet = ring.pop()?; // Can block waiting for signal
-```
-
-### 2. seL4 Endpoints (RPC)
-
-Used for synchronous request/response:
-
-```rust
-// Create endpoint
-let endpoint = broker.create_endpoint()?;
-
-// Server blocks waiting for calls
-loop {
-    let (sender, msg) = endpoint.recv()?;
-
-    // Process request
-    let response = handle_request(msg);
-
-    // Reply to sender
-    endpoint.reply(sender, response)?;
-}
-
-// Client makes synchronous call
-let response = endpoint.call(server_ep, request)?;
-```
-
-## Platform Support
-
-### x86_64 PC99
-
-**Platforms:** QEMU, PC hardware, VMs
-
-**Features:**
-- IOMMU support (VT-d)
-- APIC/x2APIC interrupts
-- PCI device enumeration
-- VGA/Serial console
-
-**Boot:** Multiboot via GRUB
-
-### ARM64 (AArch64)
-
-**Platforms:** Raspberry Pi 4, QEMU virt
-
-**Features:**
-- GICv2/GICv3 interrupts
-- Device tree parsing
-- UART PL011
-- SMMU support
-
-**Boot:** U-Boot or UEFI
-
-## Development Workflow
-
-### 1. Build seL4 Kernel
-
-```bash
-# Clone seL4
-git clone https://github.com/seL4/seL4.git
-
-# Configure for x86_64
-cd seL4
-mkdir build && cd build
-cmake -DPLATFORM=x86_64 -DSIMULATION=TRUE ..
-make
-
-# Kernel binary: images/kernel-x86_64-pc99
-```
-
-### 2. Build KaaL with seL4
-
-```bash
-# Set environment
-export SEL4_DIR=/path/to/seL4
-export SEL4_PLATFORM=x86_64
-
-# Build KaaL
-cmake -B build
-cmake --build build
-
-# System image: build/images/kaal-image-x86_64-pc99
-```
-
-### 3. Run in QEMU
-
-```bash
-qemu-system-x86_64 \
-    -kernel build/images/kernel-x86_64-pc99 \
-    -initrd build/images/kaal-image-x86_64-pc99 \
-    -serial stdio \
-    -nographic \
-    -m 512M
-```
-
-### 4. Debug with GDB
-
-```bash
-# Terminal 1: Run QEMU with GDB server
-qemu-system-x86_64 \
-    -kernel build/images/kernel-x86_64-pc99 \
-    -initrd build/images/kaal-image-x86_64-pc99 \
-    -serial stdio \
-    -s -S # GDB server on :1234, wait for debugger
-
-# Terminal 2: Connect GDB
-gdb build/kaal-root
-(gdb) target remote :1234
-(gdb) break _start
-(gdb) continue
-```
-
 ## Performance Characteristics
 
 ### seL4 Kernel Operations
@@ -493,28 +402,90 @@ gdb build/kaal-root
 | Device Request (first) | ~2000 | ~700 ns |
 | Device Request (cached) | ~100 | ~33 ns |
 
-## Security Guarantees
+## Integration Checklist
 
-seL4's formal verification provides:
+### Microkit Mode (Default)
+- [x] Cargo features configured
+- [x] Build script created
+- [x] Platform abstraction layer
+- [ ] system.xml template
+- [ ] Component ELF generation
+- [ ] QEMU test configuration
+- [ ] Hobbyist documentation
 
-1. **Functional Correctness** - Kernel behaves according to specification
-2. **Integrity** - No unauthorized access to memory or capabilities
-3. **Confidentiality** - Information flow only through IPC
-4. **Availability** - No kernel-level deadlocks
+### Runtime Mode
+- [x] Cargo features configured
+- [x] Build script created
+- [x] Platform abstraction layer
+- [ ] Target specification (x86_64-sel4.json)
+- [ ] Root task entry point
+- [ ] Linker script
+- [ ] QEMU test configuration
+- [ ] Advanced user documentation
 
-KaaL preserves these guarantees by:
-- All device access mediated through Capability Broker
-- No direct hardware access by drivers
-- IPC-only communication between components
-- Capability-based access control
+### Mock Mode (Testing)
+- [x] Cargo features configured
+- [x] Build script created
+- [x] Unit tests passing
+- [x] CI/CD integration
+
+## Next Steps
+
+1. **Create Microkit system.xml template** (Priority 1)
+   - Define protection domains for KaaL components
+   - Configure memory regions and IRQs
+   - Set up IPC channels
+
+2. **Test Microkit build** (Priority 2)
+   - Build KaaL components as ELF files
+   - Generate bootable image with microkit tool
+   - Verify QEMU execution
+
+3. **Document hobbyist workflow** (Priority 3)
+   - Step-by-step guide for adding components
+   - Examples of common system configurations
+   - Troubleshooting guide
+
+4. **Runtime mode support** (Priority 4)
+   - Create target specification
+   - Write linker script
+   - Test with rust-sel4 examples
+
+## Comparison: Microkit vs Runtime
+
+| Feature | Microkit (Default) | Runtime (Advanced) |
+|---------|-------------------|-------------------|
+| **Ease of Use** | ⭐⭐⭐⭐⭐ Easy | ⭐⭐⭐ Moderate |
+| **Setup Time** | 5 minutes | 1-2 hours |
+| **Kernel Build** | ❌ Not needed | ✅ Required |
+| **Component Model** | ✅ Built-in | 🔧 Manual |
+| **QEMU Ready** | ✅ Yes | 🔧 Manual config |
+| **Full Control** | ⭐⭐⭐ Good | ⭐⭐⭐⭐⭐ Complete |
+| **Best For** | Hobbyists, production | Research, custom systems |
+
+## Recommendation
+
+**Start with Microkit mode (default).** It provides:
+- Production-ready seL4 deployment
+- Component-based architecture
+- QEMU testing out of the box
+- Easy system composition
+
+**Use Runtime mode when:**
+- You need custom seL4 kernel configuration
+- You're doing seL4 research
+- You need access to low-level seL4 APIs
+- You're building a highly specialized system
+
+**Use Mock mode for:**
+- Unit testing only
+- CI/CD pipelines
+- Not for development or feature work
 
 ## Resources
 
 - **seL4 Manual:** https://sel4.systems/Info/Docs/seL4-manual.pdf
-- **Rust Bindings:** https://github.com/seL4/rust-sel4
+- **seL4 Microkit:** https://github.com/seL4/microkit
+- **Rust seL4 Runtime:** https://github.com/seL4/rust-sel4
 - **Tutorials:** https://docs.sel4.systems/Tutorials/
 - **Proofs:** https://sel4.systems/Info/FAQ/proof.pml
-
----
-
-**Next:** See `PHASE2_MIGRATION.md` for migration steps

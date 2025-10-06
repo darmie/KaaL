@@ -1,0 +1,40 @@
+# Cargo configuration for KaaL
+#
+# This file provides platform-specific build defaults
+
+# For macOS development: use mock backend (seL4 SDK not available)
+# For Linux: use real seL4 with Microkit (production builds)
+
+[build]
+# Uncomment for macOS development (automatic mock backend):
+# default-features = false
+# features = ["mock"]
+
+[env]
+# Point to local seL4 kernel sources (auto-detected relative to project root)
+# Override this if your seL4 is elsewhere
+# SEL4_PREFIX = { value = "", relative = true, force = false }
+
+# For Linux with seL4 SDK installed, set:
+# SEL4_PREFIX = "/path/to/seL4"
+# or
+# SEL4_INCLUDE_DIRS = "/path/to/seL4/libsel4/include"
+
+[target.aarch64-unknown-linux-gnu]
+# Cross-compilation for ARM64 Linux (seL4 target)
+# linker = "aarch64-linux-gnu-gcc"
+
+[target.x86_64-unknown-linux-gnu]
+# Linux x86_64 builds
+# linker = "gcc"
+
+# Alias for common build commands
+[alias]
+# Build with mocks (for macOS/dev)
+build-mock = "build --no-default-features --features mock"
+
+# Build with real seL4 microkit
+build-microkit = "build --features microkit,board-qemu-virt-aarch64"
+build-microkit-arm64 = "build --features microkit,board-qemu-virt-aarch64"
+build-microkit-x64 = "build --features microkit,board-pc99"
+build-microkit-riscv = "build --features microkit,board-qemu-virt-riscv64"

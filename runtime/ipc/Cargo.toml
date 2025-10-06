@@ -12,9 +12,8 @@ bitflags.workspace = true
 static_assertions.workspace = true
 crossbeam.workspace = true
 
-# seL4 bindings
-sel4-sys.workspace = true
-sel4.workspace = true
+# seL4 platform abstraction (mock mode by default)
+sel4-platform = { path = "../sel4-platform" }
 
 [dev-dependencies]
 criterion.workspace = true

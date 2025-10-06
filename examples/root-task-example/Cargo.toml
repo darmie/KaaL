@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 kaal-root-task = { path = "../../runtime/root-task" }
-sel4-sys = { path = "../../runtime/sel4-mock" }
+sel4-platform = { path = "../../runtime/sel4-platform" }
 
 [features]
 default = []
