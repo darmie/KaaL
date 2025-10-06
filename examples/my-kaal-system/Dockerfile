@@ -8,4 +8,4 @@ RUN cargo build --release \
     -Z unstable-options \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
-CMD ["cat", "/project/target/aarch64-unknown-none/release/my-test-system"]
+CMD ["cat", "/project/target/aarch64-unknown-none/release/my-kaal-system"]

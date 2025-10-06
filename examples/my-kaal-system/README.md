@@ -1,4 +1,4 @@
-# my-test-system
+# my-kaal-system
 
 KaaL-based seL4 system
 

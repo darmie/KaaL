@@ -28,10 +28,6 @@ enum Commands {
     New {
         /// Project name
         name: String,
-
-        /// Project template (minimal, driver, system)
-        #[arg(short, long, default_value = "minimal")]
-        template: String,
     },
 
     /// Build the project
@@ -56,8 +52,8 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::New { name, template } => {
-            create_project(&name, &template)?;
+        Commands::New { name } => {
+            create_project(&name)?;
         }
 
         Commands::Build { release } => {
@@ -76,9 +72,8 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_project(name: &str, template: &str) -> anyhow::Result<()> {
+fn create_project(name: &str) -> anyhow::Result<()> {
     println!("{} Creating KaaL project '{}'...", "📦".green(), name.bold());
-    println!("  Template: {}\n", template);
 
     let project_path = PathBuf::from(name);
     if project_path.exists() {
@@ -112,13 +107,8 @@ strip = true
     );
     fs::write(project_path.join("Cargo.toml"), cargo_toml)?;
 
-    // Create main.rs based on template
-    let main_rs = match template {
-        "minimal" => include_str!("../templates/minimal.rs"),
-        "driver" => include_str!("../templates/driver.rs"),
-        "system" => include_str!("../templates/system.rs"),
-        _ => anyhow::bail!("Unknown template: {}", template),
-    };
+    // Create main.rs from system template (KaaL convention)
+    let main_rs = include_str!("../templates/system.rs");
     fs::write(project_path.join("src/main.rs"), main_rs)?;
 
     // Create Dockerfile
