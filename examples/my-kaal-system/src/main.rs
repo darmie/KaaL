@@ -1,20 +1,21 @@
 //! # KaaL System Template
 //!
-//! Complete no_std seL4 system demonstrating the full workflow:
-//! 1. Parse bootinfo from seL4 kernel
-//! 2. Initialize default Capability Broker
-//! 3. Set up Component Spawner
-//! 4. Spawn stub driver component
-//! 5. Root task main loop initialization
+//! Demonstrates the composable KaaL pattern using RootTask::run_with().
 //!
-//! This follows the KaaL convention for system composition.
+//! ## Architecture
+//! 1. Initialize RootTask (handles bootinfo parsing + broker setup)
+//! 2. Use run_with() to spawn components in a composable closure
+//! 3. System enters main loop automatically
+//!
+//! This follows the KaaL composability pattern from minimal-component example.
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
-use cap_broker::{BootInfo, ComponentConfig, ComponentSpawner, DefaultCapBroker, DeviceId, DEFAULT_STACK_SIZE};
+use kaal_root_task::{RootTask, RootTaskConfig};
+use cap_broker::{ComponentConfig, ComponentSpawner, DefaultCapBroker, DeviceId, DEFAULT_STACK_SIZE};
 use core::panic::PanicInfo;
 
 // Simple bump allocator for demonstration
@@ -89,71 +90,76 @@ pub extern "C" fn stub_driver_main() -> ! {
 pub extern "C" fn _start() -> ! {
     unsafe {
         // ============================================================
-        // STEP 1: Parse Bootinfo from seL4 Kernel
+        // STEP 1 & 2: Initialize RootTask
+        // (This handles bootinfo parsing + broker initialization)
         // ============================================================
-        let bootinfo = match BootInfo::get() {
-            Ok(bi) => bi,
+        let config = RootTaskConfig::default();
+        let mut root = match RootTask::init(config) {
+            Ok(r) => r,
             Err(_) => halt(),
         };
 
         // ============================================================
-        // STEP 2: Initialize Default Capability Broker
+        // STEP 3-5: Run with composable pattern
+        // (Spawn components, then enter main loop automatically)
         // ============================================================
-        let mut broker = match DefaultCapBroker::init() {
-            Ok(b) => b,
-            Err(_) => halt(),
-        };
-
-        // ============================================================
-        // STEP 3: Create Component Spawner
-        // ============================================================
-        let mut spawner = ComponentSpawner::new(
-            bootinfo.cspace_root,
-            bootinfo.vspace_root,
-            0x4000_0000,          // VSpace base address (1GB)
-            256 * 1024 * 1024,    // VSpace size (256MB)
-        );
-
-        // ============================================================
-        // STEP 4: Spawn Stub Driver Component
-        // ============================================================
-        // Capability slot allocator
-        let mut next_slot = bootinfo.empty.start;
-        let mut slot_allocator = || {
-            let slot = next_slot;
-            next_slot += 1;
-            Ok(slot)
-        };
-
-        let driver_config = ComponentConfig {
-            name: "stub_driver",
-            entry_point: stub_driver_main as usize,
-            stack_size: DEFAULT_STACK_SIZE,
-            priority: 100,
-            device: Some(DeviceId::Serial { port: 0 }),
-            fault_ep: None,
-        };
-
-        let driver = match spawner.spawn_component_with_device(
-            driver_config,
-            &mut slot_allocator,
-            10, // untyped_cap
-            &mut broker,
-        ) {
-            Ok(component) => component,
-            Err(_) => halt(),
-        };
-
-        let _ = spawner.start_component(&driver);
-
-        // ============================================================
-        // STEP 5: Root Task Main Loop
-        // ============================================================
-        loop {
-            // Wait for IPC messages from components
-            core::arch::asm!("wfi");
-        }
+        root.run_with(|broker| {
+            spawn_components(broker);
+        });
     }
+}
+
+/// Spawn your system components here
+///
+/// This follows the composable pattern - customize this function to
+/// add your drivers and services.
+fn spawn_components(broker: &mut DefaultCapBroker) {
+    // Get bootinfo for spawner setup
+    let bootinfo = unsafe {
+        match cap_broker::BootInfo::get() {
+            Ok(bi) => bi,
+            Err(_) => return,
+        }
+    };
+
+    // Create component spawner
+    let mut spawner = ComponentSpawner::new(
+        bootinfo.cspace_root,
+        bootinfo.vspace_root,
+        0x4000_0000,          // VSpace base address (1GB)
+        256 * 1024 * 1024,    // VSpace size (256MB)
+    );
+
+    // Capability slot allocator
+    let mut next_slot = bootinfo.empty.start;
+    let mut slot_allocator = || {
+        let slot = next_slot;
+        next_slot += 1;
+        Ok(slot)
+    };
+
+    // ============================================================
+    // Spawn stub driver component
+    // ============================================================
+    let driver_config = ComponentConfig {
+        name: "stub_driver",
+        entry_point: stub_driver_main as usize,
+        stack_size: DEFAULT_STACK_SIZE,
+        priority: 100,
+        device: Some(DeviceId::Serial { port: 0 }),
+        fault_ep: None,
+    };
+
+    if let Ok(driver) = spawner.spawn_component_with_device(
+        driver_config,
+        &mut slot_allocator,
+        10, // untyped_cap
+        broker,
+    ) {
+        let _ = spawner.start_component(&driver);
+    }
+
+    // Add more components here following the same pattern
 }
 
 /// Halt system on critical error

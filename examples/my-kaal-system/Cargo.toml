@@ -9,10 +9,12 @@ edition = "2021"
 [dependencies]
 # TODO: Update these paths to point to your KaaL installation
 # For now, using relative paths (works if generated in KaaL examples/ directory)
+kaal-root-task = { path = "../../runtime/root-task" }
 cap-broker = { path = "../../runtime/cap_broker", default-features = false, features = ["runtime"] }
 sel4-platform = { path = "../../runtime/sel4-platform", default-features = false, features = ["runtime"] }
 
 # When you copy this project elsewhere, use git dependencies:
+# kaal-root-task = { git = "https://github.com/YOUR_ORG/kaal" }
 # cap-broker = { git = "https://github.com/YOUR_ORG/kaal", default-features = false, features = ["runtime"] }
 # sel4-platform = { git = "https://github.com/YOUR_ORG/kaal", default-features = false, features = ["runtime"] }
 
