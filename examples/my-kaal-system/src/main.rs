@@ -169,10 +169,11 @@ pub extern "C" fn _start() -> ! {
 // Helper Functions
 // ============================================================
 
-/// Print debug message
-/// Replace with your logging implementation
-unsafe fn debug_print(_msg: &[u8]) {
-    // Placeholder - implement using your driver/logging system
+/// Print debug message via seL4 debug console
+unsafe fn debug_print(msg: &[u8]) {
+    for &byte in msg {
+        sel4_platform::adapter::seL4_DebugPutChar(byte);
+    }
 }
 
 /// Halt system on critical error
