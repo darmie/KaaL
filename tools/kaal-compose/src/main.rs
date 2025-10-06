@@ -182,7 +182,7 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-CMD ["cat", "/kaal/target/aarch64-unknown-none/release/{name}"]
+CMD ["cat", "/kaal/examples/{name}/target/aarch64-unknown-none/release/{name}"]
 "#,
         name = name
     );
