@@ -272,7 +272,7 @@ impl CNodeManager {
 
         let slot = self.next_slot;
         self.next_slot += 1;
-        Ok(slot)
+        Ok(slot as sel4_sys::seL4_CPtr)
     }
 
     /// Get the CNode root capability
