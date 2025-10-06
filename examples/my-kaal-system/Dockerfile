@@ -74,13 +74,16 @@ RUN aarch64-linux-gnu-strip /kaal/external/seL4/build/kernel.elf -o kernel.elf &
         archive.cpio archive.o
 
 # Create a minimal gen_config.cmake that elfloader expects
-# This converts key settings from the JSON to CMake format
+# This converts key settings from the JSON to CMake format and includes necessary helpers
 RUN echo "# Auto-generated kernel config for elfloader" > /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
     echo "set(KernelPlatform \"qemu-arm-virt\")" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
     echo "set(KernelSel4Arch \"aarch64\")" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
     echo "set(KernelARMPlatform \"qemu-arm-virt\")" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
+    echo "set(KernelArchARM TRUE)" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
     echo "set(KernelDebugBuild TRUE)" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
-    echo "set(KernelPrinting TRUE)" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake
+    echo "set(KernelPrinting TRUE)" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
+    echo "# Include seL4 helpers that define config_choice and other macros" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake && \
+    echo "include(/kaal/external/seL4/tools/helpers.cmake)" >> /kaal/external/seL4/build/gen_config/kernel/gen_config.cmake
 
 # Build elfloader with CPIO embedded
 # elfloader needs both seL4_tools cmake helpers AND kernel flags
