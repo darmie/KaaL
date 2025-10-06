@@ -13,7 +13,7 @@ members = [
     "components/posix",
     "components/network",
     "components/drivers",
-    "tools/sel4-compose",
+    "tools/kaal-compose",
     "examples/serial-driver",
     "examples/root-task-example",
     "examples/system-composition",

@@ -1,0 +1,15 @@
+[package]
+name = "my-test-system"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cap-broker = { git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }
+sel4-platform = { git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

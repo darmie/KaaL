@@ -1,56 +1,122 @@
-# KaaL Quick Start (Mac Silicon)
+# KaaL Quick Start
 
-**3 simple commands to build and test KaaL with real seL4 on your Mac**
+**Build seL4-based systems with the KaaL CLI**
 
 ## Prerequisites
 
-- ✅ Docker Desktop installed and running
-- ✅ Mac Silicon (M1/M2/M3)
+- ✅ Docker Desktop installed and running (Mac users)
+- ✅ Rust toolchain installed
 - ✅ 10GB free disk space
 
 ## Quick Start
 
-### Step 1: Build Docker Image (one-time, ~15 minutes)
+### Step 1: Install KaaL CLI
 
 ```bash
-./scripts/docker-build.sh
+cargo install --path tools/kaal-compose
+```
+
+Or build from source:
+
+```bash
+cargo build --release -p kaal-compose
+# The binary will be at target/release/kaal-compose
+```
+
+### Step 2: Create a New Project
+
+```bash
+kaal new my-system
+cd my-system
+```
+
+This creates a minimal KaaL project with:
+- `src/main.rs` - Your root task entry point
+- `Cargo.toml` - Dependencies configured
+- `Dockerfile` - Build environment
+- `.kaal/config.toml` - Project configuration
+- `README.md` - Basic usage instructions
+
+Available templates:
+- `minimal` - Basic seL4 root task (default)
+- `driver` - Device driver template
+- `system` - Complete system composition
+
+```bash
+kaal new my-driver --template driver
+```
+
+### Step 3: Build Your System
+
+```bash
+kaal build
 ```
 
 This will:
+- Auto-detect macOS and use Docker build
 - Build seL4 kernel for ARM64
-- Set up complete development environment
-- Compile KaaL framework
+- Compile your root task
+- Extract binary to `build/system.elf`
 
-### Step 2: Run QEMU Test
+For release builds:
+```bash
+kaal build --release
+```
+
+### Step 4: Run in QEMU
 
 ```bash
-./scripts/docker-test.sh
+kaal run
 ```
 
 This will:
-- Build KaaL with real seL4
-- Launch in QEMU emulator
-- Run your OS!
+- Launch QEMU with your system
+- Boot seL4 kernel
+- Execute your root task
 
 **To exit QEMU**: Press `Ctrl+A` then `X`
 
-### Step 3: Development (optional)
-
+For debugging with GDB:
 ```bash
-./scripts/docker-shell.sh
+kaal run --debug
+# In another terminal: gdb build/system.elf, then (gdb) target remote :1234
 ```
 
-Inside the container:
+### Step 5: Development (optional)
+
+Edit `src/main.rs` to implement your system logic:
+
+```rust
+#![no_std]
+#![no_main]
+
+use core::panic::PanicInfo;
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    // Your system initialization here
+
+    // Example: Print to seL4 debug console
+    unsafe {
+        sel4_platform::adapter::seL4_DebugPutChar(b'H');
+        sel4_platform::adapter::seL4_DebugPutChar(b'i');
+        sel4_platform::adapter::seL4_DebugPutChar(b'\n');
+    }
+
+    loop {
+        unsafe { core::arch::asm!("wfi"); }
+    }
+}
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop { unsafe { core::arch::asm!("wfi"); } }
+}
+```
+
+Then rebuild and run:
 ```bash
-# Build for different architectures
-cargo build --features board-pc99                    # x86_64
-cargo build --features board-qemu-virt-riscv64      # RISC-V
-
-# Run tests
-cargo test --no-default-features --features mock
-
-# Build release
-cargo build --release --features board-qemu-virt-aarch64
+kaal build && kaal run
 ```
 
 ---

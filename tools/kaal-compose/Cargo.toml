@@ -1,12 +1,12 @@
 [package]
-name = "sel4-compose"
+name = "kaal-compose"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "sel4-compose"
+name = "kaal-compose"
 path = "src/main.rs"
 
 [dependencies]
