@@ -28,8 +28,10 @@ RUN git clone --depth 1 https://github.com/seL4/seL4.git && \
         .. && \
     ninja && \
     mkdir -p gen_headers/kernel gen_headers/sel4 gen_headers/interfaces gen_headers/api && \
-    cp gen_config/kernel/gen_config.{json,h} gen_headers/kernel/ && \
-    cp libsel4/gen_config/sel4/gen_config.{json,h} gen_headers/sel4/ && \
+    cp gen_config/kernel/gen_config.json gen_headers/kernel/ && \
+    cp gen_config/kernel/gen_config.h gen_headers/kernel/ && \
+    cp libsel4/gen_config/sel4/gen_config.json gen_headers/sel4/ && \
+    cp libsel4/gen_config/sel4/gen_config.h gen_headers/sel4/ && \
     cp /opt/seL4/libsel4/include/interfaces/object-api.xml gen_headers/interfaces/ && \
     cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml gen_headers/interfaces/ && \
     cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml gen_headers/interfaces/ && \
@@ -43,8 +45,10 @@ ENV SEL4_PREFIX=/opt/seL4/build
 ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
 
 # Stage 2: Build project
-COPY . /project
-WORKDIR /project
+# Note: Build context should be the KaaL repo root (../..)
+# Run from project dir: docker build -f Dockerfile -t kaal-app ../..
+COPY . /kaal
+WORKDIR /kaal/examples/my-kaal-system
 RUN cargo build --release \
     --target aarch64-unknown-none \
     --no-default-features \
@@ -52,4 +56,4 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-CMD ["cat", "/project/target/aarch64-unknown-none/release/my-kaal-system"]
+CMD ["cat", "/kaal/target/aarch64-unknown-none/release/my-kaal-system"]

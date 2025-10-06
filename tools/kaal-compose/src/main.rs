@@ -96,8 +96,14 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-cap-broker = {{ git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }}
-sel4-platform = {{ git = "https://github.com/darmie/kaal", default-features = false, features = ["runtime"] }}
+# TODO: Update these paths to point to your KaaL installation
+# For now, using relative paths (works if generated in KaaL examples/ directory)
+cap-broker = {{ path = "../../runtime/cap_broker", default-features = false, features = ["runtime"] }}
+sel4-platform = {{ path = "../../runtime/sel4-platform", default-features = false, features = ["runtime"] }}
+
+# When you copy this project elsewhere, use git dependencies:
+# cap-broker = {{ git = "https://github.com/YOUR_ORG/kaal", default-features = false, features = ["runtime"] }}
+# sel4-platform = {{ git = "https://github.com/YOUR_ORG/kaal", default-features = false, features = ["runtime"] }}
 
 [profile.release]
 opt-level = "z"
@@ -146,8 +152,10 @@ RUN git clone --depth 1 https://github.com/seL4/seL4.git && \
         .. && \
     ninja && \
     mkdir -p gen_headers/kernel gen_headers/sel4 gen_headers/interfaces gen_headers/api && \
-    cp gen_config/kernel/gen_config.{{json,h}} gen_headers/kernel/ && \
-    cp libsel4/gen_config/sel4/gen_config.{{json,h}} gen_headers/sel4/ && \
+    cp gen_config/kernel/gen_config.json gen_headers/kernel/ && \
+    cp gen_config/kernel/gen_config.h gen_headers/kernel/ && \
+    cp libsel4/gen_config/sel4/gen_config.json gen_headers/sel4/ && \
+    cp libsel4/gen_config/sel4/gen_config.h gen_headers/sel4/ && \
     cp /opt/seL4/libsel4/include/interfaces/object-api.xml gen_headers/interfaces/ && \
     cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml gen_headers/interfaces/ && \
     cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml gen_headers/interfaces/ && \
@@ -161,8 +169,10 @@ ENV SEL4_PREFIX=/opt/seL4/build
 ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
 
 # Stage 2: Build project
-COPY . /project
-WORKDIR /project
+# Note: Build context should be the KaaL repo root (../..)
+# Run from project dir: docker build -f Dockerfile -t kaal-app ../..
+COPY . /kaal
+WORKDIR /kaal/examples/{name}
 RUN cargo build --release \
     --target aarch64-unknown-none \
     --no-default-features \
@@ -170,7 +180,7 @@ RUN cargo build --release \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem
 
-CMD ["cat", "/project/target/aarch64-unknown-none/release/{name}"]
+CMD ["cat", "/kaal/target/aarch64-unknown-none/release/{name}"]
 "#,
         name = name
     );
@@ -236,9 +246,16 @@ fn build_project(release: bool) -> anyhow::Result<()> {
     if use_docker {
         println!("  Using Docker build (macOS detected)\n");
 
-        // Build Docker image
+        // Determine build context - should be KaaL repo root (../../ from examples/project)
+        let build_context = Path::new("../..").canonicalize()
+            .unwrap_or_else(|_| PathBuf::from("../.."));
+
+        println!("  Build context: {}", build_context.display());
+
+        // Build Docker image with KaaL repo root as context
         let status = Command::new("docker")
-            .args(["build", "-t", "kaal-app", "."])
+            .args(["build", "-f", "Dockerfile", "-t", "kaal-app"])
+            .arg(&build_context)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .status()?;

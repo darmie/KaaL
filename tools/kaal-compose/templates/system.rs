@@ -14,9 +14,50 @@
 
 extern crate alloc;
 
-use alloc::vec;
 use cap_broker::{BootInfo, ComponentConfig, ComponentSpawner, DefaultCapBroker, DeviceId, DEFAULT_STACK_SIZE};
 use core::panic::PanicInfo;
+
+// Simple bump allocator for demonstration
+use core::alloc::{GlobalAlloc, Layout};
+use core::cell::UnsafeCell;
+
+struct BumpAllocator {
+    heap: UnsafeCell<[u8; 8 * 1024 * 1024]>, // 8MB heap
+    next: UnsafeCell<usize>,
+}
+
+unsafe impl Sync for BumpAllocator {}
+
+unsafe impl GlobalAlloc for BumpAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let mut next = *self.next.get();
+        let align = layout.align();
+        let size = layout.size();
+
+        // Align up
+        next = (next + align - 1) & !(align - 1);
+
+        let alloc_start = next;
+        next += size;
+
+        if next > 8 * 1024 * 1024 {
+            return core::ptr::null_mut();
+        }
+
+        *self.next.get() = next;
+        self.heap.get().cast::<u8>().add(alloc_start)
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
+        // Bump allocator doesn't deallocate
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: BumpAllocator = BumpAllocator {
+    heap: UnsafeCell::new([0; 8 * 1024 * 1024]),
+    next: UnsafeCell::new(0),
+};
 
 // ============================================================
 // Component Entry Points
@@ -30,11 +71,6 @@ use core::panic::PanicInfo;
 /// - Set up interrupt handlers
 /// - Enter service loop waiting for IPC requests
 pub extern "C" fn stub_driver_main() -> ! {
-    unsafe {
-        debug_print(b"[Driver] Starting...\n");
-        debug_print(b"[Driver] Initialized\n");
-    }
-
     // Driver main loop
     loop {
         unsafe {
@@ -52,60 +88,35 @@ pub extern "C" fn stub_driver_main() -> ! {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     unsafe {
-        debug_print(b"\n================================================\n");
-        debug_print(b"  KaaL System Starting\n");
-        debug_print(b"================================================\n\n");
-
         // ============================================================
         // STEP 1: Parse Bootinfo from seL4 Kernel
         // ============================================================
-        debug_print(b"[1/5] Parsing bootinfo...\n");
-
         let bootinfo = match BootInfo::get() {
-            Ok(bi) => {
-                debug_print(b"  Bootinfo parsed\n");
-                bi
-            }
-            Err(_) => {
-                debug_print(b"ERROR: Failed to parse bootinfo\n");
-                halt();
-            }
+            Ok(bi) => bi,
+            Err(_) => halt(),
         };
 
         // ============================================================
         // STEP 2: Initialize Default Capability Broker
         // ============================================================
-        debug_print(b"\n[2/5] Initializing Capability Broker...\n");
-
         let mut broker = match DefaultCapBroker::init() {
-            Ok(b) => {
-                debug_print(b"  Capability Broker ready\n");
-                b
-            }
-            Err(_) => {
-                debug_print(b"ERROR: Failed to initialize broker\n");
-                halt();
-            }
+            Ok(b) => b,
+            Err(_) => halt(),
         };
 
         // ============================================================
         // STEP 3: Create Component Spawner
         // ============================================================
-        debug_print(b"\n[3/5] Setting up Component Spawner...\n");
-
         let mut spawner = ComponentSpawner::new(
             bootinfo.cspace_root,
             bootinfo.vspace_root,
             0x4000_0000,          // VSpace base address (1GB)
             256 * 1024 * 1024,    // VSpace size (256MB)
         );
-        debug_print(b"  Component Spawner initialized\n");
 
         // ============================================================
         // STEP 4: Spawn Stub Driver Component
         // ============================================================
-        debug_print(b"\n[4/5] Spawning stub driver...\n");
-
         // Capability slot allocator
         let mut next_slot = bootinfo.empty.start;
         let mut slot_allocator = || {
@@ -129,50 +140,19 @@ pub extern "C" fn _start() -> ! {
             10, // untyped_cap
             &mut broker,
         ) {
-            Ok(component) => {
-                debug_print(b"  Driver component spawned\n");
-                component
-            }
-            Err(_) => {
-                debug_print(b"ERROR: Failed to spawn driver\n");
-                halt();
-            }
+            Ok(component) => component,
+            Err(_) => halt(),
         };
 
-        match spawner.start_component(&driver) {
-            Ok(_) => debug_print(b"  Driver started\n"),
-            Err(_) => debug_print(b"ERROR: Failed to start driver\n"),
-        }
+        let _ = spawner.start_component(&driver);
 
         // ============================================================
-        // STEP 5: Root Task Initialization Complete
-        // ============================================================
-        debug_print(b"\n[5/5] Initialization complete\n");
-        debug_print(b"\n================================================\n");
-        debug_print(b"  System Ready\n");
-        debug_print(b"================================================\n\n");
-
-        debug_print(b"Components: stub_driver (priority 100)\n");
-        debug_print(b"Root task entering main loop...\n\n");
-
-        // ============================================================
-        // Root Task Main Loop
+        // STEP 5: Root Task Main Loop
         // ============================================================
         loop {
             // Wait for IPC messages from components
             core::arch::asm!("wfi");
         }
-    }
-}
-
-// ============================================================
-// Helper Functions
-// ============================================================
-
-/// Print debug message via seL4 debug console
-unsafe fn debug_print(msg: &[u8]) {
-    for &byte in msg {
-        sel4_platform::adapter::seL4_DebugPutChar(byte);
     }
 }
 
