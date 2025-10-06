@@ -61,6 +61,20 @@ static ALLOCATOR: BumpAllocator = BumpAllocator {
 };
 
 // ============================================================
+// seL4 Runtime Requirements
+// ============================================================
+
+// IPC buffer for seL4 syscalls
+#[no_mangle]
+#[link_section = ".bss"]
+static mut __sel4_ipc_buffer: [u8; 4096] = [0; 4096];
+
+#[no_mangle]
+pub extern "C" fn __sel4_ipc_buffer_ptr() -> *mut u8 {
+    unsafe { __sel4_ipc_buffer.as_mut_ptr() }
+}
+
+// ============================================================
 // Component Entry Points
 // ============================================================
 

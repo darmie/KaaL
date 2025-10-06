@@ -13,7 +13,6 @@ bitflags.workspace = true
 static_assertions.workspace = true
 
 # seL4 platform abstraction (handles mock/runtime modes)
-# NOT used in microkit mode (Microkit has different API constraints)
 # Default: mock mode (works on all platforms including macOS ARM)
 # For real seL4: use --features runtime
 sel4-platform = { path = "../sel4-platform", optional = true, default-features = false }
