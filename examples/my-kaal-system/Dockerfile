@@ -33,27 +33,22 @@ RUN git clone --depth 1 https://github.com/seL4/seL4.git . && \
         -DKernelPrinting=TRUE \
         .. && \
     ninja && \
-    cd /opt/seL4/build/libsel4/include && \
-    mkdir -p kernel sel4 api interfaces && \
-    cp ../../gen_config/kernel/gen_config.json kernel/ && \
-    cp ../../gen_config/kernel/gen_config.h kernel/ && \
-    cp ../gen_config/sel4/gen_config.json sel4/ && \
-    cp ../gen_config/sel4/gen_config.h sel4/ && \
-    cp /opt/seL4/libsel4/include/api/syscall.xml api/ && \
-    cp /opt/seL4/libsel4/include/interfaces/object-api.xml interfaces/ && \
-    cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml interfaces/ && \
-    cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml interfaces/
+    mkdir -p gen_headers/kernel gen_headers/sel4 gen_headers/interfaces gen_headers/api && \
+    cp gen_config/kernel/gen_config.json gen_headers/kernel/ && \
+    cp gen_config/kernel/gen_config.h gen_headers/kernel/ && \
+    cp libsel4/gen_config/sel4/gen_config.json gen_headers/sel4/ && \
+    cp libsel4/gen_config/sel4/gen_config.h gen_headers/sel4/ && \
+    cp /opt/seL4/libsel4/include/interfaces/object-api.xml gen_headers/interfaces/ && \
+    cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml gen_headers/interfaces/ && \
+    cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml gen_headers/interfaces/ && \
+    cp /opt/seL4/libsel4/include/api/syscall.xml gen_headers/api/
 
 # Set environment for rust-sel4 bindings
 ENV SEL4_DIR=/opt/seL4
 ENV SEL4_BUILD_DIR=/opt/seL4/build
 ENV SEL4_PLATFORM=qemu-arm-virt
 ENV SEL4_PREFIX=/opt/seL4/build
-
-# Verify the headers were copied correctly
-RUN ls -la /opt/seL4/build/libsel4/include/kernel/ && \
-    ls -la /opt/seL4/build/libsel4/include/sel4/ && \
-    echo "Headers verified"
+ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
 
 # ===================================================================
 # Stage 2: Build KaaL Rust library
