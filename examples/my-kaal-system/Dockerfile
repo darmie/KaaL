@@ -71,20 +71,18 @@ RUN rm -rf src/* && \
        /tmp/kaal-roottask.elf
 
 # Create minimal CMakeLists.txt that uses pre-built binary
-RUN cat > CMakeLists.txt << 'EOF'
-cmake_minimum_required(VERSION 3.7.2)
-project(sel4test-driver C ASM)
-
-# Import pre-built KaaL binary
-add_executable(sel4test-driver IMPORTED GLOBAL)
-set_target_properties(sel4test-driver PROPERTIES
-    IMPORTED_LOCATION "/tmp/kaal-roottask.elf"
-)
-
-# Declare as root server
-include(rootserver)
-DeclareRootserver(sel4test-driver)
-EOF
+RUN echo 'cmake_minimum_required(VERSION 3.7.2)' > CMakeLists.txt && \
+    echo 'project(sel4test-driver C ASM)' >> CMakeLists.txt && \
+    echo '' >> CMakeLists.txt && \
+    echo '# Import pre-built KaaL binary' >> CMakeLists.txt && \
+    echo 'add_executable(sel4test-driver IMPORTED GLOBAL)' >> CMakeLists.txt && \
+    echo 'set_target_properties(sel4test-driver PROPERTIES' >> CMakeLists.txt && \
+    echo '    IMPORTED_LOCATION "/tmp/kaal-roottask.elf"' >> CMakeLists.txt && \
+    echo ')' >> CMakeLists.txt && \
+    echo '' >> CMakeLists.txt && \
+    echo '# Declare as root server' >> CMakeLists.txt && \
+    echo 'include(rootserver)' >> CMakeLists.txt && \
+    echo 'DeclareRootserver(sel4test-driver)' >> CMakeLists.txt
 
 # ===================================================================
 # Stage 4: Build bootable image with KaaL
