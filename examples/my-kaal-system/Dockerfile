@@ -50,6 +50,11 @@ ENV SEL4_BUILD_DIR=/opt/seL4/build
 ENV SEL4_PLATFORM=qemu-arm-virt
 ENV SEL4_PREFIX=/opt/seL4/build
 
+# Verify the headers were copied correctly
+RUN ls -la /opt/seL4/build/libsel4/include/kernel/ && \
+    ls -la /opt/seL4/build/libsel4/include/sel4/ && \
+    echo "Headers verified"
+
 # ===================================================================
 # Stage 2: Build KaaL Rust library
 # ===================================================================
