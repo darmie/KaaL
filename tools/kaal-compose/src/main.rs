@@ -84,6 +84,7 @@ fn create_project(name: &str) -> anyhow::Result<()> {
     fs::create_dir_all(&project_path)?;
     fs::create_dir_all(project_path.join("src"))?;
     fs::create_dir_all(project_path.join(".kaal"))?;
+    fs::create_dir_all(project_path.join("wrapper"))?;
 
     // Create Cargo.toml
     let cargo_toml = format!(
@@ -122,17 +123,17 @@ strip = true
     let main_rs = include_str!("../templates/system.rs");
     fs::write(project_path.join("src/main.rs"), main_rs)?;
 
-    // Create Dockerfile with full build environment
+    // Create Dockerfile using sel4test infrastructure for bootable images
     let dockerfile = format!(
-        r#"# Multi-stage build for KaaL project
-# Stage 1: Build seL4 kernel and set up environment
-FROM trustworthysystems/sel4:latest AS builder
+        r#"# KaaL Bootable Image Build
+# Uses sel4test infrastructure to create bootable seL4 images with KaaL root task
+FROM trustworthysystems/sel4:latest
 
 # Install Rust and build dependencies
 RUN apt-get update && apt-get install -y \
     curl build-essential qemu-system-aarch64 \
-    device-tree-compiler wget git python3 python3-pip \
-    ninja-build tree && \
+    device-tree-compiler git python3 python3-pip \
+    ninja-build repo xmllint && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Rust nightly
@@ -141,64 +142,63 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
 ENV PATH="/root/.cargo/bin:${{PATH}}"
 RUN rustup component add rust-src
 
-# Build seL4 kernel for ARM64/QEMU
-WORKDIR /opt
-RUN git clone --depth 1 https://github.com/seL4/seL4.git && \
-    cd seL4 && mkdir build && cd build && \
-    cmake -G Ninja \
-        -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
-        -DKernelPlatform=qemu-arm-virt \
-        -DKernelSel4Arch=aarch64 \
-        -DKernelDebugBuild=TRUE \
-        -DKernelPrinting=TRUE \
-        .. && \
-    ninja && \
-    mkdir -p gen_headers/kernel gen_headers/sel4 gen_headers/interfaces gen_headers/api && \
-    cp gen_config/kernel/gen_config.json gen_headers/kernel/ && \
-    cp gen_config/kernel/gen_config.h gen_headers/kernel/ && \
-    cp libsel4/gen_config/sel4/gen_config.json gen_headers/sel4/ && \
-    cp libsel4/gen_config/sel4/gen_config.h gen_headers/sel4/ && \
-    cp /opt/seL4/libsel4/include/interfaces/object-api.xml gen_headers/interfaces/ && \
-    cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml gen_headers/interfaces/ && \
-    cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml gen_headers/interfaces/ && \
-    cp /opt/seL4/libsel4/include/api/syscall.xml gen_headers/api/
+# ===================================================================
+# Stage 1: Set up sel4test build infrastructure
+# ===================================================================
+WORKDIR /build
+RUN repo init -u https://github.com/seL4/sel4test-manifest.git -b master && \
+    repo sync
 
-# Set environment for rust-sel4 bindings
-ENV SEL4_DIR=/opt/seL4
-ENV SEL4_BUILD_DIR=/opt/seL4/build
-ENV SEL4_PLATFORM=qemu-arm-virt
-ENV SEL4_PREFIX=/opt/seL4/build
-ENV SEL4_INCLUDE_DIRS=/opt/seL4/build/gen_headers:/opt/seL4/build/libsel4/include:/opt/seL4/build/libsel4/autoconf:/opt/seL4/build/libsel4/sel4_arch_include/aarch64:/opt/seL4/build/libsel4/arch_include/arm:/opt/seL4/libsel4/include:/opt/seL4/libsel4/sel4_arch_include/aarch64:/opt/seL4/libsel4/arch_include/arm:/opt/seL4/libsel4/mode_include/64:/opt/seL4/libsel4/sel4_plat_include/qemu-arm-virt
+# ===================================================================
+# Stage 2: Build KaaL Rust library
+# ===================================================================
+COPY . /kaal-source
+WORKDIR /kaal-source/examples/{name}
 
-# Stage 2: Build KaaL root task
-COPY . /kaal
-WORKDIR /kaal/examples/{name}
+# Build KaaL as a static library (lib{name}.a)
 RUN cargo build --release \
     --target aarch64-unknown-none \
     --no-default-features \
     -Z unstable-options \
     -Zbuild-std=core,alloc,compiler_builtins \
-    -Zbuild-std-features=compiler-builtins-mem
+    -Zbuild-std-features=compiler-builtins-mem && \
+    ls -lh target/aarch64-unknown-none/release/
 
-# Stage 3: Install elfloader tool and create bootable image
-WORKDIR /opt
-RUN git clone --depth 1 https://github.com/seL4/seL4_tools.git
+# ===================================================================
+# Stage 3: Replace sel4test-driver with KaaL wrapper
+# ===================================================================
 
-# Create bootable image by combining kernel + root task
-# For qemu-arm-virt, we need to embed the root task in the kernel image
-WORKDIR /opt/seL4_tools/elfloader-tool
-RUN cmake -G Ninja \
-        -DCROSS_COMPILER_PREFIX=aarch64-linux-gnu- \
-        -DKernelARMPlatform=qemu-arm-virt \
-        -DKernelSel4Arch=aarch64 \
-        -DElfloaderImage=/kaal/examples/{name}/target/aarch64-unknown-none/release/{name} \
-        -DElfloaderKernelBinary=/opt/seL4/build/kernel.elf \
-        . && \
-    ninja && \
-    cp elfloader /output-image
+# Copy wrapper files to sel4test-driver location
+WORKDIR /build/projects/sel4test/apps/sel4test-driver/src
+RUN rm -f *.c *.h
+COPY /kaal-source/examples/{name}/wrapper/main.c .
 
-# Extract the final bootable image
-CMD ["cat", "/opt/seL4_tools/elfloader-tool/elfloader"]
+# Update sel4test-driver CMakeLists.txt to use our wrapper
+WORKDIR /build/projects/sel4test/apps/sel4test-driver
+RUN rm -f CMakeLists.txt
+COPY /kaal-source/examples/{name}/wrapper/CMakeLists.txt .
+
+# Create symlink to KaaL Rust library so CMake can find it
+RUN mkdir -p /build/projects/sel4test/apps/sel4test-driver/target/aarch64-unknown-none/release && \
+    ln -sf /kaal-source/examples/{name}/target/aarch64-unknown-none/release/lib{name}.a \
+           /build/projects/sel4test/apps/sel4test-driver/target/aarch64-unknown-none/release/lib{name}.a
+
+# ===================================================================
+# Stage 4: Build bootable image with KaaL
+# ===================================================================
+WORKDIR /build
+RUN mkdir -p build && cd build && \
+    ../init-build.sh -DPLATFORM=qemu-arm-virt -DAARCH64=1 && \
+    ninja
+
+# Extract bootable image
+RUN cp /build/build/images/sel4test-driver-image-arm-qemu-arm-virt /boot-image.elf && \
+    echo "=== Bootable KaaL image created ===" && \
+    ls -lh /boot-image.elf && \
+    file /boot-image.elf
+
+# Default command: output the bootable image
+CMD ["cat", "/boot-image.elf"]
 "#,
         name = name
     );
@@ -245,6 +245,146 @@ Edit `src/main.rs` to implement your system logic.
         name
     );
     fs::write(project_path.join("README.md"), readme)?;
+
+    // Create wrapper/main.c - C entry point that calls into Rust
+    let wrapper_main_c = r#"/*
+ * KaaL seL4 Wrapper - C Entry Point
+ *
+ * This wrapper integrates KaaL with seL4's boot infrastructure.
+ * It receives boot info from seL4 and passes it to the Rust runtime.
+ */
+
+#include <stdio.h>
+#include <sel4/sel4.h>
+#include <sel4platsupport/bootinfo.h>
+
+/* Rust entry point */
+extern void kaal_main(seL4_BootInfo *bootinfo);
+
+int main(void) {
+    seL4_BootInfo *info = platsupport_get_bootinfo();
+
+    printf("\n");
+    printf("===========================================\n");
+    printf("  KaaL Root Task Starting\n");
+    printf("===========================================\n");
+    printf("  Boot Info:\n");
+    printf("    IPC Buffer:      %p\n", (void*)info->ipcBuffer);
+    printf("    Empty Slots:     [%lu-%lu)\n",
+           (unsigned long)info->empty.start,
+           (unsigned long)info->empty.end);
+    printf("    User Image:      [%p-%p)\n",
+           (void*)info->userImageFrames.start,
+           (void*)info->userImageFrames.end);
+    printf("===========================================\n\n");
+
+    /* Transfer control to Rust KaaL runtime */
+    kaal_main(info);
+
+    /* Should never return */
+    printf("ERROR: kaal_main returned!\n");
+    return 1;
+}
+"#;
+    fs::write(project_path.join("wrapper/main.c"), wrapper_main_c)?;
+
+    // Create wrapper/kaal_entry.rs - Rust FFI entry point
+    let wrapper_kaal_entry_rs = format!(
+        r#"//! KaaL Entry Point - Rust FFI Bridge
+//!
+//! This module provides the C-callable entry point that receives
+//! seL4 boot info and initializes the KaaL runtime.
+
+#![no_std]
+
+use kaal_root_task::{{RootTask, RootTaskConfig}};
+
+/// C-callable entry point from wrapper
+///
+/// SAFETY: This function receives a pointer to seL4_BootInfo from the C wrapper.
+/// The pointer must be valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn kaal_main(bootinfo: *const u8) -> ! {{
+    // Initialize KaaL with default configuration
+    let config = RootTaskConfig::default();
+    let mut root = match RootTask::init(config) {{
+        Ok(r) => r,
+        Err(_) => halt("Failed to initialize RootTask"),
+    }};
+
+    // Run KaaL system with component spawning
+    root.run_with(|broker| {{
+        // TODO: Spawn your components here
+        // See examples/my-kaal-system/src/main.rs for patterns
+
+        // For now, just entering idle loop
+        let _ = broker;
+    }});
+}}
+
+/// Halt system on critical error
+fn halt(msg: &str) -> ! {{
+    // In a real system, you'd log this error
+    let _ = msg;
+    loop {{
+        unsafe {{
+            core::arch::asm!("wfi");
+        }}
+    }}
+}}
+"#
+    );
+    fs::write(project_path.join("wrapper/kaal_entry.rs"), wrapper_kaal_entry_rs)?;
+
+    // Create wrapper/CMakeLists.txt - Build configuration
+    let wrapper_cmake = format!(
+        r#"cmake_minimum_required(VERSION 3.7.2)
+
+# Include seL4 test infrastructure (provides build targets)
+include(${{CMAKE_SOURCE_DIR}}/projects/sel4test/settings.cmake)
+
+# Set project name
+project(kaal-wrapper C ASM)
+
+# Find required seL4 packages
+find_package(seL4 REQUIRED)
+find_package(elfloader-tool REQUIRED)
+find_package(musllibc REQUIRED)
+find_package(sel4muslcsys REQUIRED)
+find_package(sel4platsupport REQUIRED)
+find_package(sel4utils REQUIRED)
+find_package(sel4debug REQUIRED)
+
+# Build KaaL Rust library
+set(KAAL_RUST_BINARY "${{CMAKE_CURRENT_SOURCE_DIR}}/../target/aarch64-unknown-none/release/lib{name}.a")
+
+# Create wrapper executable (replaces sel4test-driver)
+add_executable(sel4test-driver
+    main.c
+)
+
+target_link_libraries(sel4test-driver
+    PRIVATE
+    ${{KAAL_RUST_BINARY}}
+    sel4
+    muslc
+    sel4muslcsys
+    sel4platsupport
+    sel4utils
+    sel4debug
+)
+
+# Declare as root server
+include(rootserver)
+DeclareRootserver(sel4test-driver)
+
+# Generate final boot image
+include(simulation)
+GenerateSimulateScript()
+"#,
+        name = name
+    );
+    fs::write(project_path.join("wrapper/CMakeLists.txt"), wrapper_cmake)?;
 
     println!("{} Project created successfully!\n", "✅".green());
     println!("Next steps:");
