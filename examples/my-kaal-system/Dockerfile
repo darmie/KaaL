@@ -1,5 +1,5 @@
 # KaaL Bootable Image Builder
-# Builds standalone KaaL root task and creates bootable seL4 image
+# Uses sel4test infrastructure with C wrapper calling Rust root task
 FROM trustworthysystems/sel4:latest
 
 # Install Rust and build dependencies
@@ -20,7 +20,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN rustup component add rust-src
 
 # ===================================================================
-# Stage 1: Build seL4 kernel (needed for rust-sel4 bindings)
+# Stage 1: Build seL4 kernel for rust-sel4 bindings
 # ===================================================================
 WORKDIR /opt/seL4
 RUN git clone --depth 1 https://github.com/seL4/seL4.git . && \
@@ -41,51 +41,43 @@ ENV SEL4_PLATFORM=qemu-arm-virt
 ENV SEL4_PREFIX=/opt/seL4/build
 
 # ===================================================================
-# Stage 2: Build KaaL root task binary
+# Stage 2: Build KaaL Rust library
 # ===================================================================
 COPY . /kaal-source
 WORKDIR /kaal-source/examples/my-kaal-system
 
-# Build KaaL as standalone ELF binary
+# Build KaaL as static library
 RUN cargo build --release \
     --target aarch64-unknown-none \
     --no-default-features \
     -Z unstable-options \
     -Zbuild-std=core,alloc,compiler_builtins \
     -Zbuild-std-features=compiler-builtins-mem && \
-    echo "=== KaaL binary built ===" && \
-    ls -lh target/aarch64-unknown-none/release/my-kaal-system && \
-    file target/aarch64-unknown-none/release/my-kaal-system
+    echo "=== KaaL library built ===" && \
+    ls -lh target/aarch64-unknown-none/release/libmy_kaal_system.a
 
 # ===================================================================
-# Stage 3: Set up sel4test build infrastructure for boot image
+# Stage 3: Set up sel4test with our wrapper
 # ===================================================================
 WORKDIR /build
 RUN repo init -u https://github.com/seL4/sel4test-manifest.git -b master && \
     repo sync
 
-# Replace sel4test-driver binary with KaaL binary
+# Replace sel4test-driver source with our wrapper
 WORKDIR /build/projects/sel4test/apps/sel4test-driver
-RUN rm -rf src/* && \
-    cp /kaal-source/examples/my-kaal-system/target/aarch64-unknown-none/release/my-kaal-system \
-       /tmp/kaal-roottask.elf
+RUN rm -rf src/* CMakeLists.txt
 
-# Create minimal CMakeLists.txt that uses pre-built binary
-RUN echo 'cmake_minimum_required(VERSION 3.7.2)' > CMakeLists.txt && \
-    echo 'project(sel4test-driver C ASM)' >> CMakeLists.txt && \
-    echo '' >> CMakeLists.txt && \
-    echo '# Import pre-built KaaL binary' >> CMakeLists.txt && \
-    echo 'add_executable(sel4test-driver IMPORTED GLOBAL)' >> CMakeLists.txt && \
-    echo 'set_target_properties(sel4test-driver PROPERTIES' >> CMakeLists.txt && \
-    echo '    IMPORTED_LOCATION "/tmp/kaal-roottask.elf"' >> CMakeLists.txt && \
-    echo ')' >> CMakeLists.txt && \
-    echo '' >> CMakeLists.txt && \
-    echo '# Declare as root server' >> CMakeLists.txt && \
-    echo 'include(rootserver)' >> CMakeLists.txt && \
-    echo 'DeclareRootserver(sel4test-driver)' >> CMakeLists.txt
+# Copy wrapper files
+COPY examples/my-kaal-system/wrapper/main.c src/
+COPY examples/my-kaal-system/wrapper/CMakeLists.txt .
+
+# Symlink KaaL library where CMake expects it
+RUN mkdir -p target/aarch64-unknown-none/release && \
+    ln -s /kaal-source/examples/my-kaal-system/target/aarch64-unknown-none/release/libmy_kaal_system.a \
+          target/aarch64-unknown-none/release/libmy_kaal_system.a
 
 # ===================================================================
-# Stage 4: Build bootable image with KaaL
+# Stage 4: Build bootable image
 # ===================================================================
 WORKDIR /build
 RUN mkdir -p build && cd build && \
