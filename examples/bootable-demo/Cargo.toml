@@ -1,0 +1,20 @@
+[package]
+name = "kaal-bootable-demo"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Team"]
+description = "Bootable KaaL demo system with Rust elfloader"
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/minimal.rs"
+
+[dependencies]
+# No dependencies - minimal standalone root task
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "z"  # Optimize for size
+strip = true

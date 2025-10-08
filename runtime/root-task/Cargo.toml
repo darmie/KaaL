@@ -8,5 +8,5 @@ sel4-platform = { path = "../sel4-platform" }
 cap-broker = { path = "../cap_broker" }
 
 [features]
-default = []
-sel4-real = []
+default = ["runtime"]
+runtime = []

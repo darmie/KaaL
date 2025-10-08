@@ -21,7 +21,10 @@ members = [
 ]
 # Exclude rust-sel4 submodule - it has platform-specific code (x86 asm) that fails on macOS ARM
 # We only use specific crates from it via [workspace.dependencies]
-exclude = ["external/rust-sel4"]
+# Exclude elfloader - it's a standalone bootloader with different target (aarch64-unknown-none)
+# Exclude elfloader-builder - it's a host tool, not part of target build
+# Exclude bootable-demo - it's a standalone bootable example with different target
+exclude = ["external/rust-sel4", "runtime/elfloader", "runtime/elfloader-builder", "examples/bootable-demo"]
 resolver = "2"
 
 [workspace.package]

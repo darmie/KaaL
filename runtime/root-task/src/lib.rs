@@ -166,13 +166,13 @@ impl RootTask {
 
         // Enter idle loop (wait for component events)
         loop {
-            #[cfg(feature = "sel4-real")]
+            #[cfg(feature = "runtime")]
             unsafe {
                 // Wait for any notification from components
                 sel4_sys::seL4_Yield();
             }
 
-            #[cfg(not(feature = "sel4-real"))]
+            #[cfg(not(feature = "runtime"))]
             {
                 // Mock mode: idle loop
                 core::hint::spin_loop();
@@ -336,7 +336,7 @@ impl ComponentSpawner {
         // - Set CSpace and VSpace
 
         // TODO PHASE 2: Start the thread
-        #[cfg(feature = "sel4-real")]
+        #[cfg(feature = "runtime")]
         {
             // Real seL4 TCB configuration would go here
             // sel4_sys::seL4_TCB_Configure(...)

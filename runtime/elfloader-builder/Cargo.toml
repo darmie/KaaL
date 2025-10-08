@@ -1,0 +1,29 @@
+[package]
+name = "kaal-elfloader-builder"
+version = "0.1.0"
+edition = "2021"
+description = "Build tool to package seL4 kernel and KaaL root task into bootable image"
+
+[[bin]]
+name = "kaal-elfloader-builder"
+path = "src/main.rs"
+
+[dependencies]
+# ELF parsing
+goblin = "0.8"
+object = { version = "0.36", features = ["read", "write", "elf"] }
+
+# Serialization
+postcard = { version = "1.0", features = ["alloc"] }
+serde = { version = "1.0", features = ["derive"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+
+# File I/O
+memmap2 = "0.9"
+
+# Utilities
+log = "0.4"
+env_logger = "0.11"
