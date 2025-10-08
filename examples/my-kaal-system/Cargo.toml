@@ -6,6 +6,10 @@ edition = "2021"
 # This is a standalone project, not part of a workspace
 [workspace]
 
+[lib]
+crate-type = ["staticlib"]
+path = "src/main.rs"
+
 [dependencies]
 # TODO: Update these paths to point to your KaaL installation
 # For now, using relative paths (works if generated in KaaL examples/ directory)
