@@ -128,6 +128,13 @@ pub extern "C" fn _start() -> ! {
 /// This follows the composable pattern - customize this function to
 /// add your drivers and services.
 fn spawn_components(broker: &mut DefaultCapBroker) {
+    // Print debug message to show KaaL is running
+    debug_print("\n");
+    debug_print("========================================\n");
+    debug_print("  KaaL Root Task Running!\n");
+    debug_print("  Initializing components...\n");
+    debug_print("========================================\n\n");
+
     // Get bootinfo for spawner setup
     let bootinfo = unsafe {
         match cap_broker::BootInfo::get() {
@@ -174,6 +181,23 @@ fn spawn_components(broker: &mut DefaultCapBroker) {
     }
 
     // Add more components here following the same pattern
+}
+
+/// Simple debug print using seL4_DebugPutChar
+fn debug_print(s: &str) {
+    for byte in s.bytes() {
+        unsafe {
+            // seL4_DebugPutChar syscall
+            core::arch::asm!(
+                "mov x0, {ch}",
+                "mov x7, #1",  // seL4_DebugPutChar syscall number
+                "svc #0",
+                ch = in(reg) byte as u64,
+                out("x0") _,
+                out("x7") _,
+            );
+        }
+    }
 }
 
 /// Halt system on critical error

@@ -32,7 +32,17 @@ RUN git clone --depth 1 https://github.com/seL4/seL4.git . && \
         -DKernelDebugBuild=TRUE \
         -DKernelPrinting=TRUE \
         .. && \
-    ninja
+    ninja && \
+    cd /opt/seL4/build/libsel4/include && \
+    mkdir -p kernel sel4 api interfaces && \
+    cp ../../gen_config/kernel/gen_config.json kernel/ && \
+    cp ../../gen_config/kernel/gen_config.h kernel/ && \
+    cp gen_config/sel4/gen_config.json sel4/ && \
+    cp gen_config/sel4/gen_config.h sel4/ && \
+    cp /opt/seL4/libsel4/include/api/syscall.xml api/ && \
+    cp /opt/seL4/libsel4/include/interfaces/object-api.xml interfaces/ && \
+    cp /opt/seL4/libsel4/sel4_arch_include/aarch64/interfaces/object-api-sel4-arch.xml interfaces/ && \
+    cp /opt/seL4/libsel4/arch_include/arm/interfaces/object-api-arch.xml interfaces/
 
 # Set environment for rust-sel4 bindings
 ENV SEL4_DIR=/opt/seL4
