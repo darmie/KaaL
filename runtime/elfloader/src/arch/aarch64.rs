@@ -30,13 +30,30 @@ pub unsafe extern "C" fn _start() -> ! {
 
         // Restore DTB address to x0 and jump to Rust
         "mov x0, x19",
-        "bl elfloader_main",
+        "bl _start_rust",
 
         // Should never return
         "3:",
         "wfe",
         "b 3b",
     )
+}
+
+/// Rust entry point - called from assembly _start
+#[no_mangle]
+extern "C" fn _start_rust(_dtb_addr: usize) -> ! {
+    // Raw UART test - write directly to hardware before any Rust setup
+    unsafe {
+        let uart_base = 0x0900_0000 as *mut u32;
+        core::ptr::write_volatile(uart_base, b'#' as u32);
+    }
+
+    // QEMU virt places DTB at fixed address 0x40000000 (base of RAM)
+    // When using -kernel with ELF, x0 is NOT set, so we hardcode the DTB location
+    let dtb_addr = 0x40000000;
+
+    // Call main elfloader entry
+    crate::elfloader_main(dtb_addr)
 }
 
 /// Get current exception level

@@ -62,10 +62,21 @@ impl Write for UartWriter {
 
 static UART: Mutex<Option<UartWriter>> = Mutex::new(None);
 
-/// Initialize UART
+/// Initialize UART with explicit hardware setup
 pub fn init() {
+    // First, write a raw test character directly to hardware to verify access
+    unsafe {
+        let uart_dr = UART_BASE as *mut u32;
+        core::ptr::write_volatile(uart_dr, b'!' as u32);
+    }
+
     let mut uart = UART.lock();
     *uart = Some(UartWriter::new());
+
+    // Write a second test character after initialization
+    if let Some(ref mut uart) = *uart {
+        uart.write_byte(b'@');
+    }
 }
 
 /// Print to UART

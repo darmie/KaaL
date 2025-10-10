@@ -1,60 +1,67 @@
 // Boot sequence management
 
 use crate::uart_println;
-use crate::{BootInfo, payload::Payload};
+use crate::BootInfo;
 
-/// Embedded payload (added by elfloader-builder)
-/// This will be patched in by the build tool
-#[link_section = ".rodata.payload"]
-#[no_mangle]
-static PAYLOAD_DATA: [u8; 4] = [0, 0, 0, 0]; // Placeholder, will be replaced
+/// Symbols provided by linker script for embedded kernel
+extern "C" {
+    static __kernel_image_start: u8;
+    static __kernel_image_end: u8;
+}
 
-/// Pointer to actual payload (set by builder)
-#[link_section = ".data.payload_ptr"]
-#[no_mangle]
-static mut PAYLOAD_START: usize = 0;
-
-#[link_section = ".data.payload_size"]
-#[no_mangle]
-static mut PAYLOAD_SIZE: usize = 0;
+/// Symbols provided by linker script for embedded root task
+extern "C" {
+    static __user_image_start: u8;
+    static __user_image_end: u8;
+}
 
 pub fn load_images() -> BootInfo {
-    uart_println!("Deserializing payload...");
+    uart_println!("Loading embedded images from ELF sections...");
 
-    // Get payload data
-    let payload_slice = unsafe {
-        if PAYLOAD_START == 0 || PAYLOAD_SIZE == 0 {
-            panic!("Payload not initialized! Run kaal-elfloader-builder first.");
-        }
-        core::slice::from_raw_parts(PAYLOAD_START as *const u8, PAYLOAD_SIZE)
+    // Get kernel image from .kernel_elf section
+    let (kernel_start, kernel_end) = unsafe {
+        (
+            &__kernel_image_start as *const u8 as usize,
+            &__kernel_image_end as *const u8 as usize,
+        )
     };
 
-    uart_println!("Payload size: {} bytes", payload_slice.len());
+    let kernel_size = kernel_end - kernel_start;
+    uart_println!("  Kernel: {:#x} - {:#x} ({} KB)", kernel_start, kernel_end, kernel_size / 1024);
 
-    // Deserialize payload metadata
-    let (payload, data): (Payload, &[u8]) = postcard::take_from_bytes(payload_slice)
-        .expect("Failed to deserialize payload");
+    // Get root task from .roottask_data section
+    let (user_start, user_end) = unsafe {
+        (
+            &__user_image_start as *const u8 as usize,
+            &__user_image_end as *const u8 as usize,
+        )
+    };
 
-    uart_println!("Payload metadata:");
-    uart_println!("  Kernel entry: {:#x}", payload.kernel_entry);
-    uart_println!("  User entry:   {:#x}", payload.user_entry);
-    uart_println!("  Kernel regions: {}", payload.kernel_regions.len());
-    uart_println!("  User regions:   {}", payload.user_regions.len());
+    let user_size = user_end - user_start;
+    uart_println!("  User:   {:#x} - {:#x} ({} KB)", user_start, user_end, user_size / 1024);
 
-    // Load regions into physical memory
+    // For now, we'll load kernel at fixed physical address 0x40000000
+    // This matches seL4's expected kernel load address for QEMU ARM virt
+    let kernel_paddr = 0x40000000;
+
+    uart_println!("Copying kernel to physical address {:#x}...", kernel_paddr);
+
+    // Copy kernel to target physical address
     unsafe {
-        payload.load_to_memory(data);
+        let src = kernel_start as *const u8;
+        let dst = kernel_paddr as *mut u8;
+        core::ptr::copy_nonoverlapping(src, dst, kernel_size);
     }
-
-    let (user_start, user_end) = payload.user_paddr_range();
 
     uart_println!("Images loaded successfully!");
 
+    // Return kernel entry point and user image location
+    // seL4 kernel entry is at the start of kernel image
     BootInfo {
         user_img_start: user_start,
         user_img_end: user_end,
-        pv_offset: 0, // Will be calculated based on kernel mapping
-        user_entry: payload.user_entry,
+        pv_offset: 0, // Identity mapped for now
+        user_entry: kernel_paddr, // Jump to kernel entry
         dtb_addr: 0, // Will be set from dtb parameter
         dtb_size: 0,
     }

@@ -4,8 +4,12 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /* Load at 256MB - below typical kernel load address */
-    . = 0x10000000;
+    /* Load in RAM after DTB region
+     * QEMU virt RAM starts at 0x40000000
+     * DTB is placed at 0x40000000-0x40100000 (1MB)
+     * Elfloader loads after DTB at 0x40100000
+     */
+    . = 0x40100000;
 
     .text.boot : {
         KEEP(*(.text.boot))

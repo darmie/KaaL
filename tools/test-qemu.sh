@@ -55,8 +55,11 @@ OUTPUT_FILE="/tmp/kaal-qemu-output.txt"
 rm -f "$OUTPUT_FILE"
 
 # Run QEMU in background with output to file
+# Use -kernel to load ELF at address specified in linker script (0x40100000)
+# DTB will be placed at 0x40000000 (1MB before elfloader)
+# Match seL4 boot configuration for QEMU ARM virt platform
 qemu-system-aarch64 \
-    -machine virt,virtualization=on \
+    -machine virt,virtualization=on,highmem=off,secure=off \
     -cpu cortex-a53 \
     -m 512M \
     -nographic \
