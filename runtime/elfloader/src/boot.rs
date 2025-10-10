@@ -244,3 +244,20 @@ fn parse_elf_entry(elf_addr: usize) -> usize {
 
     entry
 }
+
+/// Update the rootserver structure with DTB information
+///
+/// This must be called after DTB is parsed to provide device tree info to kernel
+pub fn update_rootserver_dtb(kernel_paddr: usize, dtb_addr: usize, dtb_size: usize) {
+    let rootserver_addr = kernel_paddr + ROOTSERVER_OFFSET;
+
+    uart_println!("Updating rootserver with DTB info...");
+    uart_println!("  DTB: {:#x} (size: {})", dtb_addr, dtb_size);
+
+    unsafe {
+        let rootserver = rootserver_addr as *mut RootserverMem;
+        // Update only the DTB fields, preserving other values
+        (*rootserver).extra_bi = dtb_addr;
+        (*rootserver).extra_bi_size = dtb_size;
+    }
+}

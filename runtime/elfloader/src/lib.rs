@@ -141,6 +141,9 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
     boot_info.dtb_addr = dtb_addr;
     boot_info.dtb_size = dtb.total_size();
 
+    // Update rootserver structure with DTB information
+    boot::update_rootserver_dtb(kernel_entry, dtb_addr, dtb.total_size());
+
     uart::println!("Kernel entry: {:#x}", kernel_entry);
     uart::println!("User image: {:#x} - {:#x}",
         boot_info.user_img_start, boot_info.user_img_end);
