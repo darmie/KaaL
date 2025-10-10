@@ -150,7 +150,30 @@ RUN cargo build --release
 RUN test -f target/release/kaal-elfloader-builder
 
 # ============================================================================
-# Stage 6: Assemble Bootable Image
+# Stage 6: Link Root Task into ELF Executable
+# ============================================================================
+FROM builder-base AS roottask-linker
+
+# Receive build arguments
+ARG PROJECT_PATH
+ARG ROOT_TASK_LIB
+
+# Copy root task static library and linker script
+COPY --from=roottask-builder /kaal-source/${PROJECT_PATH}/target/aarch64-unknown-none/release/${ROOT_TASK_LIB} /build/root-task.a
+COPY tools/roottask.ld /build/roottask.ld
+
+# Link root task library into executable ELF
+WORKDIR /build
+RUN mkdir -p /artifacts && \
+    aarch64-linux-gnu-ld -T roottask.ld \
+        --whole-archive /build/root-task.a --no-whole-archive \
+        -o /artifacts/root-task.elf && \
+    file /artifacts/root-task.elf && \
+    aarch64-linux-gnu-readelf -h /artifacts/root-task.elf && \
+    echo "✓ Root task linked into ELF executable"
+
+# ============================================================================
+# Stage 7: Assemble Bootable Image
 # ============================================================================
 FROM builder-base AS assembler
 
@@ -161,7 +184,7 @@ ARG ROOT_TASK_LIB
 # Copy artifacts from previous stages
 COPY --from=kernel-builder /build/kernel/build/kernel.elf /artifacts/kernel.elf
 COPY --from=elfloader-builder /build/runtime/elfloader/target/aarch64-unknown-none/release/libkaal_elfloader.a /artifacts/elfloader.a
-COPY --from=roottask-builder /kaal-source/${PROJECT_PATH}/target/aarch64-unknown-none/release/${ROOT_TASK_LIB} /artifacts/root-task.a
+COPY --from=roottask-linker /artifacts/root-task.elf /artifacts/root-task.elf
 COPY --from=builder-tool /build/runtime/elfloader-builder/target/release/kaal-elfloader-builder /usr/local/bin/
 
 WORKDIR /build
@@ -175,7 +198,7 @@ RUN echo "═══════════════════════�
     echo "" && \
     echo "Elfloader:" && file /artifacts/elfloader.a && ls -lh /artifacts/elfloader.a && \
     echo "" && \
-    echo "Root Task (${PROJECT_PATH}):" && file /artifacts/root-task.a && ls -lh /artifacts/root-task.a && \
+    echo "Root Task (${PROJECT_PATH}):" && file /artifacts/root-task.elf && ls -lh /artifacts/root-task.elf && \
     echo "" && \
     echo "═══════════════════════════════════════════════════════════"
 
@@ -192,7 +215,7 @@ RUN mkdir -p /output /build/link && \
         /artifacts/kernel.elf kernel_embed.o && \
     aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
         --rename-section .data=.roottask_data,alloc,load,readonly,data,contents \
-        /artifacts/root-task.a roottask_embed.o && \
+        /artifacts/root-task.elf roottask_embed.o && \
     aarch64-linux-gnu-ld -T /build/bootimage.ld -o /output/bootimage.elf \
         $(find . -name '*.o' ! -name 'kernel_embed.o' ! -name 'roottask_embed.o') \
         kernel_embed.o roottask_embed.o && \
@@ -209,7 +232,7 @@ RUN echo "Bootable Image Build Information" > /output/build-info.txt && \
     echo "Components:" >> /output/build-info.txt && \
     echo "  Kernel: $(file /artifacts/kernel.elf | cut -d: -f2)" >> /output/build-info.txt && \
     echo "  Elfloader: $(file /artifacts/elfloader.a | cut -d: -f2)" >> /output/build-info.txt && \
-    echo "  Root Task: $(file /artifacts/root-task.a | cut -d: -f2)" >> /output/build-info.txt && \
+    echo "  Root Task: $(file /artifacts/root-task.elf | cut -d: -f2)" >> /output/build-info.txt && \
     echo "" >> /output/build-info.txt && \
     echo "Platform: QEMU ARM virt (Cortex-A53)" >> /output/build-info.txt && \
     echo "Elfloader Load Address: 0x40100000" >> /output/build-info.txt && \
@@ -220,7 +243,7 @@ RUN test -f /output/bootimage.elf || \
     (echo "ERROR: bootimage.elf not created!" && exit 1)
 
 # ============================================================================
-# Stage 7: QEMU Test Stage
+# Stage 8: QEMU Test Stage
 # ============================================================================
 FROM builder-base AS qemu-test
 
@@ -245,7 +268,7 @@ RUN echo "Testing bootimage in QEMU..." && \
     echo "═══════════════════════════════════════════════════════════"
 
 # ============================================================================
-# Stage 8: Final Output Image
+# Stage 9: Final Output Image
 # ============================================================================
 FROM assembler AS output
 

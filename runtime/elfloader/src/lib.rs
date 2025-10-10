@@ -135,11 +135,16 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
     uart::println!("Loading images...");
 
     // Load kernel and user images
-    let boot_info = boot::load_images();
+    let (kernel_entry, mut boot_info) = boot::load_images();
 
-    uart::println!("Kernel entry: {:#x}", boot_info.user_entry);
+    // Set DTB info in boot_info
+    boot_info.dtb_addr = dtb_addr;
+    boot_info.dtb_size = dtb.total_size();
+
+    uart::println!("Kernel entry: {:#x}", kernel_entry);
     uart::println!("User image: {:#x} - {:#x}",
         boot_info.user_img_start, boot_info.user_img_end);
+    uart::println!("User entry: {:#x}", boot_info.user_entry);
 
     uart::println!();
     uart::println!("Setting up page tables...");
@@ -170,19 +175,24 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
 
     uart::println!("MMU enabled successfully");
     uart::println!();
-    uart::println!("Jumping to seL4 kernel at {:#x}...", boot_info.user_entry);
+    uart::println!("Jumping to seL4 kernel at {:#x}...", kernel_entry);
+    uart::println!("  Passing root task info:");
+    uart::println!("    user_img: {:#x} - {:#x}", boot_info.user_img_start, boot_info.user_img_end);
+    uart::println!("    user_entry: {:#x}", boot_info.user_entry);
+    uart::println!("    pv_offset: {:#x}", boot_info.pv_offset);
+    uart::println!("    dtb: {:#x} (size: {})", boot_info.dtb_addr, boot_info.dtb_size);
     uart::println!("═══════════════════════════════════════════════════════════");
     uart::println!();
 
-    // Jump to kernel
-    let kernel_entry: KernelEntry = unsafe { core::mem::transmute(boot_info.user_entry) };
-    kernel_entry(
-        boot_info.user_img_start,
-        boot_info.user_img_end,
-        boot_info.pv_offset,
-        boot_info.user_entry,
-        dtb_addr,
-        dtb.total_size(),
+    // Jump to kernel with root task boot info
+    let kernel_fn: KernelEntry = unsafe { core::mem::transmute(kernel_entry) };
+    kernel_fn(
+        boot_info.user_img_start,   // x0: user physical start
+        boot_info.user_img_end,     // x1: user physical end
+        boot_info.pv_offset,        // x2: physical-virtual offset
+        boot_info.user_entry,       // x3: user entry point
+        boot_info.dtb_addr,         // x4: DTB address
+        boot_info.dtb_size,         // x5: DTB size
     )
 }
 
