@@ -93,6 +93,14 @@ fn align_up(addr: usize, align: usize) -> usize {
 /// The seL4 kernel passes a pointer to BootInfo in register x0 (first parameter)
 #[no_mangle]
 pub extern "C" fn _start(_bootinfo_ptr: usize) -> ! {
+    // IMMEDIATELY print to UART before ANYTHING else
+    unsafe {
+        let uart = 0x09000000 as *mut u8;
+        for &byte in b"\n\n*** ROOT TASK STARTED ***\n\n" {
+            uart.write_volatile(byte);
+        }
+    }
+
     unsafe {
         ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP.len());
     }
@@ -178,6 +186,7 @@ fn demo_boot_success() {
 fn debug_print(s: &str) {
     for byte in s.bytes() {
         unsafe {
+            // Try seL4_DebugPutChar syscall (syscall number 1)
             core::arch::asm!(
                 "mov x0, {ch}",
                 "mov x7, #1",  // seL4_DebugPutChar
@@ -186,6 +195,10 @@ fn debug_print(s: &str) {
                 out("x0") _,
                 out("x7") _,
             );
+
+            // ALSO try writing directly to PL011 UART at 0x09000000
+            let uart_base = 0x09000000 as *mut u8;
+            uart_base.write_volatile(byte);
         }
     }
 }
