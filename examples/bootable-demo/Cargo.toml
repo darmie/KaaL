@@ -10,7 +10,7 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
-kaal_cap_broker = { path = "../../runtime/cap_broker", default-features = false }
+# Phase 1 dependencies will be added once seL4 BootInfo passing is implemented
 
 [profile.release]
 panic = "abort"
