@@ -89,8 +89,10 @@ fn align_up(addr: usize, align: usize) -> usize {
 }
 
 /// Root task entry point - called by seL4 after elfloader handoff
+///
+/// The seL4 kernel passes a pointer to BootInfo in register x0 (first parameter)
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(_bootinfo_ptr: usize) -> ! {
     unsafe {
         ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP.len());
     }
