@@ -205,7 +205,7 @@ main() {
         sleep 2
 
         qemu-system-aarch64 \
-            -machine virt \
+            -machine virt,virtualization=on,highmem=off,secure=off \
             -cpu cortex-a53 \
             -m 512M \
             -nographic \
@@ -222,7 +222,7 @@ main() {
     echo ""
     echo "Next steps:"
     echo "  1. Test in QEMU:"
-    echo "     qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel $OUTPUT_IMAGE"
+    echo "     qemu-system-aarch64 -machine virt,virtualization=on,highmem=off,secure=off -cpu cortex-a53 -m 512M -nographic -kernel $OUTPUT_IMAGE"
     echo ""
     echo "  2. Inspect build artifacts:"
     echo "     ls -lh $WORKSPACE_DIR/"

@@ -212,7 +212,8 @@ RUN echo "Bootable Image Build Information" > /output/build-info.txt && \
     echo "  Root Task: $(file /artifacts/root-task.a | cut -d: -f2)" >> /output/build-info.txt && \
     echo "" >> /output/build-info.txt && \
     echo "Platform: QEMU ARM virt (Cortex-A53)" >> /output/build-info.txt && \
-    echo "Kernel Load Address: 0x40000000" >> /output/build-info.txt
+    echo "Elfloader Load Address: 0x40100000" >> /output/build-info.txt && \
+    echo "DTB Address: 0x40000000 - 0x40100000 (1MB)" >> /output/build-info.txt
 
 # Verify output exists
 RUN test -f /output/bootimage.elf || \
@@ -230,7 +231,7 @@ WORKDIR /test
 # Run QEMU for 3 seconds and capture output
 RUN echo "Testing bootimage in QEMU..." && \
     timeout 3s qemu-system-aarch64 \
-        -machine virt \
+        -machine virt,virtualization=on,highmem=off,secure=off \
         -cpu cortex-a53 \
         -m 512M \
         -nographic \

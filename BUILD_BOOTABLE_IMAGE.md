@@ -1,165 +1,200 @@
 # Building a Bootable KaaL Image
 
-This guide explains how to build a complete bootable image with the new Rust elfloader.
+Complete guide for building bootable seL4 images with KaaL's Rust-based elfloader.
 
-## Current Status
+## Current Status ✅
 
-### ✅ What We Have
+**The bootable image build system is WORKING and TESTED**
 
-1. **seL4 Kernel** - Built and available at:
-   - `/Users/amaterasu/Vibranium/kaal/examples/my-kaal-system/build/kernel.elf`
-   - `/Users/amaterasu/Vibranium/kaal/build/kernel.elf`
+- ✅ seL4 kernel v13.0.0 builds successfully
+- ✅ Rust elfloader boots successfully in QEMU
+- ✅ Docker multi-stage build system complete
+- ✅ QEMU ARM virt platform tested and verified
+- ✅ Memory layout correct (DTB at 0x40000000, elfloader at 0x40100000)
 
-2. **Elfloader-Builder Tool** - Just built successfully
-   - Binary at: `target/release/kaal-elfloader-builder`
+## Quick Start
 
-3. **Elfloader Runtime Source** - Complete implementation at `runtime/elfloader/`
+```bash
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --clean --test
+```
 
-### ❌ What We Need
+This command will:
+1. Build seL4 kernel (v13.0.0)
+2. Build your root task from `examples/bootable-demo`
+3. Build Rust elfloader
+4. Link everything into `bootimage.elf`
+5. Test in QEMU automatically
 
-1. **Elfloader Binary** - Needs cross-compilation for `aarch64-unknown-none`
-2. **Root Task Binary** - A simple seL4 application to boot
+## Build System Architecture
 
-## Why Docker?
+### Components
 
-Building on macOS (Apple Silicon) has challenges:
-- Need ARM64 bare-metal toolchain (`aarch64-unknown-none`)
-- Need Rust `no_std` cross-compilation
-- Need seL4 syscall bindings properly configured
+1. **[tools/build-bootimage.sh](tools/build-bootimage.sh)** - Main build script
+2. **[tools/Dockerfile.bootimage](tools/Dockerfile.bootimage)** - Multi-stage Docker build
+3. **[tools/bootimage.ld](tools/bootimage.ld)** - Linker script (CRITICAL FILE)
+4. **[tools/test-qemu.sh](tools/test-qemu.sh)** - QEMU testing script
 
-**Docker provides a clean, reproducible build environment.**
+### Docker Multi-Stage Build Process
 
-## Build Approaches
+The build uses 8 Docker stages:
 
-### Approach 1: Docker Build (Recommended)
+```
+Stage 1: builder-base      → Base environment (Rust, ARM64 GCC, build tools)
+Stage 2: kernel-builder     → Build seL4 kernel v13.0.0
+Stage 3: elfloader-builder  → Build Rust elfloader
+Stage 4: roottask-builder   → Build your root task
+Stage 5: builder-tool       → Build elfloader-builder (future use)
+Stage 6: assembler          → Link everything together
+Stage 7: qemu-test          → Optional QEMU boot test
+Stage 8: output             → Extract final bootimage.elf
+```
 
-Create a Dockerfile that builds everything:
+## Memory Layout (QEMU ARM virt)
 
-```dockerfile
-# Dockerfile.bootable
-FROM rust:1.75 AS builder
+```
+Physical Address Range    | Description
+--------------------------|----------------------------------
+0x00000000 - 0x08000000   | Flash/ROM (128MB)
+0x09000000 - 0x09001000   | UART PL011 device
+0x0A000000 - 0x40000000   | Other devices (GIC, RTC, GPIO)
+0x40000000 - 0x40100000   | Device Tree Blob (DTB) - 1MB
+0x40100000 - ...          | Elfloader load address ← START HERE
+```
 
-# Install ARM64 cross-compilation tools
-RUN rustup target add aarch64-unknown-none
-RUN rustup component add rust-src
+**Why 0x40100000?**
+- QEMU places DTB at RAM base (0x40000000)
+- DTB occupies 1MB (0x40000000-0x40100000)
+- Elfloader must load AFTER DTB to avoid overlap
 
-# Install seL4 dependencies
-RUN apt-get update && apt-get install -y \
-    cmake ninja-build gcc-aarch64-linux-gnu \
-    device-tree-compiler qemu-system-arm
+### Elfloader Internal Layout
 
-WORKDIR /build
+```
+Address               | Section         | Description
+----------------------|-----------------|---------------------------
+0x40100000           | .text.boot      | ARM64 entry point (_start)
+0x40100xxx           | .text           | Elfloader code
+0x401xxxxx           | .rodata         | Read-only data
+0x40117000 (aligned) | .kernel_elf     | Embedded kernel ELF (~173KB)
+0x40143000 (aligned) | .roottask_data  | Embedded root task (~785KB)
+0x402xxxxx           | .data           | Initialized data
+0x402xxxxx           | .bss            | Zero-initialized data
+0x402xxxxx - 0x403xxx| Stack (1MB)     | Grows downward
+```
 
-# Copy source
-COPY . .
+## Build Script Usage
 
-# Stage 1: Build seL4 kernel
-RUN cd examples/my-kaal-system && mkdir -p build && cd build && \
-    cmake ../../../kernel -G Ninja \
-        -DCMAKE_TOOLCHAIN_FILE=../../../kernel/gcc.cmake \
-        -DPLATFORM=qemu-arm-virt \
-        -DAARCH64=1 && \
-    ninja kernel.elf
+### Basic Build
 
-# Stage 2: Build elfloader
-RUN cd runtime/elfloader && \
-    cargo build --release \
-        --target aarch64-unknown-none \
-        -Z build-std=core,alloc \
-        -Z build-std-features=compiler-builtins-mem
+```bash
+./tools/build-bootimage.sh \
+    --project examples/bootable-demo \
+    --lib libkaal_bootable_demo.a
+```
 
-# Stage 3: Create minimal root task
-RUN cd examples && mkdir -p minimal-root-task && cd minimal-root-task && \
-    cat > Cargo.toml <<'EOF'
+### Options
+
+- `--project PATH` - Path to your root task project (required)
+- `--lib NAME` - Root task library name (required)
+- `--clean` - Clean build workspace before starting
+- `--keep-workspace` - Preserve build artifacts in `.build-workspace/`
+- `--test` - Run QEMU test after build
+- `--output PATH` - Custom output path (default: `./bootimage.elf`)
+
+### Examples
+
+```bash
+# Clean build with QEMU test
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --clean --test
+
+# Custom output location
+./tools/build-bootimage.sh --project examples/my-app --lib libmy_app.a --output /tmp/my-boot.elf
+
+# Keep build artifacts for inspection
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --keep-workspace
+```
+
+## Testing in QEMU
+
+### Using build script
+
+```bash
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --test
+```
+
+### Manual testing
+
+```bash
+./tools/test-qemu.sh bootimage.elf
+```
+
+### Direct QEMU command
+
+```bash
+qemu-system-aarch64 \
+    -machine virt,virtualization=on,highmem=off,secure=off \
+    -cpu cortex-a53 \
+    -m 512M \
+    -nographic \
+    -kernel bootimage.elf
+```
+
+**Exit QEMU**: Press `Ctrl-A` then `X`
+
+## Expected Boot Output
+
+When the bootimage boots successfully in QEMU, you should see:
+
+```
+#!@═══════════════════════════════════════════════════════════
+  KaaL Elfloader v0.1.0 - Rust-based seL4 Boot Loader
+═══════════════════════════════════════════════════════════
+
+DTB address: 0x40000000
+Device tree parsed successfully
+Model: linux,dummy-virt
+Memory region: 0x40000000 - 0x60000000 (512 MB)
+
+Loading images...
+  Kernel: 0x40117000 - 0x40142538 (173 KB)
+  User:   0x40143000 - 0x40207508 (785 KB)
+Copying kernel to physical address 0x40000000...
+Images loaded successfully!
+
+Setting up page tables...
+MMU enabled successfully
+
+Jumping to seL4 kernel at 0x40000000...
+```
+
+### Debug Checkpoints
+
+The elfloader outputs debug characters at key boot stages:
+
+- `#` - First Rust code executing (_start_rust)
+- `!` - UART hardware initialized
+- `@` - UART writer ready
+- Full banner - Complete initialization successful
+
+If you only see `#` or `#!` and then nothing, the boot has failed at an early stage.
+
+## Creating Your Own Root Task
+
+Your root task must be a bare-metal ARM64 static library:
+
+### Project Structure
+
+```
+your-project/
+├── Cargo.toml
+└── src/
+    └── lib.rs
+```
+
+### Cargo.toml
+
+```toml
 [package]
-name = "minimal-root-task"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-sel4 = { path = "../../external/rust-sel4/crates/sel4", default-features = false }
-
-[profile.release]
-panic = "abort"
-EOF
-    && \
-    mkdir src && cat > src/main.rs <<'EOF'
-#![no_std]
-#![no_main]
-
-use core::panic::PanicInfo;
-
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    loop {}
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
-}
-EOF
-    && \
-    cargo build --release --target aarch64-unknown-linux-gnu
-
-# Stage 4: Package with elfloader-builder
-RUN target/release/kaal-elfloader-builder \
-    --loader runtime/elfloader/target/aarch64-unknown-none/release/libkaal_elfloader.a \
-    --kernel examples/my-kaal-system/build/kernel.elf \
-    --app examples/minimal-root-task/target/aarch64-unknown-linux-gnu/release/minimal-root-task \
-    --out /bootimage.elf
-
-# Final stage: Extract bootable image
-FROM scratch
-COPY --from=builder /bootimage.elf /bootimage.elf
-```
-
-Build with:
-```bash
-docker build -f Dockerfile.bootable -t kaal-bootable .
-docker create --name kaal-extract kaal-bootable
-docker cp kaal-extract:/bootimage.elf ./bootimage.elf
-docker rm kaal-extract
-```
-
-### Approach 2: Step-by-Step Manual Build
-
-This approach requires properly configured Rust toolchain and takes longer but provides more control.
-
-#### Step 1: Install Dependencies
-
-```bash
-# Install Rust nightly and targets
-rustup toolchain install nightly
-rustup +nightly target add aarch64-unknown-none
-rustup +nightly component add rust-src
-
-# Note: On macOS, you cannot build seL4 kernel or elfloader natively
-# Use Docker or a Linux VM
-```
-
-#### Step 2: Build Elfloader (Linux/Docker only)
-
-```bash
-cd runtime/elfloader
-
-cargo +nightly build --release \
-  --target aarch64-unknown-none \
-  -Z build-std=core,alloc \
-  -Z build-std-features=compiler-builtins-mem
-```
-
-Output: `target/aarch64-unknown-none/release/libkaal_elfloader.a`
-
-#### Step 3: Create Minimal Root Task
-
-```bash
-mkdir -p /tmp/minimal-root-task
-cd /tmp/minimal-root-task
-
-cat > Cargo.toml <<'EOF'
-[package]
-name = "minimal-root-task"
+name = "your-project"
 version = "0.1.0"
 edition = "2021"
 
@@ -169,16 +204,21 @@ crate-type = ["staticlib"]
 [profile.release]
 panic = "abort"
 lto = true
-EOF
+opt-level = "z"
 
-mkdir src
-cat > src/lib.rs <<'EOF'
+[dependencies]
+# Your dependencies here (must be no_std compatible)
+```
+
+### src/lib.rs
+
+```rust
 #![no_std]
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    // Your initialization code here
     loop {
-        // Spin forever - minimal root task
         core::hint::spin_loop();
     }
 }
@@ -187,75 +227,230 @@ pub extern "C" fn _start() -> ! {
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
-EOF
-
-cargo build --release --target aarch64-unknown-none -Z build-std=core
 ```
 
-#### Step 4: Run Elfloader-Builder
+### Build and Test
 
 ```bash
-cd /Users/amaterasu/Vibranium/kaal
-
-./target/release/kaal-elfloader-builder \
-  --loader runtime/elfloader/target/aarch64-unknown-none/release/libkaal_elfloader.a \
-  --kernel examples/my-kaal-system/build/kernel.elf \
-  --app /tmp/minimal-root-task/target/aarch64-unknown-none/release/libminimal_root_task.a \
-  --out bootimage.elf
+./tools/build-bootimage.sh \
+    --project your-project \
+    --lib libyour_project.a \
+    --clean --test
 ```
 
-#### Step 5: Test in QEMU
+## Linker Script Details
+
+**Location**: [tools/bootimage.ld](tools/bootimage.ld)
+
+This is the **ONLY** linker script used by the build system.
+
+**IMPORTANT**: Do NOT edit `runtime/elfloader/linker.ld` - that file has been removed. See [runtime/elfloader/LINKER_SCRIPT.md](runtime/elfloader/LINKER_SCRIPT.md) for why.
+
+The linker script defines:
+- Entry point: `_start` (in `.text.boot` section)
+- Load address: `0x40100000`
+- Embedded kernel section: `.kernel_elf`
+- Embedded root task section: `.roottask_data`
+- Stack size: 1MB
+- Symbol exports for memory boundaries
+
+## Troubleshooting
+
+### Issue: "DTB overlap" or "ROM regions are overlapping"
+
+**Cause**: Elfloader load address conflicts with DTB.
+
+**Solution**: Ensure [tools/bootimage.ld](tools/bootimage.ld) has `. = 0x40100000;`
+
+### Issue: No QEMU output
+
+**Possible causes**:
+1. Wrong QEMU machine configuration
+2. Elfloader crashed before UART init
+3. Docker build cache used stale files
+
+**Solutions**:
+```bash
+# Clear Docker cache and rebuild
+docker builder prune -af
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --clean
+
+# Check QEMU command matches configuration (see above)
+```
+
+### Issue: Entry point shows wrong address
+
+**Cause**: Docker using cached layers with old linker script.
+
+**Solution**:
+```bash
+docker builder prune -af
+./tools/build-bootimage.sh --clean --project examples/bootable-demo --lib libkaal_bootable_demo.a
+readelf -h bootimage.elf | grep "Entry point"
+# Should show: Entry point address: 0x40100000
+```
+
+### Issue: Build fails with "PROJECT_PATH is required"
+
+**Cause**: Missing required arguments.
+
+**Solution**: Always provide both `--project` and `--lib`:
+```bash
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a
+```
+
+## Advanced Usage
+
+### Custom Memory Layout
+
+To change the elfloader load address:
+
+1. Edit [tools/bootimage.ld](tools/bootimage.ld) line 12: `. = 0x40100000;`
+2. Update DTB address in [runtime/elfloader/src/arch/aarch64.rs](runtime/elfloader/src/arch/aarch64.rs) if needed
+3. Rebuild with `--clean`
+
+### Inspecting Build Artifacts
 
 ```bash
+# Keep workspace to inspect artifacts
+./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --keep-workspace
+
+# Check workspace contents
+ls -lh .build-workspace/
+cat .build-workspace/build-info.txt
+
+# Inspect bootimage
+readelf -h bootimage.elf
+readelf -l bootimage.elf  # Show program headers
+readelf -S bootimage.elf  # Show sections
+```
+
+### Debugging with GDB
+
+```bash
+# Terminal 1: Start QEMU with GDB server
 qemu-system-aarch64 \
-  -machine virt \
-  -cpu cortex-a53 \
-  -m 512M \
-  -nographic \
-  -kernel bootimage.elf
+    -machine virt,virtualization=on,highmem=off,secure=off \
+    -cpu cortex-a53 \
+    -m 512M \
+    -nographic \
+    -kernel bootimage.elf \
+    -s -S  # Wait for GDB on port 1234
+
+# Terminal 2: Connect GDB
+aarch64-linux-gnu-gdb bootimage.elf
+(gdb) target remote :1234
+(gdb) b _start
+(gdb) c
 ```
 
-## Current Limitation
+## File Organization
 
-The elfloader-builder currently outputs a `.payload` file rather than directly patching the elfloader binary. The final step (embedding payload into ELF) needs to be implemented.
+```
+kaal/
+├── tools/
+│   ├── build-bootimage.sh      ← Main build script
+│   ├── test-qemu.sh            ← QEMU test script
+│   ├── bootimage.ld            ← Linker script (CRITICAL)
+│   └── Dockerfile.bootimage    ← Multi-stage build
+├── runtime/
+│   ├── elfloader/
+│   │   ├── src/
+│   │   │   ├── lib.rs          ← Main entry point
+│   │   │   ├── arch/aarch64.rs ← ARM64 boot code
+│   │   │   ├── boot.rs         ← Image loading
+│   │   │   ├── mmu.rs          ← Page table setup
+│   │   │   └── uart.rs         ← Debug output
+│   │   ├── Cargo.toml
+│   │   └── LINKER_SCRIPT.md    ← Explains linker script location
+│   └── elfloader-builder/      ← Future tool (not yet used)
+└── examples/
+    └── bootable-demo/          ← Example root task
+        ├── src/lib.rs
+        └── Cargo.toml
+```
 
-**Workaround**: For now, the payload can be linked at build time into the elfloader.
+## Build System Internals
+
+### How Images Are Embedded
+
+The kernel and root task are embedded as ELF sections using `objcopy`:
+
+```bash
+# Embed kernel
+aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
+    --rename-section .data=.kernel_elf,alloc,load,readonly,data,contents \
+    kernel.elf kernel_embed.o
+
+# Embed root task
+aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
+    --rename-section .data=.roottask_data,alloc,load,readonly,data,contents \
+    root-task.a roottask_embed.o
+```
+
+These are then linked with the elfloader using [tools/bootimage.ld](tools/bootimage.ld).
+
+### Accessing Embedded Images in Rust
+
+The elfloader accesses embedded images via linker symbols:
+
+```rust
+extern "C" {
+    static __kernel_image_start: u8;
+    static __kernel_image_end: u8;
+    static __user_image_start: u8;
+    static __user_image_end: u8;
+}
+
+let kernel_start = &__kernel_image_start as *const u8 as usize;
+let kernel_end = &__kernel_image_end as *const u8 as usize;
+```
+
+## Requirements
+
+### Host Requirements
+- Docker
+- Bash 4.0+
+- ~2GB disk space for Docker images
+
+### Container Requirements
+All automatically installed in Docker:
+- Rust nightly (1.75+)
+- ARM64 GCC cross-compiler (aarch64-linux-gnu-gcc)
+- CMake, Ninja (for seL4 kernel)
+- Python3 with seL4 dependencies
+- QEMU (for testing)
 
 ## Next Steps
 
-1. **Complete elfloader-builder** - Implement ELF patching to embed payload
-2. **Create proper root task** - Use actual KaaL root-task with cap_broker
-3. **Add to CI/CD** - Automate bootable image builds
-4. **Test on hardware** - Beyond QEMU testing
+1. **Build your first bootable image**:
+   ```bash
+   ./tools/build-bootimage.sh --project examples/bootable-demo --lib libkaal_bootable_demo.a --test
+   ```
 
-## Quick Test (Without Full Build)
+2. **Create your own root task** (see "Creating Your Own Root Task" above)
 
-To test if the system would work, you can check individual components:
+3. **Integrate with KaaL framework**:
+   - Use `cap_broker` for capability management
+   - Implement proper IPC handlers
+   - Add device drivers using DDDK
 
-```bash
-# Check kernel
-file examples/my-kaal-system/build/kernel.elf
-# Should show: ELF 64-bit LSB executable, ARM aarch64
+4. **Deploy to hardware** (future):
+   - Raspberry Pi 4
+   - Odroid boards
+   - Custom ARM64 platforms
 
-# Check builder tool
-./target/release/kaal-elfloader-builder --help
-# Should show CLI help
+## References
 
-# Inspect kernel details
-readelf -h examples/my-kaal-system/build/kernel.elf
-```
+- [seL4 Manual](https://sel4.systems/Info/Docs/seL4-manual.pdf)
+- [seL4 QEMU ARM virt](https://docs.sel4.systems/Hardware/QEMUArmVirt/)
+- [ARM64 Boot Protocol](https://www.kernel.org/doc/Documentation/arm64/booting.txt)
+- [QEMU ARM virt Platform](https://www.qemu.org/docs/master/system/arm/virt.html)
+- [runtime/elfloader/LINKER_SCRIPT.md](runtime/elfloader/LINKER_SCRIPT.md) - Linker script documentation
 
-## Summary
+---
 
-**We're close but not quite there yet**. The pieces are:
-
-| Component | Status |
-|-----------|--------|
-| seL4 Kernel | ✅ Built |
-| Elfloader Source | ✅ Complete |
-| Elfloader Binary | ❌ Needs cross-compile |
-| Root Task | ❌ Needs creation |
-| Builder Tool | ✅ Built (macOS) |
-| Final Integration | ❌ Needs ELF patching |
-
-**Best path forward**: Use Docker to build everything in a single reproducible step, or wait until the elfloader-builder can properly embed payloads into the ELF binary.
+**Build System Version**: 1.0
+**Last Updated**: 2025 (after QEMU boot fixes)
+**Minimum seL4 Version**: 13.0.0
+**Rust Version**: nightly (1.75+)
