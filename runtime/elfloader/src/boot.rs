@@ -52,11 +52,11 @@ struct RootserverMem {
 /// Offset of rootserver structure within the kernel binary
 ///
 /// Found by: nm kernel.elf | grep rootserver
-/// Address: 0xFFFFFF804001E8C8 (virtual)
+/// Address: 0xFFFFFF804002E8C8 (virtual)
 /// Kernel loads at: 0x40000000 (physical)
 /// Kernel virtual base: 0xFFFFFF8040000000
-/// Offset = 0xFFFFFF804001E8C8 - 0xFFFFFF8040000000 = 0x1E8C8
-const ROOTSERVER_OFFSET: usize = 0x1E8C8;
+/// Offset = 0xFFFFFF804002E8C8 - 0xFFFFFF8040000000 = 0x2E8C8
+const ROOTSERVER_OFFSET: usize = 0x2E8C8;
 
 /// Load kernel and root task, return (kernel_entry, boot_info_for_root_task)
 pub fn load_images() -> (usize, BootInfo) {

@@ -1,0 +1,39 @@
+cmake_minimum_required(VERSION 3.12)
+
+# Build seL4 kernel WITH our Rust root task integrated
+project(sel4-kernel-with-kaal-roottask C ASM)
+
+# Point to seL4 kernel source
+set(SEL4_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/seL4" CACHE PATH "Path to seL4 kernel")
+
+# Platform configuration for QEMU ARM virt
+set(KernelPlatform "qemu-arm-virt" CACHE STRING "seL4 platform")
+set(KernelSel4Arch "aarch64" CACHE STRING "seL4 architecture")
+set(KernelARMPlatform "qemu-arm-virt" CACHE STRING "ARM platform")
+set(KernelDebugBuild ON CACHE BOOL "Enable kernel debugging")
+set(KernelPrinting ON CACHE BOOL "Enable kernel printing")
+set(KernelVerificationBuild OFF CACHE BOOL "Disable verification build")
+
+# Include seL4 kernel build
+add_subdirectory(${SEL4_ROOT} kernel)
+
+# Define our Rust root task as an IMPORTED executable
+# This tells CMake about our pre-built root task ELF
+add_executable(kaal-roottask IMPORTED GLOBAL)
+set_target_properties(kaal-roottask PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/roottask.elf"
+)
+
+# Tell seL4 build system this is the root server
+# This is THE critical function that integrates root task with kernel
+if(COMMAND DeclareRootserver)
+    DeclareRootserver(kaal-roottask)
+else()
+    message(STATUS "DeclareRootserver not available, using manual configuration")
+
+    # Fallback: Set kernel configuration variables for root task
+    set(KernelRootCNodeSizeBits 12 CACHE STRING "Root CNode size bits")
+    set(KernelBootstrapCNodeSizeBits 12 CACHE STRING "Bootstrap CNode size bits")
+endif()
+
+# The build system should now create a kernel that knows about our root task
