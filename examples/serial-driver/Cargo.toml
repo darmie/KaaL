@@ -1,9 +1,0 @@
-[package]
-name = "serial-driver-example"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-cap-broker = { path = "../../runtime/cap_broker" }
-dddk-runtime = { path = "../../runtime/dddk-runtime" }
-kaal-dddk = { path = "../../runtime/dddk" }
