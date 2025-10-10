@@ -15,6 +15,49 @@ extern "C" {
     static __user_image_end: u8;
 }
 
+/// seL4 kernel's rootserver structure
+///
+/// This structure is defined in the seL4 kernel's BSS section at a fixed offset.
+/// The elfloader must populate this structure with information about the root task
+/// before jumping to the kernel. The kernel reads this structure during boot to
+/// initialize the root task.
+///
+/// Based on seL4 v13.0.0 kernel source
+#[repr(C)]
+struct RootserverMem {
+    /// Physical region containing root task image
+    p_reg_start: usize,
+    p_reg_end: usize,
+
+    /// Virtual region for root task image
+    v_reg_start: usize,
+    v_reg_end: usize,
+
+    /// Virtual entry point of root task
+    v_entry: usize,
+
+    /// Extra bootinfo pointer (DTB/ACPI)
+    extra_bi: usize,
+
+    /// Size of extra bootinfo
+    extra_bi_size: usize,
+
+    /// PV offset (physical-virtual offset)
+    pv_offset: usize,
+
+    /// Padding to 72 bytes
+    _reserved: usize,
+}
+
+/// Offset of rootserver structure within the kernel binary
+///
+/// Found by: nm kernel.elf | grep rootserver
+/// Address: 0xFFFFFF804001E8C8 (virtual)
+/// Kernel loads at: 0x40000000 (physical)
+/// Kernel virtual base: 0xFFFFFF8040000000
+/// Offset = 0xFFFFFF804001E8C8 - 0xFFFFFF8040000000 = 0x1E8C8
+const ROOTSERVER_OFFSET: usize = 0x1E8C8;
+
 /// Load kernel and root task, return (kernel_entry, boot_info_for_root_task)
 pub fn load_images() -> (usize, BootInfo) {
     uart_println!("Loading embedded images from ELF sections...");
@@ -54,11 +97,46 @@ pub fn load_images() -> (usize, BootInfo) {
         core::ptr::copy_nonoverlapping(src, dst, kernel_size);
     }
 
-    // Parse root task ELF to get entry point
+    // Parse root task ELF to get entry point and load segments
     let user_entry = parse_elf_entry(user_start);
     uart_println!("Root task entry point: {:#x}", user_entry);
 
     uart_println!("Images loaded successfully!");
+
+    // CRITICAL: Populate the kernel's rootserver structure
+    // This tells the seL4 kernel where to find the root task
+    let rootserver_addr = kernel_paddr + ROOTSERVER_OFFSET;
+    uart_println!("Populating rootserver structure at {:#x}...", rootserver_addr);
+
+    unsafe {
+        let rootserver = rootserver_addr as *mut RootserverMem;
+        core::ptr::write(rootserver, RootserverMem {
+            // Physical region - where root task ELF is loaded in memory
+            p_reg_start: user_entry,  // Root task loaded at its entry address
+            p_reg_end: user_entry + (user_end - user_start),
+
+            // Virtual region - same as physical for identity mapping
+            v_reg_start: user_entry,
+            v_reg_end: user_entry + (user_end - user_start),
+
+            // Virtual entry point
+            v_entry: user_entry,
+
+            // Extra bootinfo (DTB) - will be set later
+            extra_bi: 0,
+            extra_bi_size: 0,
+
+            // Physical-virtual offset (0 for identity mapping)
+            pv_offset: 0,
+
+            // Reserved/padding
+            _reserved: 0,
+        });
+    }
+
+    uart_println!("Rootserver structure populated:");
+    uart_println!("  p_reg: {:#x} - {:#x}", user_entry, user_entry + (user_end - user_start));
+    uart_println!("  v_entry: {:#x}", user_entry);
 
     // Return kernel entry and boot info
     // The kernel expects info about the root task in these parameters
