@@ -25,10 +25,12 @@ pub struct BootParams {
 /// This is the first Rust function that executes.
 /// Boot parameters are in callee-saved registers x19-x23 (set by _start).
 pub fn kernel_entry() -> ! {
-    // Get boot parameters from registers (x19-x23)
+    // CRITICAL: Get boot parameters from registers FIRST before any function calls
+    // The registers x19-x23 are callee-saved, but we must read them before
+    // any function calls that might use them.
     let params = unsafe { get_boot_params() };
 
-    // Initialize console component first so we can print
+    // Initialize console component (safe to do after reading params)
     crate::config::init_console();
 
     // Print banner
@@ -89,17 +91,19 @@ unsafe fn get_boot_params() -> BootParams {
     let root_v_entry: usize;
     let pv_offset: usize;
 
+    // Use specific registers to avoid clobbering x19-x23
     asm!(
-        "mov {0}, x19",
-        "mov {1}, x20",
-        "mov {2}, x21",
-        "mov {3}, x22",
-        "mov {4}, x23",
-        out(reg) dtb_addr,
-        out(reg) root_p_start,
-        out(reg) root_p_end,
-        out(reg) root_v_entry,
-        out(reg) pv_offset,
+        "mov {dtb}, x19",
+        "mov {root_start}, x20",
+        "mov {root_end}, x21",
+        "mov {entry}, x22",
+        "mov {offset}, x23",
+        dtb = out(reg) dtb_addr,
+        root_start = out(reg) root_p_start,
+        root_end = out(reg) root_p_end,
+        entry = out(reg) root_v_entry,
+        offset = out(reg) pv_offset,
+        options(nomem, nostack),
     );
 
     BootParams {
