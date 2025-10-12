@@ -4,7 +4,7 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 0x200000;
+    . = 0x40400000;
     _kernel_start = .;
 
     .text : {

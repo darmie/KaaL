@@ -23,9 +23,15 @@ codegen-units = 1
 panic = "abort"
 
 [features]
-default = ["log-info"]
+default = ["log-info", "console-pl011"]
+
+# Logging levels
 log-error = []
 log-warn = []
 log-info = []
 log-debug = []
 log-trace = []
+
+# Console components (compile-time selection)
+console-pl011 = []  # PL011 UART console (default for QEMU virt)
+console-null = []   # No console output (production builds)

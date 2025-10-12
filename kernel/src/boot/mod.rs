@@ -28,8 +28,8 @@ pub fn kernel_entry() -> ! {
     // Get boot parameters from registers (x19-x23)
     let params = unsafe { get_boot_params() };
 
-    // Initialize UART first so we can print
-    crate::arch::aarch64::uart::init();
+    // Initialize console component first so we can print
+    crate::config::init_console();
 
     // Print banner
     crate::kprintln!("═══════════════════════════════════════════════════════════");

@@ -14,6 +14,7 @@
 //! - `log-debug`: DEBUG level and above
 //! - `log-trace`: TRACE level (everything)
 
+use crate::components::console::Console;
 use core::fmt;
 
 /// Debug writer (uses UART)
@@ -21,7 +22,7 @@ pub struct DebugWriter;
 
 impl fmt::Write for DebugWriter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        crate::arch::aarch64::uart::puts(s);
+        crate::config::console().puts(s);
         Ok(())
     }
 }
