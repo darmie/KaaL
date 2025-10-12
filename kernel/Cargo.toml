@@ -14,7 +14,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 bitflags = { version = "2.4", default-features = false }
-spin = { version = "0.9", default-features = false }
+spin = { version = "0.9", default-features = false, features = ["once", "mutex", "spin_mutex"] }
 
 [profile.release]
 opt-level = "z"

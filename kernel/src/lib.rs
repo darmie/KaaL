@@ -28,3 +28,4 @@ pub mod boot;
 pub mod components;
 pub mod debug;
 pub mod config;
+pub mod memory;

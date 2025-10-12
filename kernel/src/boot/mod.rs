@@ -48,7 +48,7 @@ pub fn kernel_entry() -> ! {
 
     // Parse device tree
     crate::kprintln!("Parsing device tree...");
-    match dtb::parse(params.dtb_addr) {
+    let dtb_info = match dtb::parse(params.dtb_addr) {
         Ok(info) => {
             crate::kprintln!("Device tree parsed successfully:");
             crate::kprintln!("  Model:       {}", info.model);
@@ -57,18 +57,75 @@ pub fn kernel_entry() -> ! {
                            info.memory_end,
                            (info.memory_end - info.memory_start) / (1024 * 1024));
             crate::kprintln!("");
+            Some(info)
         }
         Err(e) => {
             crate::kprintln!("ERROR: Failed to parse DTB: {:?}", e);
+            None
         }
-    }
+    };
 
     crate::kprintln!("═══════════════════════════════════════════════════════════");
     crate::kprintln!("  Chapter 1: COMPLETE ✓");
     crate::kprintln!("═══════════════════════════════════════════════════════════");
     crate::kprintln!("");
+
+    // Chapter 2: Memory Management
+    if let Some(info) = dtb_info {
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("  Chapter 2: Memory Management");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("");
+
+        // Get kernel boundaries (symbols from linker script)
+        extern "C" {
+            static _kernel_start: u8;
+            static _kernel_end: u8;
+        }
+
+        let kernel_start = unsafe { &_kernel_start as *const u8 as usize };
+        let kernel_end = unsafe { &_kernel_end as *const u8 as usize };
+
+        // Initialize memory subsystem
+        unsafe {
+            crate::memory::init(
+                crate::memory::PhysAddr::new(kernel_start),
+                crate::memory::PhysAddr::new(kernel_end),
+                crate::memory::PhysAddr::new(info.memory_start),
+                info.memory_end - info.memory_start,
+            );
+        }
+
+        // Test frame allocation
+        crate::kprintln!("");
+        crate::kprintln!("[test] Testing frame allocator...");
+        if let Some(frame1) = crate::memory::alloc_frame() {
+            crate::kprintln!("  Allocated frame: {:?}", frame1);
+            if let Some(frame2) = crate::memory::alloc_frame() {
+                crate::kprintln!("  Allocated frame: {:?}", frame2);
+
+                // Deallocate
+                unsafe {
+                    crate::memory::dealloc_frame(frame1);
+                    crate::memory::dealloc_frame(frame2);
+                }
+                crate::kprintln!("  Deallocated both frames");
+            }
+        }
+
+        if let Some((free, total)) = crate::memory::memory_stats() {
+            crate::kprintln!("  Final stats: {}/{} frames free", free, total);
+        }
+
+        crate::kprintln!("");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("  Chapter 2: Phase 1 & 2 COMPLETE ✓");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("");
+    }
+
     crate::kprintln!("Kernel initialization complete!");
-    crate::kprintln!("(Halting - more features coming in Chapter 2)");
+    crate::kprintln!("(Halting - MMU and page tables coming in Phase 3)");
     crate::kprintln!("");
 
     // Halt (later chapters will jump to scheduler)

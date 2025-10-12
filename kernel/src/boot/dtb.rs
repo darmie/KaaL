@@ -71,32 +71,55 @@ pub fn parse(dtb_addr: usize) -> Result<DtbInfo, DtbError> {
 
     let mut offset = 0;
     let mut iterations = 0;
-    const MAX_ITERATIONS: usize = 10000;
+    const MAX_ITERATIONS: usize = 200; // Much smaller limit for faster failure
 
     crate::kprintln!("Parsing DTB structure at {:#x}", struct_base);
+
+    // Track if we're in a memory node
+    let mut in_memory_node = false;
 
     loop {
         iterations += 1;
         if iterations > MAX_ITERATIONS {
-            crate::kprintln!("ERROR: Too many iterations!");
+            crate::kprintln!("ERROR: DTB parser exceeded {} iterations", MAX_ITERATIONS);
+            crate::kprintln!("  Last offset: {:#x}", offset);
+            crate::kprintln!("  Found model: {}", model.is_some());
+            crate::kprintln!("  Found memory: {}", memory_start.is_some());
+            // Return what we found so far if we have at least memory info
+            if let (Some(start), Some(end)) = (memory_start, memory_end) {
+                return Ok(DtbInfo {
+                    model: model.unwrap_or("Unknown (DTB parse incomplete)"),
+                    memory_start: start,
+                    memory_end: end,
+                });
+            }
             return Err(DtbError::InvalidStructure);
         }
 
         let token = read_u32(struct_base + offset);
         offset += 4;
 
-        if iterations <= 10 {
-            crate::kprintln!("Token {}: {:#x} at offset {:#x}", iterations, token, offset - 4);
+        if iterations <= 20 || iterations % 50 == 0 {
+            crate::kprintln!("  [{}] Token {:#x} at offset {:#x}", iterations, token, offset - 4);
         }
 
         match token {
             FDT_BEGIN_NODE => {
                 // Read node name
                 let node_name = read_string(struct_base + offset);
+
+                // Check if this is a memory node
+                if node_name.starts_with("memory@") || node_name == "memory" {
+                    in_memory_node = true;
+                    if iterations <= 20 {
+                        crate::kprintln!("    -> Entering memory node: '{}'", node_name);
+                    }
+                }
+
                 offset = align_up(offset + node_name.len() + 1, 4);
             }
             FDT_END_NODE => {
-                // End of node
+                in_memory_node = false;
             }
             FDT_PROP => {
                 // Read property
@@ -108,28 +131,50 @@ pub fn parse(dtb_addr: usize) -> Result<DtbInfo, DtbError> {
                 let prop_name = read_string_from_table(strings_base, nameoff);
                 let prop_data = struct_base + offset;
 
+                if iterations <= 20 {
+                    crate::kprintln!("    -> Prop '{}' (len={})", prop_name, len);
+                }
+
                 // Check if this is the model property
                 if prop_name == "model" && model.is_none() {
                     model = Some(read_string(prop_data));
+                    crate::kprintln!("  Found model: '{}'", model.unwrap());
                 }
 
                 // Check if this is a memory reg property
-                if prop_name == "reg" && memory_start.is_none() {
-                    // reg property contains: <address size> pairs (64-bit each on ARM64)
-                    let start = read_u64(prop_data);
-                    let size = read_u64(prop_data + 8);
-                    memory_start = Some(start as usize);
-                    memory_end = Some((start + size) as usize);
+                if prop_name == "reg" && in_memory_node && memory_start.is_none() {
+                    if len >= 16 {
+                        crate::kprintln!("    -> Reading memory reg property (len={})", len);
+                        // reg property contains: <address size> pairs (64-bit each on ARM64)
+                        let start = read_u64(prop_data);
+                        crate::kprintln!("    -> Got start: {:#x}", start);
+                        let size = read_u64(prop_data + 8);
+                        crate::kprintln!("    -> Got size: {:#x}", size);
+                        memory_start = Some(start as usize);
+                        memory_end = Some((start + size) as usize);
+
+                        crate::kprintln!("  Found memory: {:#x} - {:#x}", start, start + size);
+                    } else {
+                        crate::kprintln!("    -> Memory reg property too short: {}", len);
+                    }
                 }
 
                 offset = align_up(offset + len, 4);
             }
             FDT_END => {
+                crate::kprintln!("  DTB parsing complete ({} tokens)", iterations);
                 break;
             }
             _ => {
+                crate::kprintln!("ERROR: Unknown DTB token {:#x} at offset {:#x}", token, offset - 4);
                 return Err(DtbError::InvalidStructure);
             }
+        }
+
+        // Early exit if we have both model and memory
+        if model.is_some() && memory_start.is_some() {
+            crate::kprintln!("  Found all required info, stopping parse");
+            break;
         }
     }
 
@@ -150,8 +195,10 @@ fn read_u32(addr: usize) -> u32 {
 /// Read big-endian u64
 #[inline]
 fn read_u64(addr: usize) -> u64 {
-    let val = unsafe { core::ptr::read_volatile(addr as *const u64) };
-    u64::from_be(val)
+    // Read as two u32s to avoid alignment issues
+    let hi = read_u32(addr);
+    let lo = read_u32(addr + 4);
+    ((hi as u64) << 32) | (lo as u64)
 }
 
 /// Read null-terminated string

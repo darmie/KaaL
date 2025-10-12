@@ -153,7 +153,9 @@ impl VirtAddr {
     }
 
     /// Create a virtual address from a pointer
-    pub const fn from_ptr<T>(ptr: *const T) -> Self {
+    ///
+    /// Note: This cannot be const because pointer-to-int casts are not allowed in const context
+    pub fn from_ptr<T>(ptr: *const T) -> Self {
         VirtAddr(ptr as usize)
     }
 
