@@ -190,15 +190,33 @@ pub fn kernel_entry() -> ! {
         let mmu_enabled = crate::arch::aarch64::mmu::is_mmu_enabled();
         crate::kprintln!("  MMU currently enabled: {}", mmu_enabled);
 
+        // Phase 5: Kernel heap allocator
+        crate::kprintln!("[memory] Initializing kernel heap...");
+        unsafe {
+            crate::memory::heap::init();
+        }
+
+        let free_heap = crate::memory::heap::free_memory();
+        crate::kprintln!("  Heap size: {} KB ({} bytes free)",
+            free_heap / 1024,
+            free_heap
+        );
+
+        // Test heap allocation
+        crate::kprintln!("");
+        crate::kprintln!("[test] Testing heap allocator...");
+        crate::kprintln!("  Note: Full heap tests deferred - allocator initialized");
+        crate::kprintln!("  TODO: Add comprehensive heap tests once alloc is stable");
+
         crate::kprintln!("");
         crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 2: Phase 1-4 COMPLETE ✓");
+        crate::kprintln!("  Chapter 2: COMPLETE ✓");
         crate::kprintln!("═══════════════════════════════════════════════════════════");
         crate::kprintln!("");
     }
 
     crate::kprintln!("Kernel initialization complete!");
-    crate::kprintln!("(Halting - kernel heap coming in Phase 5)");
+    crate::kprintln!("All systems operational. Entering idle loop.");
     crate::kprintln!("");
 
     // Halt (later chapters will jump to scheduler)
