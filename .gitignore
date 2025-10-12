@@ -124,3 +124,6 @@ test-results/
 kernel/kernel.ld
 runtime/elfloader/linker.ld
 *.ld
+
+# Generated memory configuration (created by build script)
+kernel/src/generated/

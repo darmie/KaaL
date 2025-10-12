@@ -41,6 +41,15 @@ kernel_offset = "0x400000"    # Kernel at ram_base + 0x400000 = 0x40400000
 # Stack location (grows down from this address)
 stack_top_offset = "0x8000000" # Stack top at ram_base + ram_size = 0x48000000
 
+# Virtual memory layout (ARM64)
+kernel_virt_base = "0xFFFF000000000000"  # Kernel virtual address space start
+user_virt_max = "0x0000FFFFFFFFFFFF"     # User virtual address space max
+
+# Page sizes (ARM64 standard)
+page_size = "0x1000"              # 4KB
+large_page_size = "0x200000"      # 2MB
+huge_page_size = "0x40000000"     # 1GB
+
 # QEMU launch parameters
 qemu_machine = "virt"
 qemu_cpu = "cortex-a53"
@@ -70,6 +79,15 @@ kernel_offset = "0x200000"    # Kernel at 0x200000
 # Stack location
 stack_top_offset = "0x800000" # Stack top at 8MB
 
+# Virtual memory layout (ARM64)
+kernel_virt_base = "0xFFFF000000000000"  # Kernel virtual address space start
+user_virt_max = "0x0000FFFFFFFFFFFF"     # User virtual address space max
+
+# Page sizes (ARM64 standard)
+page_size = "0x1000"              # 4KB
+large_page_size = "0x200000"      # 2MB
+huge_page_size = "0x40000000"     # 1GB
+
 # =============================================================================
 # Generic ARM64 platform (template for custom boards)
 # =============================================================================
@@ -93,3 +111,12 @@ kernel_offset = "0x200000"
 
 # Stack location
 stack_top_offset = "0x1000000" # Stack top at 16MB
+
+# Virtual memory layout (ARM64)
+kernel_virt_base = "0xFFFF000000000000"  # Kernel virtual address space start
+user_virt_max = "0x0000FFFFFFFFFFFF"     # User virtual address space max
+
+# Page sizes (ARM64 standard)
+page_size = "0x1000"              # 4KB
+large_page_size = "0x200000"      # 2MB
+huge_page_size = "0x40000000"     # 1GB
