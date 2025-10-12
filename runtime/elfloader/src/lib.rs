@@ -1,7 +1,7 @@
-//! KaaL Elfloader - Rust-based bootloader for seL4
+//! KaaL Elfloader - Rust-based bootloader for KaaL kernel
 //!
-//! This bootloader prepares the ARM64 system for running the seL4 microkernel
-//! and KaaL root task. It handles:
+//! This bootloader prepares the ARM64 system for running the KaaL microkernel
+//! and root task. It handles:
 //! - ARM64 boot initialization
 //! - MMU and page table setup
 //! - ELF image loading
@@ -9,6 +9,7 @@
 //! - Kernel handoff
 
 #![no_std]
+#![no_main]
 #![feature(alloc_error_handler)]
 
 extern crate alloc;
@@ -108,7 +109,7 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
     // Initialize UART for debug output
     uart::init();
     uart::println!("═══════════════════════════════════════════════════════════");
-    uart::println!("  KaaL Elfloader v0.1.0 - Rust-based seL4 Boot Loader");
+    uart::println!("  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader");
     uart::println!("═══════════════════════════════════════════════════════════");
     uart::println!();
     uart::println!("DTB address: {:#x}", dtb_addr);
@@ -135,7 +136,7 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
     uart::println!("Loading images...");
 
     // Load kernel and user images
-    let (kernel_entry, mut boot_info) = boot::load_images();
+    let (kernel_entry, mut boot_info) = boot::load_images(dtb_addr);
 
     // Set DTB info in boot_info
     boot_info.dtb_addr = dtb_addr;
@@ -166,19 +167,9 @@ pub extern "C" fn elfloader_main(dtb_addr: usize) -> ! {
     uart::println!("TTBR0: {:#x}", pt_mgr.get_ttbr0());
 
     uart::println!();
-    uart::println!("Enabling MMU...");
-
-    // Enable MMU
-    arch::enable_mmu(
-        pt_mgr.get_ttbr0(),
-        0, // TTBR1 not used
-        mmu::PageTableManager::get_mair(),
-        mmu::PageTableManager::get_tcr(),
-    );
-
-    uart::println!("MMU enabled successfully");
+    uart::println!("Skipping MMU setup - kernel will handle it");
     uart::println!();
-    uart::println!("Jumping to seL4 kernel at {:#x}...", kernel_entry);
+    uart::println!("Jumping to KaaL kernel at {:#x}...", kernel_entry);
     uart::println!("  Passing root task info:");
     uart::println!("    user_img: {:#x} - {:#x}", boot_info.user_img_start, boot_info.user_img_end);
     uart::println!("    user_entry: {:#x}", boot_info.user_entry);

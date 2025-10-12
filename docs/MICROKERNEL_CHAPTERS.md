@@ -1,6 +1,6 @@
 # KaaL Rust Microkernel - Development Chapters
 
-> **A chapter-by-chapter guide to building a pure-Rust seL4-compatible microkernel**
+> **A chapter-by-chapter guide to building the KaaL capability-based microkernel in Rust**
 >
 > Each chapter is a self-contained milestone with documentation, implementation, and testing.
 
@@ -8,12 +8,14 @@
 
 ## Overview
 
-This document structures the Rust microkernel development into **8 distinct chapters**, each building upon the previous one. Each chapter has:
+This document structures the KaaL microkernel development into **8 distinct chapters**, each building upon the previous one. Each chapter has:
 - Clear objectives and deliverables
 - Step-by-step implementation guide
 - Testing criteria
 - Documentation requirements
 - Estimated timeline
+
+The KaaL microkernel is built from scratch in Rust, implementing capability-based security, IPC, memory management, and scheduling for ARM64 platforms.
 
 **Total Timeline**: 9-12 months
 **Commitment**: 1-2 developers full-time
@@ -24,8 +26,8 @@ This document structures the Rust microkernel development into **8 distinct chap
 
 | Chapter | Title | Duration | Status |
 |---------|-------|----------|--------|
-| [Chapter 0](#chapter-0) | Project Setup & Infrastructure | 1 week | 📋 Planned |
-| [Chapter 1](#chapter-1) | Bare Metal Boot & Early Init | 2-3 weeks | 📋 Planned |
+| [Chapter 0](#chapter-0) | Project Setup & Infrastructure | 1 week | ✅ Complete |
+| [Chapter 1](#chapter-1) | Bare Metal Boot & Early Init | 2-3 weeks | ✅ Complete |
 | [Chapter 2](#chapter-2) | Memory Management & MMU | 3-4 weeks | 📋 Planned |
 | [Chapter 3](#chapter-3) | Exception Handling & Syscalls | 2-3 weeks | 📋 Planned |
 | [Chapter 4](#chapter-4) | Kernel Object Model | 4-5 weeks | 📋 Planned |
@@ -41,7 +43,7 @@ This document structures the Rust microkernel development into **8 distinct chap
 ## Chapter 0: Project Setup & Infrastructure
 
 **Duration**: 1 week
-**Status**: 📋 Planned
+**Status**: ✅ Complete
 
 ### Objectives
 

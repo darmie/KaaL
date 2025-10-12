@@ -15,51 +15,17 @@ extern "C" {
     static __user_image_end: u8;
 }
 
-/// seL4 kernel's rootserver structure
+/// KaaL kernel boot parameters (passed in ARM64 registers x0-x4)
 ///
-/// This structure is defined in the seL4 kernel's BSS section at a fixed offset.
-/// The elfloader must populate this structure with information about the root task
-/// before jumping to the kernel. The kernel reads this structure during boot to
-/// initialize the root task.
-///
-/// Based on seL4 v13.0.0 kernel source
-#[repr(C)]
-struct RootserverMem {
-    /// Physical region containing root task image
-    p_reg_start: usize,
-    p_reg_end: usize,
-
-    /// Virtual region for root task image
-    v_reg_start: usize,
-    v_reg_end: usize,
-
-    /// Virtual entry point of root task
-    v_entry: usize,
-
-    /// Extra bootinfo pointer (DTB/ACPI)
-    extra_bi: usize,
-
-    /// Size of extra bootinfo
-    extra_bi_size: usize,
-
-    /// PV offset (physical-virtual offset)
-    pv_offset: usize,
-
-    /// Padding to 72 bytes
-    _reserved: usize,
-}
-
-/// Offset of rootserver structure within the kernel binary
-///
-/// Found by: nm kernel.elf | grep rootserver
-/// Address: 0xFFFFFF804002E8C8 (virtual)
-/// Kernel loads at: 0x40000000 (physical)
-/// Kernel virtual base: 0xFFFFFF8040000000
-/// Offset = 0xFFFFFF804002E8C8 - 0xFFFFFF8040000000 = 0x2E8C8
-const ROOTSERVER_OFFSET: usize = 0x2E8C8;
+/// The KaaL kernel receives boot parameters via ARM64 calling convention:
+/// - x0 = DTB address
+/// - x1 = Root task physical start
+/// - x2 = Root task physical end
+/// - x3 = Root task virtual entry
+/// - x4 = Physical-virtual offset
 
 /// Load kernel and root task, return (kernel_entry, boot_info_for_root_task)
-pub fn load_images() -> (usize, BootInfo) {
+pub fn load_images(dtb_addr: usize) -> (usize, BootInfo) {
     uart_println!("Loading embedded images from ELF sections...");
 
     // Get kernel image from .kernel_elf section
@@ -84,64 +50,24 @@ pub fn load_images() -> (usize, BootInfo) {
     let user_size = user_end - user_start;
     uart_println!("  User:   {:#x} - {:#x} ({} KB)", user_start, user_end, user_size / 1024);
 
-    // Load kernel at fixed physical address 0x40000000
-    // This matches seL4's expected kernel load address for QEMU ARM virt
-    let kernel_paddr = 0x40000000;
+    // Parse kernel ELF and load its segments
+    // The parse_elf_entry function loads all PT_LOAD segments to their target addresses
+    let kernel_entry = parse_elf_and_load_segments(kernel_start);
+    uart_println!("Kernel loaded at entry point: {:#x}", kernel_entry);
 
-    uart_println!("Copying kernel to physical address {:#x}...", kernel_paddr);
-
-    // Copy kernel to target physical address
-    unsafe {
-        let src = kernel_start as *const u8;
-        let dst = kernel_paddr as *mut u8;
-        core::ptr::copy_nonoverlapping(src, dst, kernel_size);
-    }
-
-    // Parse root task ELF to get entry point and load segments
-    let user_entry = parse_elf_entry(user_start);
-    uart_println!("Root task entry point: {:#x}", user_entry);
+    // Parse root task ELF and load its segments
+    let user_entry = parse_elf_and_load_segments(user_start);
+    uart_println!("Root task loaded at entry point: {:#x}", user_entry);
 
     uart_println!("Images loaded successfully!");
-
-    // CRITICAL: Populate the kernel's rootserver structure
-    // This tells the seL4 kernel where to find the root task
-    let rootserver_addr = kernel_paddr + ROOTSERVER_OFFSET;
-    uart_println!("Populating rootserver structure at {:#x}...", rootserver_addr);
-
-    unsafe {
-        let rootserver = rootserver_addr as *mut RootserverMem;
-        core::ptr::write(rootserver, RootserverMem {
-            // Physical region - where root task ELF is loaded in memory
-            p_reg_start: user_entry,  // Root task loaded at its entry address
-            p_reg_end: user_entry + (user_end - user_start),
-
-            // Virtual region - same as physical for identity mapping
-            v_reg_start: user_entry,
-            v_reg_end: user_entry + (user_end - user_start),
-
-            // Virtual entry point
-            v_entry: user_entry,
-
-            // Extra bootinfo (DTB) - will be set later
-            extra_bi: 0,
-            extra_bi_size: 0,
-
-            // Physical-virtual offset (0 for identity mapping)
-            pv_offset: 0,
-
-            // Reserved/padding
-            _reserved: 0,
-        });
-    }
-
-    uart_println!("Rootserver structure populated:");
-    uart_println!("  p_reg: {:#x} - {:#x}", user_entry, user_entry + (user_end - user_start));
-    uart_println!("  v_entry: {:#x}", user_entry);
+    uart_println!("Kernel entry: {:#x}", kernel_entry);
+    uart_println!("Root task:  {:#x} - {:#x}", user_start, user_end);
+    uart_println!("Root entry: {:#x}", user_entry);
 
     // Return kernel entry and boot info
     // The kernel expects info about the root task in these parameters
     (
-        kernel_paddr,  // Jump to kernel at this address
+        kernel_entry,  // Jump to kernel at this address (from ELF header)
         BootInfo {
             user_img_start: user_start,    // Physical start of root task ELF
             user_img_end: user_end,          // Physical end of root task ELF
@@ -154,7 +80,7 @@ pub fn load_images() -> (usize, BootInfo) {
 }
 
 /// Parse ELF and load its segments into memory, return entry point
-fn parse_elf_entry(elf_addr: usize) -> usize {
+fn parse_elf_and_load_segments(elf_addr: usize) -> usize {
     // Read ELF header
     let elf_header = unsafe { core::slice::from_raw_parts(elf_addr as *const u8, 64) };
 
@@ -247,17 +173,8 @@ fn parse_elf_entry(elf_addr: usize) -> usize {
 
 /// Update the rootserver structure with DTB information
 ///
-/// This must be called after DTB is parsed to provide device tree info to kernel
-pub fn update_rootserver_dtb(kernel_paddr: usize, dtb_addr: usize, dtb_size: usize) {
-    let rootserver_addr = kernel_paddr + ROOTSERVER_OFFSET;
-
-    uart_println!("Updating rootserver with DTB info...");
+/// For KaaL kernel, this is a no-op since boot params are passed via function call
+pub fn update_rootserver_dtb(_kernel_paddr: usize, dtb_addr: usize, dtb_size: usize) {
+    uart_println!("DTB info will be passed to kernel via function parameters");
     uart_println!("  DTB: {:#x} (size: {})", dtb_addr, dtb_size);
-
-    unsafe {
-        let rootserver = rootserver_addr as *mut RootserverMem;
-        // Update only the DTB fields, preserving other values
-        (*rootserver).extra_bi = dtb_addr;
-        (*rootserver).extra_bi_size = dtb_size;
-    }
 }

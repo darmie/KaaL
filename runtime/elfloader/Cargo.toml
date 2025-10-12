@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = []
+
+[[bin]]
+name = "elfloader"
+path = "src/lib.rs"
 
 [dependencies]
 # Core dependencies for no_std environment
@@ -22,15 +26,14 @@ fdt = "0.1"
 postcard = { version = "1.0", default-features = false, features = ["use-crc", "alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 
-# UART driver for debug output
-sel4-pl011-driver = { git = "https://github.com/seL4/rust-sel4", optional = true }
-
 [build-dependencies]
 cc = "1.0"
 
 [features]
-default = ["uart-pl011"]
-uart-pl011 = ["sel4-pl011-driver"]
+default = []
+
+# Platform-specific DTB location fallbacks (only used if bootloader doesn't provide DTB in x0)
+platform-qemu-virt = []
 
 [profile.release]
 opt-level = "z"

@@ -2,23 +2,30 @@
 name = "kaal-kernel"
 version = "0.1.0"
 edition = "2021"
-authors = ["KaaL Contributors"]
-description = "KaaL Rust Microkernel - Pure Rust seL4-compatible microkernel"
+
+[[bin]]
+name = "kaal-kernel"
+path = "src/main.rs"
 
 [lib]
-crate-type = ["staticlib"]
+name = "kaal_kernel"
+path = "src/lib.rs"
+crate-type = ["rlib"]
 
 [dependencies]
 bitflags = { version = "2.4", default-features = false }
 spin = { version = "0.9", default-features = false }
 
 [profile.release]
-opt-level = "z"          # Optimize for size
-lto = true               # Link-time optimization
-codegen-units = 1        # Better optimization
-panic = "abort"          # No unwinding
-overflow-checks = true   # Safety checks
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
 
 [features]
-default = ["debug"]
-debug = []              # Enable debug printing
+default = ["log-info"]
+log-error = []
+log-warn = []
+log-info = []
+log-debug = []
+log-trace = []

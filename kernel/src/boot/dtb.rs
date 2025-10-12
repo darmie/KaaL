@@ -46,12 +46,16 @@ const FDT_END: u32 = 0x00000009;
 
 /// Parse device tree at given physical address
 pub fn parse(dtb_addr: usize) -> Result<DtbInfo, DtbError> {
+    crate::kprintln!("DTB parse: reading header at {:#x}", dtb_addr);
     let header = unsafe { &*(dtb_addr as *const FdtHeader) };
 
     // Verify magic number
-    if u32::from_be(header.magic) != FDT_MAGIC {
+    let magic = u32::from_be(header.magic);
+    crate::kprintln!("DTB magic: {:#x} (expected {:#x})", magic, FDT_MAGIC);
+    if magic != FDT_MAGIC {
         return Err(DtbError::InvalidMagic);
     }
+    crate::kprintln!("DTB magic OK");
 
     // Get offsets
     let struct_offset = u32::from_be(header.off_dt_struct) as usize;
@@ -66,9 +70,24 @@ pub fn parse(dtb_addr: usize) -> Result<DtbInfo, DtbError> {
     let mut memory_end: Option<usize> = None;
 
     let mut offset = 0;
+    let mut iterations = 0;
+    const MAX_ITERATIONS: usize = 10000;
+
+    crate::kprintln!("Parsing DTB structure at {:#x}", struct_base);
+
     loop {
+        iterations += 1;
+        if iterations > MAX_ITERATIONS {
+            crate::kprintln!("ERROR: Too many iterations!");
+            return Err(DtbError::InvalidStructure);
+        }
+
         let token = read_u32(struct_base + offset);
         offset += 4;
+
+        if iterations <= 10 {
+            crate::kprintln!("Token {}: {:#x} at offset {:#x}", iterations, token, offset - 4);
+        }
 
         match token {
             FDT_BEGIN_NODE => {

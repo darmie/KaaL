@@ -1,6 +1,6 @@
 # KaaL - Kernel-as-a-Library
 
-**A composable OS development framework built on seL4**
+**A composable OS development framework with a native Rust microkernel**
 
 > KaaL is the skeleton, not the OS. Build your own capability-based operating system using composable components.
 
@@ -8,10 +8,10 @@
 
 KaaL is a **framework for composable operating system development**. It provides:
 
-- **Kernel-as-a-Library**: seL4 integration as a pluggable backend
+- **Native Rust Microkernel**: Capability-based kernel built from scratch in Rust
 - **Composable Components**: Mix and match VFS, network, POSIX layers
 - **Capability-Based Architecture**: Security by design
-- **Production-First**: Defaults to real seL4, not mocks
+- **Multi-Platform**: ARM64 support (QEMU, Raspberry Pi, custom boards)
 
 Think of KaaL as the **skeleton** upon which you build your custom OS for embedded, IoT, or security-critical systems.
 
@@ -35,13 +35,13 @@ Your Custom OS (you build this)
 │  │ IPC Layer (message passing)      ││
 │  ├─────────────────────────────────┤│
 │  │ Kernel Abstraction (pluggable)   ││
-│  │  ├── seL4 Microkit (default)     ││
-│  │  ├── seL4 Runtime (advanced)     ││
-│  │  └── Mock (development)          ││
+│  │  ├── KaaL Microkernel (Rust)     ││
+│  │  ├── Mock (development)          ││
+│  │  └── Other kernels (future)      ││
 │  └─────────────────────────────────┘│
 └─────────────────────────────────────┘
     ↓
-  seL4 Microkernel (or future: other kernels)
+  KaaL Rust Microkernel (capability-based, ARM64)
 ```
 
 **You decide**: Which components? Which policies? Which deployment?
@@ -50,31 +50,33 @@ Your Custom OS (you build this)
 
 ## 🚀 Quick Start
 
-### Build Your OS for Any Platform
+### Building a Bootable Image
 
-**Your OS runs on**: ARM64, x86_64, RISC-V, or any seL4-supported architecture
-**Build environment**: Currently requires Linux (or Docker) due to seL4 SDK tooling
+KaaL uses a config-driven build system to create bootable images for ARM64 platforms:
 
 ```bash
-# Build real OS for ARM64 (runs on ARM hardware/QEMU)
-export SEL4_PREFIX=/path/to/seL4
-cargo build --features board-qemu-virt-aarch64
+# Build bootable image for QEMU virt (default)
+./build.sh
 
-# Build real OS for x86_64 (runs on PC/QEMU)
-cargo build --features board-pc99
+# Build for Raspberry Pi 4
+./build.sh --platform rpi4
 
-# Framework development (any platform - macOS, Linux, Windows)
-cargo build --no-default-features --features mock
+# Build for custom platform
+./build.sh --platform my-board
+
+# Test in QEMU
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 ```
 
-**Important**: The OS you build runs everywhere - the build environment limitation is temporary.
+The build system packages your kernel, user-space components, and drivers into a single bootable ELF image. Configure platforms in [build-config.toml](build-config.toml).
 
 ---
 
 ## 📦 What KaaL Provides
 
 ### Core Framework (The Skeleton)
-- **`sel4-platform`**: Kernel abstraction layer (pluggable)
+- **`kaal-kernel`**: Native Rust microkernel (capability-based)
 - **`cap-broker`**: Capability management (bring your policies)
 - **`kaal-ipc`**: Typed message passing
 - **`kaal-allocator`**: Memory primitives
@@ -87,7 +89,8 @@ cargo build --no-default-features --features mock
 - **`kaal-drivers`**: Hardware drivers (optional)
 
 ### Tools
-- **`sel4-compose`**: Declarative OS builder *(planned)*
+- **Build system**: Config-driven multi-platform build
+- **Platform support**: QEMU, Raspberry Pi, custom boards
 
 **Pick what you need. Leave what you don't.**
 
@@ -97,32 +100,21 @@ cargo build --no-default-features --features mock
 
 1. **Composability**: Mix and match components
 2. **Security by Default**: Capabilities, not ACLs
-3. **Kernel as Library**: Pluggable backends
-4. **Production-First**: Real kernel integration (seL4)
+3. **Native Rust**: Type safety and memory safety throughout
+4. **Multi-Platform**: Easy to port to new ARM64 boards
 5. **Explicit Everything**: No magic, no implicit state
 
 ---
 
-## 📊 Build Modes
+## 📊 Platform Support
 
-| Mode | Default | Build Host | Output OS Runs On | Use Case |
-|------|---------|------------|-------------------|----------|
-| **Microkit** | ✅ YES | Linux* | ARM64, x86, RISC-V | Build production OS |
-| **Runtime** | ❌ NO | Linux* | ARM64, x86, RISC-V | Advanced seL4 OS |
-| **Mock** | ❌ NO | Any | N/A (testing only) | Framework dev |
+| Platform | Status | CPU | Memory | Boot Method |
+|----------|--------|-----|--------|-------------|
+| **QEMU virt** | ✅ Working | Cortex-A53 | 128MB | ELF image |
+| **Raspberry Pi 4** | 🚧 In Progress | Cortex-A72 | 1GB | SD card / TFTP |
+| **Custom ARM64** | 📝 Template | Configurable | Configurable | Platform-specific |
 
-*Build host limitation is temporary - the OS you build runs on any seL4 target
-
-```bash
-# Build OS for ARM64 (build on Linux, runs on ARM hardware)
-cargo build --features board-qemu-virt-aarch64
-
-# Build OS for x86 (build on Linux, runs on PC)
-cargo build --features board-pc99
-
-# Framework development (any build platform)
-cargo build --no-default-features --features mock
-```
+Add new platforms by configuring [build-config.toml](build-config.toml).
 
 ---
 
@@ -145,11 +137,10 @@ cargo build --no-default-features --features mock
 
 ## 📚 Documentation
 
-- [docs/BUILD_INSTRUCTIONS.md](docs/BUILD_INSTRUCTIONS.md) - Complete build guide
-- [docs/CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) - Build for any architecture
-- [docs/BUILD_MODES.md](docs/BUILD_MODES.md) - Build mode details
-- [docs/INTEGRATION_SUMMARY.md](docs/INTEGRATION_SUMMARY.md) - Integration summary
-- [scripts/README.md](scripts/README.md) - Build scripts documentation
+- [BUILD_SYSTEM.md](BUILD_SYSTEM.md) - Config-driven build system guide
+- [kernel/README.md](kernel/README.md) - KaaL microkernel documentation
+- [runtime/elfloader/README.md](runtime/elfloader/README.md) - Bootloader documentation
+- [build-config.toml](build-config.toml) - Platform configuration reference
 
 ---
 

@@ -6,21 +6,18 @@ use core::arch::{asm, naked_asm};
 /// x0 = DTB physical address
 #[unsafe(naked)]
 #[no_mangle]
-#[link_section = ".text.boot"]
 pub unsafe extern "C" fn _start() -> ! {
     naked_asm!(
         // Preserve DTB address in x0
         "mov x19, x0",
 
         // Set up stack (use end of elfloader as stack base)
-        "adrp x1, __stack_top",
-        "add sp, x1, #0",
+        "ldr x1, =__stack_top",
+        "mov sp, x1",
 
         // Clear BSS
-        "adrp x1, __bss_start",
-        "add x1, x1, #0",
-        "adrp x2, __bss_end",
-        "add x2, x2, #0",
+        "ldr x1, =__bss_start",
+        "ldr x2, =__bss_end",
         "1:",
         "cmp x1, x2",
         "b.eq 2f",
@@ -41,16 +38,24 @@ pub unsafe extern "C" fn _start() -> ! {
 
 /// Rust entry point - called from assembly _start
 #[no_mangle]
-extern "C" fn _start_rust(_dtb_addr: usize) -> ! {
-    // Raw UART test - write directly to hardware before any Rust setup
-    unsafe {
-        let uart_base = 0x0900_0000 as *mut u32;
-        core::ptr::write_volatile(uart_base, b'#' as u32);
-    }
+extern "C" fn _start_rust(dtb_addr: usize) -> ! {
+    // DTB address should be passed from firmware/bootloader in x0
+    // If x0 is 0, use platform-specific fallback
+    let dtb_addr = if dtb_addr != 0 {
+        dtb_addr
+    } else {
+        #[cfg(feature = "platform-qemu-virt")]
+        {
+            // QEMU virt machine places DTB at 0x40000000 (RAM base)
+            0x40000000
+        }
 
-    // QEMU virt places DTB at fixed address 0x40000000 (base of RAM)
-    // When using -kernel with ELF, x0 is NOT set, so we hardcode the DTB location
-    let dtb_addr = 0x40000000;
+        #[cfg(not(feature = "platform-qemu-virt"))]
+        {
+            // No fallback available - pass 0 and let main handle the error
+            0
+        }
+    };
 
     // Call main elfloader entry
     crate::elfloader_main(dtb_addr)

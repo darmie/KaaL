@@ -1,0 +1,95 @@
+# KaaL Build Configuration
+# This file defines platform-specific settings for building the KaaL microkernel
+
+[build]
+# Default platform to use if --platform is not specified
+default_platform = "qemu-virt"
+
+# Project structure
+output_dir = "runtime/build"
+bootimage_name = "kaal-boot.elf"
+
+# Component directories
+kernel_source_dir = "kernel"
+elfloader_source_dir = "runtime/elfloader"
+roottask_source_dir = "runtime/dummy-roottask"
+
+# Kernel stack size (applies to all platforms)
+kernel_stack_size = "0x4000"  # 16KB
+
+# =============================================================================
+# QEMU virt platform (ARM64 Cortex-A53)
+# =============================================================================
+[platform.qemu-virt]
+name = "QEMU virt (ARM64)"
+arch = "aarch64"
+kernel_target = "aarch64-unknown-none"
+elfloader_target_json = "aarch64-unknown-none-elf.json"
+
+# Memory layout
+ram_base = "0x40000000"       # RAM starts at 1GB
+ram_size = "0x8000000"        # 128MB total RAM
+
+# Device addresses
+uart_base = "0x09000000"      # PL011 UART
+
+# Boot memory layout offsets (relative to ram_base)
+dtb_offset = "0x0"            # DTB at ram_base + 0x0 = 0x40000000
+elfloader_offset = "0x200000" # Elfloader at ram_base + 0x200000 = 0x40200000
+kernel_offset = "0x400000"    # Kernel at ram_base + 0x400000 = 0x40400000
+
+# Stack location (grows down from this address)
+stack_top_offset = "0x8000000" # Stack top at ram_base + ram_size = 0x48000000
+
+# QEMU launch parameters
+qemu_machine = "virt"
+qemu_cpu = "cortex-a53"
+qemu_memory = "128M"
+
+# =============================================================================
+# Raspberry Pi 4 (ARM64 Cortex-A72)
+# =============================================================================
+[platform.rpi4]
+name = "Raspberry Pi 4 (ARM64)"
+arch = "aarch64"
+kernel_target = "aarch64-unknown-none"
+elfloader_target_json = "aarch64-unknown-none-elf.json"
+
+# Memory layout
+ram_base = "0x0"              # RAM starts at 0x0
+ram_size = "0x40000000"       # 1GB (for 1GB model)
+
+# Device addresses
+uart_base = "0xFE201000"      # Mini UART
+
+# Boot memory layout offsets
+dtb_offset = "0x0"            # DTB at 0x0
+elfloader_offset = "0x80000"  # Elfloader at 0x80000 (standard ARM64 boot offset)
+kernel_offset = "0x200000"    # Kernel at 0x200000
+
+# Stack location
+stack_top_offset = "0x800000" # Stack top at 8MB
+
+# =============================================================================
+# Generic ARM64 platform (template for custom boards)
+# =============================================================================
+[platform.generic-arm64]
+name = "Generic ARM64"
+arch = "aarch64"
+kernel_target = "aarch64-unknown-none"
+elfloader_target_json = "aarch64-unknown-none-elf.json"
+
+# Memory layout (customize for your board)
+ram_base = "0x80000000"
+ram_size = "0x20000000"       # 512MB
+
+# Device addresses (customize for your board)
+uart_base = "0x10000000"
+
+# Boot memory layout offsets
+dtb_offset = "0x0"
+elfloader_offset = "0x80000"
+kernel_offset = "0x200000"
+
+# Stack location
+stack_top_offset = "0x1000000" # Stack top at 16MB

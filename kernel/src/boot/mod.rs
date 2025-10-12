@@ -23,9 +23,9 @@ pub struct BootParams {
 /// Kernel entry point (called from _start)
 ///
 /// This is the first Rust function that executes.
-/// Boot parameters are passed in ARM64 registers x0-x4.
+/// Boot parameters are in callee-saved registers x19-x23 (set by _start).
 pub fn kernel_entry() -> ! {
-    // Get boot parameters from registers
+    // Get boot parameters from registers (x19-x23)
     let params = unsafe { get_boot_params() };
 
     // Initialize UART first so we can print

@@ -20,8 +20,8 @@ struct Pl011Regs {
     cr: u32,
 }
 
-/// UART base address for QEMU virt
-const UART_BASE: usize = 0x09000000;
+/// UART base address for QEMU virt (physical address)
+const UART_BASE: usize = 0x9000000;
 
 /// Initialize UART for output
 pub fn init() {
@@ -31,7 +31,7 @@ pub fn init() {
         ptr::write_volatile(&mut (*uart).cr, 0);
 
         // Wait for transmit to finish
-        while (ptr::read_volatile(&(*uart).fr) & (1 << 3)) \!= 0 {}
+        while (ptr::read_volatile(&(*uart).fr) & (1 << 3)) != 0 {}
 
         // Configure: 8n1, FIFO enabled
         ptr::write_volatile(&mut (*uart).lcrh, (1 << 4) | (3 << 5));
@@ -46,7 +46,7 @@ pub fn putc(c: u8) {
     let uart = UART_BASE as *mut Pl011Regs;
     unsafe {
         // Wait until TX FIFO not full
-        while (ptr::read_volatile(&(*uart).fr) & (1 << 5)) \!= 0 {}
+        while (ptr::read_volatile(&(*uart).fr) & (1 << 5)) != 0 {}
 
         // Write byte
         ptr::write_volatile(&mut (*uart).dr, c as u32);

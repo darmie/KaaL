@@ -7,7 +7,7 @@ use core::arch::asm;
 pub fn read_midr_el1() -> u64 {
     let val: u64;
     unsafe {
-        asm\!("mrs {}, midr_el1", out(reg) val);
+        asm!("mrs {}, midr_el1", out(reg) val);
     }
     val
 }
@@ -17,7 +17,7 @@ pub fn read_midr_el1() -> u64 {
 pub fn current_el() -> u8 {
     let val: u64;
     unsafe {
-        asm\!("mrs {}, CurrentEL", out(reg) val);
+        asm!("mrs {}, CurrentEL", out(reg) val);
     }
     ((val >> 2) & 0x3) as u8
 }

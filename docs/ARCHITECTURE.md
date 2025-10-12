@@ -1,6 +1,6 @@
 # KaaL Architecture Overview
 
-This document provides a high-level overview of the KaaL architecture. For complete technical details, see [technical_arch_implementation.md](../internal_resource/technical_arch_implementation.md).
+A high-level overview of the KaaL microkernel and framework architecture.
 
 ---
 
@@ -8,33 +8,34 @@ This document provides a high-level overview of the KaaL architecture. For compl
 
 ### Core Principles
 
-1. **Pragmatic Impurity** - Trade microkernel purity for developer usability
-2. **Progressive Disclosure** - Simple tasks simple, complex tasks possible
-3. **Composition Over Configuration** - Link only what you need
-4. **Performance Through Architecture** - Zero-copy, shared memory, batching
+1. **Capability-Based Security** - Unforgeable tokens for all access control
+2. **Composition Over Configuration** - Link only what you need
+3. **Type Safety** - Rust's safety guarantees throughout the stack
+4. **Performance Through Architecture** - Zero-copy, efficient IPC, minimal overhead
 
 ### Design Goals
 
 | Goal | Target | Status |
 |------|--------|--------|
-| **Reduce Development Time** | 10x faster (6 months vs 3 years) | 🚧 In Progress |
-| **Preserve Security** | Verified core, <200K TCB | ✅ By Design |
-| **Enable Applications** | POSIX compatibility | ⏳ Planned |
-| **Excellent DX** | Modern tooling, <1 day to productive | 🚧 In Progress |
+| **Security** | Capability-based, memory-safe | ✅ By Design |
+| **Performance** | Low latency IPC, fast context switching | 🚧 In Progress |
+| **Portability** | Easy to port to new ARM64 boards | ✅ Config-driven |
+| **Developer Experience** | Modern tooling, clear abstractions | 🚧 In Progress |
 
 ---
 
 ## System Layers
 
-### Layer 0: seL4 Microkernel
-- **Size:** 10K LOC
-- **Status:** Formally verified
+### Layer 0: KaaL Microkernel (Rust)
+- **Language:** Pure Rust (no_std)
+- **Architecture:** ARM64 (AArch64)
 - **Responsibilities:**
-  - IPC primitives
-  - Scheduling
-  - Memory management
-  - Capability system
-- **Development:** Never modified (black box)
+  - Capability management
+  - IPC and message passing
+  - Memory management (MMU, page tables)
+  - Thread scheduling
+  - Exception handling
+- **Status:** Boot and early initialization complete
 
 ### Layer 1: Runtime Services
 - **Size:** ~8K LOC
@@ -42,7 +43,7 @@ This document provides a high-level overview of the KaaL architecture. For compl
   - Capability Broker (5K LOC)
   - Memory Manager (3K LOC)
 - **Responsibilities:**
-  - Hide seL4 complexity
+  - Hide microkernel complexity
   - Device resource allocation
   - Untyped memory management
   - IPC endpoint creation

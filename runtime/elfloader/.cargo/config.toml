@@ -1,8 +1,8 @@
 [build]
-target = "aarch64-unknown-none"
+target = "aarch64-unknown-none-elf.json"
 
-[target.aarch64-unknown-none]
-rustflags = [
-    "-C", "link-arg=-Tlinker.ld",
-    "-C", "relocation-model=static",
-]
+[env]
+RUSTFLAGS = "-C link-arg=-Tlinker.ld --cfg feature=\"platform-qemu-virt\""
+
+[unstable]
+build-std = ["core", "alloc"]
