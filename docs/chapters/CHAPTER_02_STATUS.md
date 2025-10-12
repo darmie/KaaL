@@ -186,10 +186,32 @@ Chapter 2 is complete when:
 ## Progress Tracking
 
 ### In Progress 🚧
-- Starting Chapter 2 implementation
+- Phase 5: Kernel heap allocator (next)
+- MMU enable (deferred - needs more testing)
 
 ### Completed ✅
-- None yet
+- ✅ Phase 1: Address Types (PhysAddr, VirtAddr, PageFrameNumber)
+- ✅ Phase 2: Frame Allocator (31,726/32,768 frames working)
+- ✅ Phase 3: Page Table Types (ARM64 4-level tables, bitflags)
+- ✅ Phase 4: MMU Setup (registers configured, page tables created)
+- ✅ Fixed DTB parser infinite loop
+- ✅ Platform-agnostic memory constants via build-config.toml
 
 ### Blocked ⛔
-- None
+- MMU enable requires additional testing (page fault handling not yet implemented)
+
+### Test Results
+```
+[memory] Initializing memory subsystem
+  RAM:    0x40000000 - 0x48000000 (128MB)
+  Kernel: 0x40400000 - 0x40412000 (72KB)
+  Frames: 31726/32768 free (123MB usable)
+
+[memory] Setting up page tables and MMU...
+  Mapping DTB: 0x40000000 - 0x40200000
+  Mapping kernel: 0x40400000 - 0x40412000
+  Mapping stack/heap region: 0x40412000 - 0x48000000
+  Mapping UART device: 0x9000000
+  Root page table at: 0x40412000
+  MMU currently enabled: false
+```
