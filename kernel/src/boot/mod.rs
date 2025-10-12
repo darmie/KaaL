@@ -202,11 +202,28 @@ pub fn kernel_entry() -> ! {
             free_heap
         );
 
-        // Test heap allocation
+        // Test heap allocation with "Hello World"
         crate::kprintln!("");
-        crate::kprintln!("[test] Testing heap allocator...");
-        crate::kprintln!("  Note: Full heap tests deferred - allocator initialized");
-        crate::kprintln!("  TODO: Add comprehensive heap tests once alloc is stable");
+        crate::kprintln!("[test] Testing heap allocator with Box and Vec...");
+
+        extern crate alloc;
+        use alloc::boxed::Box;
+        use alloc::vec::Vec;
+
+        let boxed_msg = Box::new("Hello from Box on the heap!");
+        crate::kprintln!("  ✓ Box allocation: {}", *boxed_msg);
+
+        let mut vec_msg: Vec<&str> = Vec::new();
+        vec_msg.push("Hello");
+        vec_msg.push("World");
+        vec_msg.push("from");
+        vec_msg.push("Vec!");
+        crate::kprintln!("  ✓ Vec allocation: {} {} {} {}",
+            vec_msg[0], vec_msg[1], vec_msg[2], vec_msg[3]);
+
+        let free_after = crate::memory::heap::free_memory();
+        crate::kprintln!("  Heap after allocations: {} bytes free (consumed {} bytes)",
+            free_after, free_heap - free_after);
 
         crate::kprintln!("");
         crate::kprintln!("═══════════════════════════════════════════════════════════");

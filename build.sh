@@ -108,6 +108,9 @@ echo "Generating kernel memory configuration..."
 KERNEL_VIRT_BASE=$(get_config "platform.$PLATFORM" "kernel_virt_base")
 USER_VIRT_MAX=$(get_config "platform.$PLATFORM" "user_virt_max")
 PAGE_SIZE=$(get_config "platform.$PLATFORM" "page_size")
+HEAP_SIZE=$(get_config "platform.$PLATFORM" "heap_size" "0x100000")
+MAX_FRAMES=$(get_config "platform.$PLATFORM" "max_physical_frames" "262144")
+
 LARGE_PAGE_SIZE=$(get_config "platform.$PLATFORM" "large_page_size")
 HUGE_PAGE_SIZE=$(get_config "platform.$PLATFORM" "huge_page_size")
 
@@ -140,6 +143,12 @@ pub const HUGE_PAGE_SHIFT: usize = 30;
 /// User virtual address space maximum
 pub const USER_MAX: usize = $USER_VIRT_MAX;
 
+
+/// Kernel heap size
+pub const HEAP_SIZE: usize = $HEAP_SIZE;
+
+/// Maximum physical frames (for frame allocator)
+pub const MAX_PHYSICAL_FRAMES: usize = $MAX_FRAMES;
 /// Kernel virtual address space base
 pub const KERNEL_BASE: usize = $KERNEL_VIRT_BASE;
 MEMCONFIG

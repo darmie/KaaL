@@ -20,11 +20,12 @@
 //! - Each bit represents one 4KB page frame
 //! - 1 = allocated, 0 = free
 
+#[path = "../generated/memory_config.rs"]
+mod memory_config;
+use memory_config::MAX_PHYSICAL_FRAMES as MAX_FRAMES;
+
 use crate::memory::address::{PhysAddr, PageFrameNumber, PAGE_SIZE};
 
-/// Maximum number of physical frames we can track
-/// For 1GB RAM: 1GB / 4KB = 256K frames = 32KB bitmap
-const MAX_FRAMES: usize = 256 * 1024; // 1GB / 4KB
 
 /// Physical frame allocator
 ///
