@@ -20,10 +20,12 @@
 
 pub mod address;
 pub mod frame_allocator;
+pub mod paging;
 
 pub use address::{PhysAddr, VirtAddr, PageFrameNumber};
 pub use address::{PAGE_SIZE, LARGE_PAGE_SIZE, HUGE_PAGE_SIZE};
 pub use address::{KERNEL_BASE, USER_MAX};
+pub use paging::{PageMapper, PageSize, MappingError};
 
 use frame_allocator::FrameAllocator;
 use crate::kprintln;
