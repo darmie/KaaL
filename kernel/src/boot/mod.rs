@@ -181,14 +181,27 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DEVICE,
         ).expect("Failed to map UART");
 
-        // Initialize MMU (setup but don't enable yet - Phase 4 WIP)
-        crate::kprintln!("  Setting up MMU registers (not enabling yet)...");
-        crate::kprintln!("  TODO: Enable MMU after verifying all mappings are correct");
+        // Initialize and ENABLE MMU!
         crate::kprintln!("  Root page table at: {:#x}", root_phys.as_usize());
+        crate::kprintln!("  Enabling MMU with exception handling ready...");
 
-        // For now, just verify the page table structure is correct
+        let mmu_config = crate::arch::aarch64::mmu::MmuConfig {
+            ttbr1: root_phys,
+            ttbr0: Some(root_phys), // Use same table for identity mapping
+        };
+
+        unsafe {
+            crate::arch::aarch64::mmu::init_mmu(mmu_config);
+        }
+
         let mmu_enabled = crate::arch::aarch64::mmu::is_mmu_enabled();
-        crate::kprintln!("  MMU currently enabled: {}", mmu_enabled);
+        crate::kprintln!("  MMU enabled: {}", mmu_enabled);
+
+        if !mmu_enabled {
+            panic!("MMU failed to enable!");
+        }
+
+        crate::kprintln!("  ✓ MMU enabled successfully with virtual memory!");
 
         // Phase 5: Kernel heap allocator
         crate::kprintln!("[memory] Initializing kernel heap...");
@@ -247,6 +260,17 @@ pub fn kernel_entry() -> ! {
         crate::kprintln!("  Chapter 3: Phase 1 COMPLETE ✓ (Exception vectors)");
         crate::kprintln!("═══════════════════════════════════════════════════════════");
         crate::kprintln!("");
+
+        // Test exception handling with deliberate data abort (commented out for now)
+        // Uncomment to test trap frame:
+        /*
+        crate::kprintln!("[test] Testing exception handler with deliberate data abort...");
+        unsafe {
+            let bad_ptr: *mut u64 = 0xDEADBEEF as *mut u64;
+            core::ptr::write_volatile(bad_ptr, 0x12345678);
+        }
+        crate::kprintln!("  If you see this, exception handling failed!");
+        */
     }
 
     crate::kprintln!("Kernel initialization complete!");
