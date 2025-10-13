@@ -72,6 +72,11 @@ impl Message {
         }
     }
 
+    /// Create an empty message (alias for new())
+    pub const fn empty() -> Self {
+        Self::new()
+    }
+
     /// Create a message with a label
     pub const fn with_label(label: u64) -> Self {
         Self {

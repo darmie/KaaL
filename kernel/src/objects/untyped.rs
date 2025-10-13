@@ -251,6 +251,7 @@ impl UntypedMemory {
             CapType::PageTable => 12,              // 4KB
             CapType::IrqHandler => 0,              // Zero-size (just metadata)
             CapType::IrqControl => 0,              // Zero-size
+            CapType::Reply => 0,                   // Zero-size (just metadata)
         };
 
         if size_bits < min_size_bits {

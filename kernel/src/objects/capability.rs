@@ -181,6 +181,28 @@ impl Capability {
             guard: badge, // Reuse guard field for badge
         })
     }
+
+    /// Get the badge value (for endpoint/reply capabilities)
+    ///
+    /// The guard field is reused for badges in endpoint and reply capabilities.
+    #[inline]
+    pub fn badge(&self) -> u64 {
+        self.guard
+    }
+
+    /// Set the badge value (for endpoint/reply capabilities)
+    ///
+    /// The guard field is reused for badges in endpoint and reply capabilities.
+    #[inline]
+    pub fn set_badge(&mut self, badge: u64) {
+        self.guard = badge;
+    }
+
+    /// Set the rights for this capability
+    #[inline]
+    pub fn set_rights(&mut self, rights: CapRights) {
+        self.rights = rights;
+    }
 }
 
 /// Types of kernel objects
@@ -222,6 +244,9 @@ pub enum CapType {
 
     /// IRQ Control - IRQ management capability
     IrqControl = 10,
+
+    /// Reply - one-time reply capability for IPC call/reply
+    Reply = 11,
 }
 
 /// Capability rights (bitflags)

@@ -190,7 +190,7 @@ pub unsafe fn recv(
 /// 1. Read from sender's IPC buffer
 /// 2. Write to receiver's IPC buffer
 /// 3. Transfer capabilities if present
-unsafe fn transfer_message(
+pub(crate) unsafe fn transfer_message(
     sender: *mut TCB,
     receiver: *mut TCB,
     msg: &Message,

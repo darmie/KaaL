@@ -144,6 +144,7 @@ pub unsafe fn invoke_capability(
         CapType::PageTable => invoke_page_table(cap, args),
         CapType::IrqHandler => invoke_irq_handler(cap, args),
         CapType::IrqControl => invoke_irq_control(cap, args),
+        CapType::Reply => Err(InvocationError::InvalidCapability), // Reply caps are used directly by IPC, not invoked
     }
 }
 
