@@ -69,7 +69,7 @@ global_asm!(
     // Current EL with SP_ELx
     ".balign 0x80",
     "curr_el_spx_sync:",
-    "    b exception_curr_el_spx_sync",
+    "    b handle_curr_el_spx_sync",
 
     ".balign 0x80",
     "curr_el_spx_irq:",
@@ -118,16 +118,12 @@ global_asm!(
     "    b exception_lower_el_aarch32_serror",
 );
 
-/// Context save macro - saves all 36 registers to trap frame on stack
-///
-/// TrapFrame layout: x0-x30 (31 regs) + sp_el0, elr_el1, spsr_el1, esr_el1, far_el1
-/// Total: 36 * 8 = 288 bytes
+/// Shared exception handler stub - saves context, calls Rust handler, restores context
 global_asm!(
-    ".macro SAVE_CONTEXT",
-    // Allocate space for trap frame on stack
+    ".global handle_curr_el_spx_sync",
+    "handle_curr_el_spx_sync:",
+    // Save all context to stack (288 bytes)
     "    sub sp, sp, #288",
-
-    // Save x0-x30 (general purpose registers) using store-pair instructions
     "    stp x0, x1, [sp, #0]",
     "    stp x2, x3, [sp, #16]",
     "    stp x4, x5, [sp, #32]",
@@ -144,30 +140,20 @@ global_asm!(
     "    stp x26, x27, [sp, #208]",
     "    stp x28, x29, [sp, #224]",
     "    str x30, [sp, #240]",
-
-    // Save special registers
     "    mrs x0, sp_el0",
     "    mrs x1, elr_el1",
     "    mrs x2, spsr_el1",
     "    mrs x3, esr_el1",
     "    mrs x4, far_el1",
-    "    stp x0, x1, [sp, #248]",  // sp_el0, elr_el1
-    "    stp x2, x3, [sp, #264]",  // spsr_el1, esr_el1
-    "    str x4, [sp, #280]",      // far_el1
-
-    // Pass trap frame pointer in x0 (first argument to Rust handler)
-    "    mov x0, sp",
-    ".endm"
-);
-
-/// Context restore macro - restores all registers from trap frame and returns
-global_asm!(
-    ".macro RESTORE_CONTEXT",
-    // Restore special registers first (except ELR and SPSR)
-    "    ldr x0, [sp, #248]",      // sp_el0
+    "    stp x0, x1, [sp, #248]",
+    "    stp x2, x3, [sp, #264]",
+    "    str x4, [sp, #280]",
+    "    mov x0, sp",                 // Pass TrapFrame* to handler
+    // Call Rust handler
+    "    bl exception_curr_el_spx_sync_handler",
+    // Restore context
+    "    ldr x0, [sp, #248]",
     "    msr sp_el0, x0",
-
-    // Restore x0-x30
     "    ldp x0, x1, [sp, #0]",
     "    ldp x2, x3, [sp, #16]",
     "    ldp x4, x5, [sp, #32]",
@@ -184,19 +170,12 @@ global_asm!(
     "    ldp x26, x27, [sp, #208]",
     "    ldp x28, x29, [sp, #224]",
     "    ldr x30, [sp, #240]",
-
-    // Restore ELR and SPSR for exception return
-    "    ldr x1, [sp, #256]",      // elr_el1
-    "    ldr x2, [sp, #264]",      // spsr_el1
+    "    ldr x1, [sp, #256]",
+    "    ldr x2, [sp, #264]",
     "    msr elr_el1, x1",
     "    msr spsr_el1, x2",
-
-    // Deallocate trap frame
     "    add sp, sp, #288",
-
-    // Return from exception
     "    eret",
-    ".endm"
 );
 
 // Rust exception handlers (called from assembly stubs with TrapFrame* in x0)
@@ -228,8 +207,20 @@ extern "C" fn exception_curr_el_sp0_serror() {
 }
 
 #[no_mangle]
-extern "C" fn exception_curr_el_spx_sync() {
+extern "C" fn exception_curr_el_spx_sync_handler(tf: &mut TrapFrame) {
     kprintln!("[exception] Current EL with SP_ELx - Synchronous");
+    kprintln!("  ELR: {:#x}, ESR: {:#x}, FAR: {:#x}", tf.elr_el1, tf.esr_el1, tf.far_el1);
+    kprintln!("  Exception class: {:#x}", tf.exception_class());
+
+    // Check if it's a syscall (shouldn't happen from kernel)
+    if tf.is_syscall() {
+        kprintln!("  → Syscall from kernel space (unexpected!)");
+    } else if tf.is_data_abort() {
+        kprintln!("  → Data abort at address {:#x}", tf.far_el1);
+    } else if tf.is_instruction_abort() {
+        kprintln!("  → Instruction abort at address {:#x}", tf.far_el1);
+    }
+
     print_exception_info();
     panic!("Unhandled exception: Current EL SPx Sync");
 }
