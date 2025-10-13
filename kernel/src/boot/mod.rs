@@ -199,6 +199,9 @@ pub fn kernel_entry() -> ! {
         // Check UART
         mapper.debug_walk(VirtAddr::new(0x09000000));
 
+        // Check the address that will fault (heap region)
+        mapper.debug_walk(VirtAddr::new(0x40600000));
+
         crate::kprintln!("");
 
         // CRITICAL: Install exception handlers BEFORE MMU enable!

@@ -107,7 +107,16 @@ impl PageMapper {
             return Err(MappingError::AlreadyMapped);
         }
 
-        table.set_entry(index, paddr, flags);
+        // Adjust flags for block vs page entries:
+        // - Block entries (L1/L2): TABLE_OR_PAGE bit must be 0
+        // - Page entries (L3): TABLE_OR_PAGE bit must be 1
+        let mut entry_flags = flags;
+        if page_size != PageSize::Size4KB {
+            // This is a block entry (1GB or 2MB), clear TABLE_OR_PAGE bit
+            entry_flags.remove(PageTableFlags::TABLE_OR_PAGE);
+        }
+
+        table.set_entry(index, paddr, entry_flags);
         Ok(())
     }
 
