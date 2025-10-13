@@ -232,6 +232,23 @@ pub fn kernel_entry() -> ! {
         crate::kprintln!("");
     }
 
+    // Chapter 3: Exception Handling & Syscalls
+    {
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("  Chapter 3: Exception Handling & Syscalls");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("");
+
+        // Install exception vector table
+        crate::arch::aarch64::exception::init();
+
+        crate::kprintln!("");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("  Chapter 3: Phase 1 COMPLETE ✓ (Exception vectors)");
+        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("");
+    }
+
     crate::kprintln!("Kernel initialization complete!");
     crate::kprintln!("All systems operational. Entering idle loop.");
     crate::kprintln!("");
