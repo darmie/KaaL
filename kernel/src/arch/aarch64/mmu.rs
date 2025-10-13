@@ -127,7 +127,7 @@ pub unsafe fn init_mmu(config: MmuConfig) {
         options(nomem, nostack),
     );
 
-    // Enable MMU by setting SCTLR_EL1.M bit
+    // Enable MMU ONLY (following seL4 pattern: enable MMU first, caches later)
     let mut sctlr: u64;
     asm!(
         "mrs {sctlr}, sctlr_el1",
@@ -135,11 +135,12 @@ pub unsafe fn init_mmu(config: MmuConfig) {
         options(nomem, nostack),
     );
 
-    // Set bits:
-    // - M (bit 0): Enable MMU
-    // - C (bit 2): Enable data cache
-    // - I (bit 12): Enable instruction cache
-    sctlr |= (1 << 0) | (1 << 2) | (1 << 12);
+    // First, ensure caches are disabled (seL4 requirement)
+    sctlr &= !(1 << 2);   // Clear C bit (data cache)
+    sctlr &= !(1 << 12);  // Clear I bit (instruction cache)
+
+    // Now enable ONLY the MMU
+    sctlr |= (1 << 0);    // Set M bit (MMU enable)
 
     asm!(
         "msr sctlr_el1, {sctlr}",
@@ -148,6 +149,9 @@ pub unsafe fn init_mmu(config: MmuConfig) {
         sctlr = in(reg) sctlr,
         options(nomem, nostack),
     );
+
+    // TODO: Enable caches after MMU is verified working
+    // sctlr |= (1 << 2) | (1 << 12);  // Enable D-cache and I-cache
 }
 
 /// Check if MMU is currently enabled
