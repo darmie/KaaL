@@ -29,6 +29,7 @@ pub mod endpoint;
 pub mod tcb;
 pub mod untyped;
 pub mod invoke;
+pub mod test_runner;
 
 #[cfg(test)]
 mod tests;
