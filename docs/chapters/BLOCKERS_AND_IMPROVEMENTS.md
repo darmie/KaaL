@@ -167,7 +167,7 @@
 
 ## Chapter 3: Exception Handling & Syscalls
 
-**Status**: 🚧 In Progress - Phase 1 Complete!
+**Status**: ✅ COMPLETE (2025-10-13)
 
 ### Completed ✅
 - [x] Exception vector table (16 entries, 2KB aligned)
@@ -176,32 +176,23 @@
 - [x] Exception handlers (synchronous exceptions working)
 - [x] ESR/FAR decoding for fault analysis
 - [x] Integration with MMU (handlers installed before MMU enable)
+- [x] **Test Exception Handling** - Data abort (EC 0x25) ✅ TESTED
+- [x] **Syscall Testing** - Syscall (EC 0x15) ✅ TESTED
 
-### Remaining for Chapter 3 Completion
+### Testing Results
 
-#### Critical - Must Complete Before Chapter 4
-- [ ] **Test Exception Handling with Deliberate Faults**
-  - Action: Uncomment test code in boot/mod.rs to trigger data abort
-  - Verify: Trap frame saves/restores correctly
-  - Verify: Exception handler displays correct fault info
-  - Impact: Validates exception infrastructure works end-to-end
-  - Estimated effort: 30 minutes
-
-- [ ] **Syscall Testing**
-  - Current: Syscall dispatcher infrastructure ready
-  - Needed: Test syscall from user mode (requires EL0 context)
-  - Blocker: Need user-mode setup for proper testing
-  - Priority: Can defer to Chapter 4 (when we have TCBs)
-  - Alternative: Test with SVC from kernel for now
+Both exception types verified successfully:
+- **Data Abort**: Caught at FAR 0xdeadbeef, decoded EC 0x25, translation fault level 1
+- **Syscall**: Caught EC 0x15, extracted syscall #42 and arguments from trap frame
 
 ### Blockers for Chapter 4
-**None** - All prerequisites complete! Ready to proceed to Chapter 4 after testing.
+**None** - All prerequisites complete! Ready to proceed to Chapter 4.
 
 ### Future Improvements (Post-Chapter 3)
 
 - [ ] **User Mode Context Switching**
   - Needed for full syscall testing from EL0
-  - Can be implemented in Chapter 4 with TCBs
+  - Will be implemented in Chapter 4 with TCBs
 
 - [ ] **Advanced Page Fault Handling**
   - Current: Panics with detailed fault info
