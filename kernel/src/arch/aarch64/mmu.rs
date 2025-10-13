@@ -118,10 +118,12 @@ pub unsafe fn init_mmu(config: MmuConfig) {
         );
     }
 
-    // Ensure all previous writes are visible
+    // Invalidate TLB (crucial before MMU enable!)
+    // ARM TF does this: "Ensure translation table writes have drained"
     asm!(
-        "dsb sy",
-        "isb",
+        "tlbi vmalle1",           // Invalidate all TLB entries for EL1
+        "dsb ish",                 // Data sync barrier (inner shareable)
+        "isb",                     // Instruction sync barrier
         options(nomem, nostack),
     );
 
