@@ -203,32 +203,90 @@ Both exception types verified successfully:
 
 ## Chapter 4: Kernel Object Model
 
-**Status**: 📋 Planned
+**Status**: 🚧 IN PROGRESS - 43% Complete (3/7 phases, 2025-10-13)
 
-### Prerequisites
-- ✅ Chapter 3 exception handling complete
-- ⬜ Capability representation
-- ⬜ CNode implementation
+### Completed ✅
+- [x] **Phase 1: Capability System** (2025-10-13)
+  - 32-byte Capability structure, CapType enum, CapRights bitflags
+  - Capability derivation and minting
+  - File: [kernel/src/objects/capability.rs](../../kernel/src/objects/capability.rs)
+
+- [x] **Phase 2: CNode Implementation** (2025-10-13)
+  - Capability container (2^n slots, O(1) lookup)
+  - Insert/delete/move/copy operations
+  - File: [kernel/src/objects/cnode.rs](../../kernel/src/objects/cnode.rs)
+
+- [x] **Phase 3: TCB Implementation** (2025-10-13)
+  - Thread representation with TrapFrame, state machine
+  - CSpace/VSpace roots, IPC buffer, priority scheduling
+  - File: [kernel/src/objects/tcb.rs](../../kernel/src/objects/tcb.rs)
+
+### Remaining Phases
+
+- [ ] **Phase 4: Endpoint Objects** - Basic IPC structure (2-3 hours)
+- [ ] **Phase 5: Untyped Memory** - Retyping infrastructure (4-6 hours)
+- [ ] **Phase 6: Object Invocations** - Syscall dispatch (6-8 hours)
+- [ ] **Phase 7: Integration Testing** - End-to-end tests (4-6 hours)
+
+### Rendezvous Point with Chapter 5
+
+**Decision**: We can proceed to Chapter 5 (IPC) after Phase 4 completes.
+
+**Rationale**:
+- ✅ Core object infrastructure ready (Capability, CNode, TCB)
+- ⬜ Endpoint basic structure needed (Phase 4, ~3 hours)
+- ⚠️ Untyped memory can be deferred - not required for IPC
+- ⚠️ Object invocations better understood after IPC implementation
+
+**Proposed Path**:
+1. Complete Phase 4 (Endpoint structure)
+2. Move to Chapter 5 (implement full IPC with message passing)
+3. Return to Chapter 4 Phases 5-7 (Untyped, invocations, testing)
+
+This provides a natural development flow where IPC implementation informs the final object model design.
 
 ### Known Blockers
-*To be documented during implementation*
+**None** - All dependencies from previous chapters complete.
 
 ### Future Improvements
-*To be documented during implementation*
+
+#### High Priority
+- [ ] **Capability Revocation** - Required for security (1-2 days)
+- [ ] **CNode Guard Bits** - Efficient capability addressing (1 day)
+- [ ] **TCB Scheduler Integration** - Deferred to Chapter 6
+
+#### Medium Priority
+- [ ] **Object Size Optimization** - Cache efficiency (1-2 days)
+- [ ] **Capability Address Space Compression** (2-3 days)
+
+#### Low Priority
+- [ ] **Type-Safe Object Wrappers** - Better compile-time safety (2-3 days)
 
 ---
 
 ## Chapter 5: IPC & Message Passing
 
-**Status**: 📋 Planned
+**Status**: 📋 Planned - Ready to Start After Chapter 4 Phase 4
 
 ### Prerequisites
-- ✅ Chapter 4 object model complete
-- ⬜ Endpoint objects
-- ⬜ Basic send/receive
+**Status**: 🟡 Nearly Ready (3/4 complete)
+
+- ✅ Capability system (Chapter 4 Phase 1) - **DONE**
+- ✅ CNode for capability storage (Chapter 4 Phase 2) - **DONE**
+- ✅ TCB for thread representation (Chapter 4 Phase 3) - **DONE**
+- ⬜ Endpoint basic structure (Chapter 4 Phase 4) - **IN PROGRESS (~3 hours)**
+
+### Planned Implementation
+
+Once Endpoint structure is ready, Chapter 5 will implement:
+- Synchronous send/receive operations
+- Message registers and IPC buffer
+- Capability transfer (move/grant/mint)
+- Call/reply semantics
+- IPC fastpath optimization (optional)
 
 ### Known Blockers
-*To be documented during implementation*
+- ⏳ Waiting for Chapter 4 Phase 4 (Endpoint structure)
 
 ### Future Improvements
 *To be documented during implementation*
