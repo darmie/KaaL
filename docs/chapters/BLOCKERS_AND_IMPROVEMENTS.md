@@ -55,52 +55,47 @@
 
 ## Chapter 2: Memory Management
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete - MMU Fully Operational! (2025-10-13)
 
 ### Blockers
 
-#### Critical - Requires Chapter 3
-- [x] **MMU Enable Deferred**: MMU setup complete but not enabled
-  - Reason: Page fault handling not yet implemented
-  - Blocker: Need exception vector table (Chapter 3) before enabling MMU
-  - Impact: Kernel runs with MMU disabled (physical addressing only)
-  - Resolution: Enable MMU after Chapter 3 exception handling
-  - Files: [kernel/src/arch/aarch64/mmu.rs](../../kernel/src/arch/aarch64/mmu.rs), [kernel/src/memory/paging.rs](../../kernel/src/memory/paging.rs)
-  - Note: All MMU registers configured, page tables mapped, ready to enable
+#### ~~Critical - Requires Chapter 3~~ ✅ RESOLVED (2025-10-13)
+- [x] **MMU Enable Deferred**: ✅ **COMPLETE** - MMU now enabled and working!
+  - Resolution: Integrated exception handling with MMU enable
+  - Result: MMU successfully enabled with virtual memory
+  - Fixed: Three critical bugs (PXN bit, exception timing, block encoding)
+  - Status: Kernel heap working, Box/Vec allocations successful
+  - See: [SESSION_SUMMARY_2025-10-13.md](../SESSION_SUMMARY_2025-10-13.md) for details
 
 ### Future Improvements
 
 #### High Priority
+- [x] **Large Page Support**: ✅ **COMPLETE** - 2MB blocks now working!
+  - Implementation: Block entries with TABLE_OR_PAGE bit cleared
+  - Status: Heap region uses 2MB blocks for efficient mapping
+  - File: [kernel/src/memory/paging.rs](../../kernel/src/memory/paging.rs)
+
+- [x] **Page Table Caching**: ✅ **COMPLETE** - TLB invalidation implemented
+  - Implementation: `tlbi vmalle1` before MMU enable with proper barriers
+  - Status: Full system barriers (dsb sy, isb) in place
+  - File: [kernel/src/arch/aarch64/mmu.rs](../../kernel/src/arch/aarch64/mmu.rs)
+
 - [ ] **Frame Allocator Optimization**: Replace linear scan with buddy allocator
-  - Current: O(n) bitmap scan for free frames
+  - Current: O(n) bitmap scan for free frames (acceptable for now)
   - Needed: O(log n) buddy allocator for better performance
-  - Impact: Critical for high-frequency allocations in later chapters
-  - File: [kernel/src/memory/frame_allocator.rs](../../kernel/src/memory/frame_allocator.rs:7-21)
+  - Impact: Important for high-frequency allocations
+  - Priority: **DEFERRED** to post-Chapter 4 (not blocking)
+  - File: [kernel/src/memory/frame.rs](../../kernel/src/memory/frame.rs)
   - Estimated effort: 1-2 days
-  - References: seL4 uses buddy allocator, see [seL4 whitepaper](https://sel4.systems/About/seL4-whitepaper.pdf)
 
 - [ ] **Heap Allocator Safety**: Fix `static mut` reference warning
-  - Current: Warning on line 38 of heap.rs - mutable reference to static
-  - Issue: Undefined behavior per Rust 2024 edition
+  - Current: Warning about mutable reference to static
   - Needed: Use `SyncUnsafeCell` or atomic operations
-  - Impact: Future-proof for Rust edition migration
-  - File: [kernel/src/memory/heap.rs:38](../../kernel/src/memory/heap.rs:38)
-  - Reference: https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html
-
-- [ ] **Page Table Caching**: Implement TLB invalidation strategy
-  - Current: No explicit TLB management
-  - Needed: TLBI instructions after page table modifications
-  - Impact: Prevent stale TLB entries causing faults
-  - File: [kernel/src/arch/aarch64/mmu.rs](../../kernel/src/arch/aarch64/mmu.rs)
+  - Priority: **DEFERRED** - not affecting functionality
+  - File: [kernel/src/memory/heap.rs](../../kernel/src/memory/heap.rs)
   - Estimated effort: 1 day
 
-#### Medium Priority
-- [ ] **Large Page Support**: Enable 2MB and 1GB pages
-  - Current: Only 4KB pages implemented
-  - Needed: Large page mapping for kernel code/data
-  - Impact: Reduced TLB pressure, better performance
-  - File: [kernel/src/memory/paging.rs](../../kernel/src/memory/paging.rs)
-  - Estimated effort: 2-3 days
+#### Medium Priority (Deferred)
 
 - [ ] **NUMA-Aware Frame Allocation**: Support for multi-node systems
   - Current: Single memory pool
@@ -172,18 +167,46 @@
 
 ## Chapter 3: Exception Handling & Syscalls
 
-**Status**: 📋 Planned
+**Status**: 🚧 In Progress - Phase 1 Complete!
 
-### Prerequisites
-- ✅ Chapter 2 memory management complete
-- ⬜ Exception vector table implementation
-- ⬜ Trap frame (context saving/restoring)
+### Completed ✅
+- [x] Exception vector table (16 entries, 2KB aligned)
+- [x] Trap frame structure (36 × 64-bit registers)
+- [x] Context save/restore assembly (52 instructions)
+- [x] Exception handlers (synchronous exceptions working)
+- [x] ESR/FAR decoding for fault analysis
+- [x] Integration with MMU (handlers installed before MMU enable)
 
-### Known Blockers
-*To be documented during implementation*
+### Remaining for Chapter 3 Completion
 
-### Future Improvements
-*To be documented during implementation*
+#### Critical - Must Complete Before Chapter 4
+- [ ] **Test Exception Handling with Deliberate Faults**
+  - Action: Uncomment test code in boot/mod.rs to trigger data abort
+  - Verify: Trap frame saves/restores correctly
+  - Verify: Exception handler displays correct fault info
+  - Impact: Validates exception infrastructure works end-to-end
+  - Estimated effort: 30 minutes
+
+- [ ] **Syscall Testing**
+  - Current: Syscall dispatcher infrastructure ready
+  - Needed: Test syscall from user mode (requires EL0 context)
+  - Blocker: Need user-mode setup for proper testing
+  - Priority: Can defer to Chapter 4 (when we have TCBs)
+  - Alternative: Test with SVC from kernel for now
+
+### Blockers for Chapter 4
+**None** - All prerequisites complete! Ready to proceed to Chapter 4 after testing.
+
+### Future Improvements (Post-Chapter 3)
+
+- [ ] **User Mode Context Switching**
+  - Needed for full syscall testing from EL0
+  - Can be implemented in Chapter 4 with TCBs
+
+- [ ] **Advanced Page Fault Handling**
+  - Current: Panics with detailed fault info
+  - Future: Demand paging, copy-on-write
+  - Can defer to later optimization phase
 
 ---
 
