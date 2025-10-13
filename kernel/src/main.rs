@@ -18,6 +18,12 @@ global_asm!(
     ".global _start",
     ".type _start, @function",
     "_start:",
+    "    // Enable FP/SIMD before anything else (CPACR_EL1.FPEN = 0b11)",
+    "    mrs x10, cpacr_el1",
+    "    orr x10, x10, #(0x3 << 20)",
+    "    msr cpacr_el1, x10",
+    "    isb",
+    "    // Save boot parameters",
     "    mov x19, x4",      // x19 = dtb_addr (from x4)
     "    mov x20, x0",      // x20 = user_img_start (from x0)
     "    mov x21, x1",      // x21 = user_img_end (from x1)

@@ -5,13 +5,20 @@ use core::arch::global_asm;
 use core::panic::PanicInfo;
 use kaal_kernel::kprintln;
 
-// ARM64 boot entry - setup stack and BSS, then call _start
+// ARM64 boot entry - setup stack, enable FP/SIMD, clear BSS, then call _start
 global_asm!(
     ".section .text._boot_start",
     ".global _boot_start",
     "_boot_start:",
+    "    // Set up stack",
     "    ldr x30, =_stack_top",
     "    mov sp, x30",
+    "    // Enable FP/SIMD (CPACR_EL1.FPEN = 0b11)",
+    "    mrs x0, cpacr_el1",
+    "    orr x0, x0, #(0x3 << 20)",
+    "    msr cpacr_el1, x0",
+    "    isb",
+    "    // Clear BSS",
     "    ldr x0, =_bss_start",
     "    ldr x1, =_bss_end",
     "    sub x1, x1, x0",
