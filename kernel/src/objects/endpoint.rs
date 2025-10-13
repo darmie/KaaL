@@ -23,8 +23,7 @@
 //! When a sender arrives and receivers are queued (or vice versa),
 //! the IPC happens immediately and both threads are unblocked.
 
-use super::{TCB, ThreadState};
-use alloc::vec::Vec;
+use super::TCB;
 
 /// Endpoint - rendezvous point for synchronous IPC
 ///
@@ -237,43 +236,62 @@ impl core::fmt::Debug for Endpoint {
 /// Thread queue - FIFO queue of TCB pointers
 ///
 /// Used for maintaining waiting threads in endpoints.
+/// Maximum number of threads that can be queued on an endpoint
+const MAX_QUEUE_SIZE: usize = 256;
+
 /// Threads are queued in FIFO order to ensure fairness.
+///
+/// Uses a fixed-size array to avoid heap allocation issues with spinlocks.
 struct ThreadQueue {
-    /// Vector of TCB pointers
-    threads: Vec<*mut TCB>,
+    /// Fixed-size array of TCB pointers
+    threads: [*mut TCB; MAX_QUEUE_SIZE],
+    /// Number of threads currently in the queue
+    count: usize,
 }
 
 impl ThreadQueue {
     /// Create a new empty thread queue
     fn new() -> Self {
         Self {
-            threads: Vec::new(),
+            threads: [core::ptr::null_mut(); MAX_QUEUE_SIZE],
+            count: 0,
         }
     }
 
     /// Check if the queue is empty
     #[inline]
     fn is_empty(&self) -> bool {
-        self.threads.is_empty()
+        self.count == 0
     }
 
     /// Get the number of threads in the queue
     #[inline]
     fn len(&self) -> usize {
-        self.threads.len()
+        self.count
     }
 
     /// Add a thread to the back of the queue (FIFO)
     fn enqueue(&mut self, tcb: *mut TCB) {
-        self.threads.push(tcb);
+        debug_assert!(self.count < MAX_QUEUE_SIZE, "Thread queue overflow");
+        if self.count < MAX_QUEUE_SIZE {
+            self.threads[self.count] = tcb;
+            self.count += 1;
+        }
     }
 
     /// Remove and return the thread at the front of the queue
     fn dequeue(&mut self) -> Option<*mut TCB> {
-        if self.threads.is_empty() {
+        if self.count == 0 {
             None
         } else {
-            Some(self.threads.remove(0))
+            let tcb = self.threads[0];
+            // Shift elements forward
+            for i in 0..self.count - 1 {
+                self.threads[i] = self.threads[i + 1];
+            }
+            self.threads[self.count - 1] = core::ptr::null_mut();
+            self.count -= 1;
+            Some(tcb)
         }
     }
 
@@ -281,18 +299,28 @@ impl ThreadQueue {
     ///
     /// Returns true if the thread was found and removed.
     fn remove(&mut self, tcb: *mut TCB) -> bool {
-        if let Some(pos) = self.threads.iter().position(|&t| t == tcb) {
-            self.threads.remove(pos);
-            true
-        } else {
-            false
+        for i in 0..self.count {
+            if self.threads[i] == tcb {
+                // Shift elements forward
+                for j in i..self.count - 1 {
+                    self.threads[j] = self.threads[j + 1];
+                }
+                self.threads[self.count - 1] = core::ptr::null_mut();
+                self.count -= 1;
+                return true;
+            }
         }
+        false
     }
 
     /// Peek at the front thread without removing it
     #[allow(dead_code)]
     fn peek(&self) -> Option<*mut TCB> {
-        self.threads.first().copied()
+        if self.count > 0 {
+            Some(self.threads[0])
+        } else {
+            None
+        }
     }
 }
 

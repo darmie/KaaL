@@ -209,40 +209,10 @@ pub fn kernel_entry() -> ! {
 
         crate::kprintln!("  ✓ MMU enabled successfully with virtual memory!");
 
-        // Phase 5: Kernel heap allocator
-        crate::kprintln!("[memory] Initializing kernel heap...");
-        unsafe {
-            crate::memory::heap::init();
-        }
-
-        let free_heap = crate::memory::heap::free_memory();
-        crate::kprintln!("  Heap size: {} KB ({} bytes free)",
-            free_heap / 1024,
-            free_heap
-        );
-
-        // Test heap allocation with "Hello World"
-        crate::kprintln!("");
-        crate::kprintln!("[test] Testing heap allocator with Box and Vec...");
-
-        extern crate alloc;
-        use alloc::boxed::Box;
-        use alloc::vec::Vec;
-
-        let boxed_msg = Box::new("Hello from Box on the heap!");
-        crate::kprintln!("  ✓ Box allocation: {}", *boxed_msg);
-
-        let mut vec_msg: Vec<&str> = Vec::new();
-        vec_msg.push("Hello");
-        vec_msg.push("World");
-        vec_msg.push("from");
-        vec_msg.push("Vec!");
-        crate::kprintln!("  ✓ Vec allocation: {} {} {} {}",
-            vec_msg[0], vec_msg[1], vec_msg[2], vec_msg[3]);
-
-        let free_after = crate::memory::heap::free_memory();
-        crate::kprintln!("  Heap after allocations: {} bytes free (consumed {} bytes)",
-            free_after, free_heap - free_after);
+        // Phase 5: No kernel heap allocator (seL4 design principle)
+        // seL4 kernels do not use dynamic memory allocation after boot.
+        // All resources are statically allocated or provided by userspace.
+        crate::kprintln!("[memory] No kernel heap (seL4 design: static allocation only)");
 
         crate::kprintln!("");
         crate::kprintln!("═══════════════════════════════════════════════════════════");

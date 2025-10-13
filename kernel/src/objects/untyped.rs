@@ -49,7 +49,6 @@
 
 use crate::memory::PhysAddr;
 use super::{CapError, CapType};
-use alloc::vec::Vec;
 
 /// Untyped Memory - raw memory that can be retyped into kernel objects
 ///
@@ -79,7 +78,11 @@ pub struct UntypedMemory {
     ///
     /// Stores physical addresses of all objects created from this untyped.
     /// Used during revocation to destroy all children.
-    children: Vec<PhysAddr>,
+    /// Fixed-size array to avoid heap allocation issues.
+    children: [PhysAddr; Self::MAX_CHILDREN],
+
+    /// Number of children currently tracked
+    child_count: usize,
 
     /// Whether this untyped is currently available for retyping
     ///
@@ -88,6 +91,12 @@ pub struct UntypedMemory {
 }
 
 impl UntypedMemory {
+    /// Maximum number of child objects that can be derived from an untyped
+    const MAX_CHILDREN: usize = 128;
+
+    /// Maximum number of splits that can be created from an untyped
+    const MAX_SPLITS: usize = 64;
+
     /// Create a new untyped memory object
     ///
     /// # Arguments
@@ -122,7 +131,8 @@ impl UntypedMemory {
             paddr,
             size_bits,
             watermark: 0,
-            children: Vec::new(),
+            children: [PhysAddr::new(0); Self::MAX_CHILDREN],
+            child_count: 0,
             is_available: true,
         })
     }
@@ -160,7 +170,7 @@ impl UntypedMemory {
     /// Get the number of children
     #[inline]
     pub fn num_children(&self) -> usize {
-        self.children.len()
+        self.child_count
     }
 
     /// Retype untyped memory into a specific object type
@@ -218,7 +228,10 @@ impl UntypedMemory {
         self.watermark = aligned_watermark + obj_size;
 
         // Record child
-        self.children.push(aligned_paddr);
+        if self.child_count < Self::MAX_CHILDREN {
+            self.children[self.child_count] = aligned_paddr;
+            self.child_count += 1;
+        }
 
         Ok(aligned_paddr)
     }
@@ -282,7 +295,10 @@ impl UntypedMemory {
         // 3. Clear memory (for security)
 
         // For now, just clear the children list and reset watermark
-        self.children.clear();
+        for i in 0..self.child_count {
+            self.children[i] = PhysAddr::new(0);
+        }
+        self.child_count = 0;
         self.watermark = 0;
 
         // Make available again
@@ -299,12 +315,13 @@ impl UntypedMemory {
     /// # Arguments
     ///
     /// * `split_size_bits` - Size of each split piece
+    /// * `splits_out` - Fixed-size array to store the splits
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<UntypedMemory>)` - Vector of new untyped objects
+    /// * `Ok(usize)` - Number of splits created
     /// * `Err(CapError)` - Split failed
-    pub fn split(&mut self, split_size_bits: u8) -> Result<Vec<UntypedMemory>, CapError> {
+    pub fn split(&mut self, split_size_bits: u8, splits_out: &mut [UntypedMemory; Self::MAX_SPLITS]) -> Result<usize, CapError> {
         if split_size_bits >= self.size_bits {
             return Err(CapError::InvalidArgument);
         }
@@ -316,17 +333,20 @@ impl UntypedMemory {
         let split_size = 1usize << split_size_bits;
         let num_splits = self.size() / split_size;
 
-        let mut splits = Vec::new();
+        if num_splits > Self::MAX_SPLITS {
+            return Err(CapError::InvalidArgument);
+        }
+
         for i in 0..num_splits {
             let split_paddr = PhysAddr::new((self.paddr.as_u64() + (i * split_size) as u64) as usize);
-            splits.push(UntypedMemory::new(split_paddr, split_size_bits)?);
+            splits_out[i] = UntypedMemory::new(split_paddr, split_size_bits)?;
         }
 
         // Mark this untyped as fully allocated
         self.watermark = self.size();
         self.is_available = false;
 
-        Ok(splits)
+        Ok(num_splits)
     }
 
     /// Check if a physical address is within this untyped region
@@ -340,7 +360,7 @@ impl UntypedMemory {
 
     /// Get iterator over children
     pub fn children(&self) -> impl Iterator<Item = PhysAddr> + '_ {
-        self.children.iter().copied()
+        self.children[..self.child_count].iter().copied()
     }
 }
 
