@@ -378,40 +378,74 @@ kernel/src/objects/
 
 ## Test Results
 
-### Test Suite Status (18 tests total)
+### Test Suite Status: 18/18 PASS ✅ (100% SUCCESS RATE!)
 
-**Heap Allocator Tests**: 8/8 PASS ✅ (skipped for object model test isolation)
-**Object Model Tests**: 15/18 functional (83%)
+All kernel object model tests passing successfully after identifying and fixing the FP/SIMD configuration issue.
 
-#### Passing Tests (15) ✅
+#### All Tests Passing (18/18) ✅
+
+**Capability Tests (4)**
 1. test_capability_creation
 2. test_capability_derivation
 3. test_capability_minting
 4. test_capability_rights
+
+**CNode Tests (3)**
 5. test_cnode_creation
 6. test_cnode_insert_lookup
 7. test_cnode_copy_move
+
+**TCB Tests (3)**
 8. test_tcb_creation
 9. test_tcb_state_transitions
 10. test_tcb_priority
+
+**Endpoint Tests (2)**
 11. test_endpoint_creation
-12. test_untyped_creation
-13. test_untyped_retype ✅ (fixed with array-based allocation)
-14. test_untyped_revoke ✅ (fixed with array-based allocation)
-15. test_invocation_rights_enforcement
+12. test_endpoint_queue_operations ✅
 
-#### Skipped/Problematic Tests (3) ⚠️
-- test_endpoint_queue_operations - **SKIP** (hangs - root cause TBD)
-- test_tcb_invocation_priority - Hangs
-- test_capability_delegation_chain - Not reached due to previous hang
+**Untyped Memory Tests (3)**
+13. test_untyped_creation
+14. test_untyped_retype ✅
+15. test_untyped_revoke ✅
 
-### Architectural Fix: Eliminated Vec Usage
+**Invocation Tests (3)**
+16. test_tcb_invocation_priority ✅
+17. test_invocation_rights_enforcement
+18. test_capability_delegation_chain ✅
 
-**Problem**: The `linked_list_allocator::LockedHeap` with spinlocks caused deadlocks when Vec was used in bare-metal environment without proper thread primitives.
+### Root Cause: FP/SIMD Was Disabled
+
+**Problem**: Tests 16-18 hung silently even after removing heap allocator and increasing stack to 256KB.
+
+**Investigation**: Exception handlers revealed Exception Class 0x07 = "Trapped FP/SIMD operations"
+
+**Root Cause**: CPACR_EL1 wasn't configured to allow FP/SIMD access. The compiler was generating SIMD instructions for optimized memory operations (array initialization, memcpy), but these trapped because FP/SIMD was disabled.
+
+**Solution**: Enable FP/SIMD at boot by setting CPACR_EL1.FPEN = 0b11 in assembly:
+
+```asm
+mrs x10, cpacr_el1
+orr x10, x10, #(0x3 << 20)  // FPEN = 0b11 (no trapping)
+msr cpacr_el1, x10
+isb
+```
+
+Applied to:
+1. Main kernel ([kernel/src/main.rs:22-25](../../kernel/src/main.rs))
+2. Test harness ([examples/kernel-test/src/main.rs](../../examples/kernel-test/src/main.rs))
+
+**Result**: ALL 18/18 TESTS PASS!
+
+### Architectural Fix: Eliminated Vec Usage (seL4 Design Principle)
+
+**Research Finding**: seL4 kernels do NOT use dynamic heap allocation after boot. Everything is statically allocated or provided by userspace.
+
+**Problem**: The `linked_list_allocator::LockedHeap` with spinlocks caused deadlocks when Vec was used in bare-metal environment.
 
 **Solution**: Replaced all Vec usage with fixed-size arrays:
 
-1. **Endpoint ThreadQueue** ([endpoint.rs:246](../../kernel/src/objects/endpoint.rs))
+1. **Endpoint ThreadQueue** ([endpoint.rs:32-36](../../kernel/src/objects/endpoint.rs))
    - Before: `Vec<*mut TCB>`
    - After: `[*mut TCB; MAX_QUEUE_SIZE]` with count tracking
    - Constant: `MAX_QUEUE_SIZE = 256`
@@ -426,9 +460,22 @@ kernel/src/objects/
    - After: `Result<usize, CapError>` with out-parameter `&mut [UntypedMemory; MAX_SPLITS]`
    - Constant: `MAX_SPLITS = 64`
 
-**Impact**: This eliminated all heap allocation from core kernel object operations, resolving the spinlock deadlock and making tests deterministic.
+**Impact**:
+- Eliminated all heap allocation from core kernel object operations
+- Aligned with seL4's static allocation architecture
+- Resolved spinlock deadlock issues
+- Made tests deterministic and reliable
 
-**Test Results**: After this fix, untyped memory tests (13-15) now pass successfully.
+### Debugging Journey
+
+1. ❌ Initial attempt: Reinitialize heap → No improvement
+2. ❌ Removed Vec usage → Helped but tests 16-18 still hung
+3. ❌ Increased stack to 256KB → Still failing
+4. ✅ **Installed exception handlers** (critical insight!) → Got Exception Class 0x07
+5. ✅ Decoded EC 0x07 → FP/SIMD trapped
+6. ✅ Enabled CPACR_EL1.FPEN → **ALL TESTS PASS!**
+
+**Key Insight**: In no_std bare-metal, exceptions don't trigger panics by default. Without proper exception handlers, FP/SIMD faults appeared as silent hangs. Installing exception handlers provided ESR/FAR register values that revealed the true cause.
 
 ## Progress Tracking
 
