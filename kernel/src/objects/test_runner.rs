@@ -203,11 +203,18 @@ pub fn test_endpoint_creation() -> bool {
 }
 
 pub fn test_endpoint_queue_operations() -> bool {
+    use crate::kprintln;
     unsafe {
+        kprintln!("    [DEBUG] Creating endpoint...");
         let mut ep = Endpoint::new();
+        kprintln!("    [DEBUG] Endpoint created");
+
+        kprintln!("    [DEBUG] Creating cnode_memory array...");
         let mut cnode_memory = [Capability::null(); 16];
         let cnode_ptr = &mut cnode_memory[0] as *mut _ as *mut CNode;
+        kprintln!("    [DEBUG] CNode memory created");
 
+        kprintln!("    [DEBUG] Creating sender TCB...");
         let mut sender = TCB::new(
             1,
             cnode_ptr,
@@ -216,7 +223,9 @@ pub fn test_endpoint_queue_operations() -> bool {
             0x200000,
             0x300000,
         );
+        kprintln!("    [DEBUG] Sender TCB created");
 
+        kprintln!("    [DEBUG] Creating receiver TCB...");
         let mut receiver = TCB::new(
             2,
             cnode_ptr,
@@ -225,18 +234,24 @@ pub fn test_endpoint_queue_operations() -> bool {
             0x200000,
             0x300000,
         );
+        kprintln!("    [DEBUG] Receiver TCB created");
 
         let sender_ptr = &mut sender as *mut TCB;
         let receiver_ptr = &mut receiver as *mut TCB;
 
+        kprintln!("    [DEBUG] Queueing sender...");
         ep.queue_send(sender_ptr);
         if !ep.has_senders() { return false; }
         if ep.send_queue_len() != 1 { return false; }
+        kprintln!("    [DEBUG] Sender queued");
 
+        kprintln!("    [DEBUG] Queueing receiver...");
         ep.queue_receive(receiver_ptr);
         if !ep.has_receivers() { return false; }
         if ep.recv_queue_len() != 1 { return false; }
+        kprintln!("    [DEBUG] Receiver queued");
 
+        kprintln!("    [DEBUG] Trying match...");
         // Try match
         match ep.try_match() {
             Some((s, r)) => s == sender_ptr && r == receiver_ptr,
@@ -306,10 +321,13 @@ pub fn test_untyped_revoke() -> bool {
 // ========================================================================
 
 pub fn test_tcb_invocation_priority() -> bool {
+    use crate::kprintln;
     unsafe {
+        kprintln!("    [DEBUG] Creating cnode_memory...");
         let mut cnode_memory = [Capability::null(); 16];
         let cnode_ptr = &mut cnode_memory[0] as *mut _ as *mut CNode;
 
+        kprintln!("    [DEBUG] Creating TCB...");
         let mut tcb = TCB::new(
             1,
             cnode_ptr,
@@ -318,17 +336,27 @@ pub fn test_tcb_invocation_priority() -> bool {
             0x200000,
             0x300000,
         );
+        kprintln!("    [DEBUG] TCB created");
 
+        kprintln!("    [DEBUG] Creating capability...");
         let cap = Capability::new(CapType::Tcb, &mut tcb as *mut _ as usize);
+        kprintln!("    [DEBUG] Creating invocation args...");
         let args = InvocationArgs {
             label: 3, // SetPriority
             args: &[150],
             cap_args: &[],
         };
 
+        kprintln!("    [DEBUG] Calling invoke_capability...");
         match invoke_capability(&cap, args) {
-            Ok(_) => tcb.priority() == 150,
-            Err(_) => false,
+            Ok(_) => {
+                kprintln!("    [DEBUG] Invocation succeeded, checking priority...");
+                tcb.priority() == 150
+            },
+            Err(_) => {
+                kprintln!("    [DEBUG] Invocation failed");
+                false
+            }
         }
     }
 }

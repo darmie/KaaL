@@ -37,6 +37,14 @@ pub extern "C" fn _start() -> ! {
     kprintln!("(No heap allocator - seL4 design: static allocation only)");
     kprintln!("");
 
+    // Initialize exception handlers to catch faults
+    kprintln!("[init] Installing exception handlers...");
+    unsafe {
+        kaal_kernel::arch::aarch64::exception::init();
+    }
+    kprintln!("[init] Exception handlers installed");
+    kprintln!("");
+
     // ========================================================================
     // HEAP ALLOCATOR TESTS COMMENTED OUT FOR OBJECT MODEL TEST ISOLATION
     // ========================================================================
@@ -259,15 +267,13 @@ pub extern "C" fn _start() -> ! {
     }
 
     kprintln!("[12/{}] test_endpoint_queue_operations...", obj_total);
-    kprintln!("    ⊘ SKIP (hangs - root cause under investigation)");
-    // TODO: Debug why this test hangs
-    // if kaal_kernel::objects::test_runner::test_endpoint_queue_operations() {
-    //     kprintln!("    ✓ PASS");
-    //     obj_passed += 1;
-    // } else {
-    //     kprintln!("    ✗ FAIL");
-    //     obj_failed += 1;
-    // }
+    if kaal_kernel::objects::test_runner::test_endpoint_queue_operations() {
+        kprintln!("    ✓ PASS");
+        obj_passed += 1;
+    } else {
+        kprintln!("    ✗ FAIL");
+        obj_failed += 1;
+    }
 
     // Untyped Tests
     kprintln!("[13/{}] test_untyped_creation...", obj_total);

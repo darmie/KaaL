@@ -131,11 +131,14 @@ impl TCB {
         entry_point: u64,
         stack_pointer: u64,
     ) -> Self {
+        crate::kprintln!("      [TCB::new] Starting (tid={})", tid);
         let mut context = TrapFrame::new();
+        crate::kprintln!("      [TCB::new] TrapFrame created");
 
         // Set up initial context
         context.elr_el1 = entry_point;
         context.sp_el0 = stack_pointer;
+        crate::kprintln!("      [TCB::new] Context configured");
 
         // Set SPSR for EL0 execution:
         // - D=1 (Debug exceptions masked)
@@ -144,8 +147,10 @@ impl TCB {
         // - F=1 (FIQ masked)
         // - EL=0 (Exception Level 0)
         context.spsr_el1 = 0x3c5; // All interrupts masked, EL0
+        crate::kprintln!("      [TCB::new] SPSR set");
 
-        Self {
+        crate::kprintln!("      [TCB::new] Creating Self struct...");
+        let tcb = Self {
             context,
             cspace_root,
             vspace_root,
@@ -154,7 +159,9 @@ impl TCB {
             priority: Self::DEFAULT_PRIORITY,
             time_slice: Self::DEFAULT_TIME_SLICE,
             tid,
-        }
+        };
+        crate::kprintln!("      [TCB::new] Done!");
+        tcb
     }
 
     /// Get the thread ID
