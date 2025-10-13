@@ -5,3 +5,4 @@ pub mod registers;
 pub mod page_table;
 pub mod mmu;
 pub mod exception;
+pub mod context;
