@@ -1,6 +1,6 @@
 # Chapter 5: IPC & Message Passing - Status
 
-**Status**: 🚧 IN PROGRESS - 71% Complete (5/7 phases)
+**Status**: 🚧 IN PROGRESS - 86% Complete (6/7 phases)
 **Started**: 2025-10-13
 **Target Completion**: TBD
 
@@ -8,7 +8,7 @@
 
 1. ✅ Implement synchronous IPC (send/receive) - Infrastructure complete
 2. ✅ Create message structure and transfer - Basic implementation done
-3. ⬜ Implement call/reply semantics
+3. ✅ Implement call/reply semantics - RPC-style operations complete
 4. ✅ Add capability transfer in messages - Transfer protocol implemented
 5. ⬜ (Optional) Implement IPC fastpath optimization
 
@@ -235,12 +235,12 @@ pub unsafe fn transfer_capabilities(...) -> Result<(), IpcError>
 - [x] Transfer mode encoding/decoding for IPC buffer
 - [x] Null pointer validation and error handling
 
-### Phase 6: Call/Reply Semantics ⬜ NOT STARTED
+### Phase 6: Call/Reply Semantics ✅ COMPLETE
 
 Implement RPC-style call/reply on top of send/receive.
 
-**Files to Create:**
-- `kernel/src/ipc/call.rs` - Call/reply operations
+**Files Created:**
+- `kernel/src/ipc/call.rs` - Call/reply operations (390 lines)
 
 **Call Operation:**
 ```rust
