@@ -1,7 +1,7 @@
 # KaaL Project Status Report
 
-**Last Updated:** 2025-10-12
-**Current Status:** Chapter 1 Complete ✅
+**Last Updated:** 2025-10-13
+**Current Status:** Chapter 2 Complete ✅ - MMU Fully Operational!
 
 ## Executive Summary
 
@@ -9,7 +9,7 @@ KaaL is a Rust-based microkernel and OS development framework. The project inclu
 - **KaaL Microkernel**: A from-scratch capability-based microkernel in Rust for ARM64
 - **KaaL Framework**: Composable OS components for building custom operating systems
 
-**Key Achievement:** Chapter 1 of microkernel complete with working boot sequence, UART output, and config-driven multi-platform build system.
+**Major Milestone:** MMU now fully operational with virtual memory, 4-level page tables, heap allocation working, and exception handling integrated!
 
 ## Project Statistics
 
@@ -175,6 +175,79 @@ pub struct E1000Driver {
 | Hardware testing | 2 weeks | 📋 Planned | Physical hardware |
 
 **Estimated Phase 2 Completion:** 4-6 weeks (revised from 6-8 weeks)
+
+## Native Rust Microkernel (Parallel Track)
+
+### Chapter 1: Bare Metal Boot & Early Init ✅
+
+- Boot sequence with elfloader
+- UART console output
+- Device tree parsing
+- Config-driven build system (build-config.toml)
+- Multi-platform support (QEMU virt initial target)
+
+### Chapter 2: Memory Management ✅ **JUST COMPLETED!**
+
+**Major Achievement:** MMU now fully operational with virtual memory!
+
+#### Completed Features
+
+- **Physical Memory Manager**: Bitmap-based frame allocator
+  - Tracks 32,768 frames (128MB RAM)
+  - 31,466 frames free after kernel/page tables
+  - O(1) allocation/deallocation
+
+- **4-Level ARM64 Page Tables**: Complete translation infrastructure
+  - L0-L3 page table walking with automatic allocation
+  - 2MB block entries for efficient large mappings
+  - 4KB page entries for fine-grained control
+  - Identity mapping for kernel bootstrap
+
+- **MMU Enable**: Successfully enabled with proper barriers
+  - Exception handlers installed before MMU enable (critical!)
+  - TLB invalidation with full system barriers
+  - MMU-only enable (caches disabled initially, per seL4 pattern)
+  - Fixed block entry encoding (TABLE_OR_PAGE bit handling)
+
+- **Kernel Heap**: 1MB linked-list allocator
+  - Box and Vec allocations working
+  - Alloc trait integrated for Rust collections
+
+#### Technical Challenges Solved
+
+1. **PXN Bit Issue**: Kernel code pages had PXN=1 preventing EL1 execution
+   - Solution: Created KERNEL_RWX flags with PXN=0 for bootstrapping
+
+2. **Exception Handler Timing**: Handlers were installed AFTER MMU enable
+   - Solution: Moved exception::init() before init_mmu()
+   - MMU enable can trigger faults, handlers must be ready
+
+3. **Block Entry Encoding**: 2MB blocks had TABLE_OR_PAGE=1 (wrong!)
+   - Solution: Clear TABLE_OR_PAGE bit for L1/L2 block entries
+   - ARM requires bit 1 = 0 for blocks, 1 for tables/pages
+
+#### Debug Tools Created
+
+- `debug_walk()`: Page table walker for verifying translations
+- Detailed PTE flag decoding (AF, UXN, PXN, memory attributes)
+- QEMU `-d int,mmu` integration for low-level debugging
+
+### Chapter 3: Exception Handling & Syscalls (In Progress)
+
+- ✅ Exception vector table (16 entries, 2KB aligned)
+- ✅ Trap frame structure (36 x 64-bit registers)
+- ✅ Context save/restore in assembly
+- ✅ Exception handlers catch MMU faults
+- 🚧 Syscall dispatcher (infrastructure ready)
+- 🚧 Page fault handler (detect translation faults)
+- 📋 TODO: Test with deliberate exceptions
+
+### Next Steps
+
+1. Remove debug page walk output (done)
+2. Test exception handling with deliberate faults
+3. Implement syscall dispatcher
+4. Continue with remaining chapters
 
 ## Architecture Highlights
 
