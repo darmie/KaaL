@@ -118,12 +118,19 @@ pub unsafe fn init_mmu(config: MmuConfig) {
         );
     }
 
+    // Ensure all page table writes are visible before MMU enable
+    // This is CRITICAL - page tables must be in memory, not stuck in caches
+    asm!(
+        "dsb sy",                  // Full system data sync barrier
+        options(nomem, nostack),
+    );
+
     // Invalidate TLB (crucial before MMU enable!)
     // ARM TF does this: "Ensure translation table writes have drained"
     asm!(
         "tlbi vmalle1",           // Invalidate all TLB entries for EL1
-        "dsb ish",                 // Data sync barrier (inner shareable)
-        "isb",                     // Instruction sync barrier
+        "dsb sy",                 // Full system data sync barrier
+        "isb",                    // Instruction sync barrier
         options(nomem, nostack),
     );
 
@@ -144,8 +151,8 @@ pub unsafe fn init_mmu(config: MmuConfig) {
 
     asm!(
         "msr sctlr_el1, {sctlr}",
-        "dsb sy",
-        "isb",
+        "dsb sy",                 // Full system barrier
+        "isb",                    // Synchronize instruction fetch
         sctlr = in(reg) sctlr,
         options(nomem, nostack),
     );

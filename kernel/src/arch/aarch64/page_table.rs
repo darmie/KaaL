@@ -107,6 +107,16 @@ bitflags! {
                             | Self::DEVICE.bits()
                             | Self::UXN.bits()
                             | Self::PXN.bits();
+
+        /// Kernel RWX (read-write-execute) - for bootstrapping only
+        /// TODO: Split kernel into separate code/data/rodata sections
+        const KERNEL_RWX    = Self::VALID.bits()
+                            | Self::TABLE_OR_PAGE.bits()
+                            | Self::AP_RW_EL1.bits()
+                            | Self::ACCESSED.bits()
+                            | Self::INNER_SHARE.bits()
+                            | Self::NORMAL.bits()
+                            | Self::UXN.bits();  // PXN=0 allows EL1 execution
     }
 }
 

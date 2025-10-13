@@ -7,6 +7,7 @@
 //! 4. Setting up memory regions
 
 use core::arch::asm;
+use crate::memory::VirtAddr;
 
 pub mod dtb;
 
@@ -144,7 +145,7 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DATA,
         ).expect("Failed to map DTB region");
 
-        // 2. Map kernel code and data
+        // 2. Map kernel code and data (use KERNEL_RWX for bootstrapping)
         crate::kprintln!("  Mapping kernel: {:#x} - {:#x}",
             kernel_start,
             kernel_end
@@ -154,7 +155,7 @@ pub fn kernel_entry() -> ! {
             &mut mapper,
             kernel_start,
             kernel_size,
-            PageTableFlags::KERNEL_DATA,  // Using DATA for simplicity (includes stack)
+            PageTableFlags::KERNEL_RWX,  // RWX for bootstrapping (TODO: split code/data)
         ).expect("Failed to map kernel");
 
         // 3. Map stack region (grows down from top of RAM)
@@ -183,6 +184,28 @@ pub fn kernel_entry() -> ! {
 
         // Initialize and ENABLE MMU!
         crate::kprintln!("  Root page table at: {:#x}", root_phys.as_usize());
+
+        // Debug: Verify page table mappings before MMU enable
+        crate::kprintln!("");
+        crate::kprintln!("[debug] Verifying page table mappings:");
+
+        // Check kernel entry point
+        mapper.debug_walk(VirtAddr::new(kernel_start));
+
+        // Check current PC location (roughly)
+        let current_pc = 0x40400000 + 0x10000; // Somewhere in kernel
+        mapper.debug_walk(VirtAddr::new(current_pc));
+
+        // Check UART
+        mapper.debug_walk(VirtAddr::new(0x09000000));
+
+        crate::kprintln!("");
+
+        // CRITICAL: Install exception handlers BEFORE MMU enable!
+        // MMU enable might trigger exceptions, so handlers must be ready
+        crate::kprintln!("[exception] Installing exception vector table...");
+        crate::arch::aarch64::exception::init();
+
         crate::kprintln!("  Enabling MMU with exception handling ready...");
 
         let mmu_config = crate::arch::aarch64::mmu::MmuConfig {
@@ -252,8 +275,7 @@ pub fn kernel_entry() -> ! {
         crate::kprintln!("═══════════════════════════════════════════════════════════");
         crate::kprintln!("");
 
-        // Install exception vector table
-        crate::arch::aarch64::exception::init();
+        // Exception vector table already installed before MMU enable (see Chapter 2)
 
         crate::kprintln!("");
         crate::kprintln!("═══════════════════════════════════════════════════════════");

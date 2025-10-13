@@ -241,6 +241,71 @@ impl PageMapper {
     pub fn root_phys_addr(&self) -> PhysAddr {
         PhysAddr::new(self.root as *const _ as usize)
     }
+
+    /// Debug: Walk page tables and print translation for a virtual address
+    pub fn debug_walk(&self, vaddr: VirtAddr) {
+        use crate::kprintln;
+
+        kprintln!("  [walk] Translating {:#x}:", vaddr.as_usize());
+
+        let mut table = self.root as *const PageTable;
+        let mut level = PageTableLevel::L0;
+
+        loop {
+            let index = level.index(vaddr);
+            let entry = unsafe { (*table).entries[index] };
+
+            kprintln!("    L{} [{}]: {:#018x}", level as u8, index, entry);
+
+            // Check if entry is valid
+            if entry & PageTableFlags::VALID.bits() == 0 {
+                kprintln!("      -> INVALID (not mapped)");
+                return;
+            }
+
+            // Decode flags
+            let is_table = entry & PageTableFlags::TABLE_OR_PAGE.bits() != 0;
+            let has_af = entry & PageTableFlags::ACCESSED.bits() != 0;
+            let uxn = (entry >> 54) & 1;  // UXN bit (user execute never)
+            let pxn = (entry >> 53) & 1;  // PXN bit (privileged execute never)
+
+            kprintln!("      -> VALID | {} | AF={} | UXN={} | PXN={}",
+                if is_table { "TABLE" } else { "BLOCK" },
+                if has_af { "1" } else { "0" },
+                uxn, pxn
+            );
+
+            // Check if this is a block entry (1GB or 2MB)
+            if !is_table && level.supports_blocks() {
+                // Block entry - extract address
+                let block_addr = (entry & 0x0000_FFFF_FFFF_F000) as usize;
+                let offset = vaddr.as_usize() & (level.block_size() - 1);
+                let phys_addr = block_addr + offset;
+                kprintln!("      -> Translates to {:#x} (block @ {:#x} + offset {:#x})",
+                    phys_addr, block_addr, offset);
+                return;
+            }
+
+            // Move to next level
+            match level.next() {
+                Some(next_level) => {
+                    level = next_level;
+                    let next_table_addr = (entry & 0x0000_FFFF_FFFF_F000) as usize;
+                    kprintln!("      -> Next table at {:#x}", next_table_addr);
+                    table = next_table_addr as *const PageTable;
+                }
+                None => {
+                    // L3 entry - page mapping
+                    let page_addr = (entry & 0x0000_FFFF_FFFF_F000) as usize;
+                    let offset = vaddr.as_usize() & (PAGE_SIZE - 1);
+                    let phys_addr = page_addr + offset;
+                    kprintln!("      -> Translates to {:#x} (page @ {:#x} + offset {:#x})",
+                        phys_addr, page_addr, offset);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /// Identity map a memory region (vaddr == paddr)
