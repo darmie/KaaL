@@ -185,31 +185,11 @@ pub fn kernel_entry() -> ! {
         // Initialize and ENABLE MMU!
         crate::kprintln!("  Root page table at: {:#x}", root_phys.as_usize());
 
-        // Debug: Verify page table mappings before MMU enable
-        crate::kprintln!("");
-        crate::kprintln!("[debug] Verifying page table mappings:");
-
-        // Check kernel entry point
-        mapper.debug_walk(VirtAddr::new(kernel_start));
-
-        // Check current PC location (roughly)
-        let current_pc = 0x40400000 + 0x10000; // Somewhere in kernel
-        mapper.debug_walk(VirtAddr::new(current_pc));
-
-        // Check UART
-        mapper.debug_walk(VirtAddr::new(0x09000000));
-
-        // Check the address that will fault (heap region)
-        mapper.debug_walk(VirtAddr::new(0x40600000));
-
-        crate::kprintln!("");
-
         // CRITICAL: Install exception handlers BEFORE MMU enable!
         // MMU enable might trigger exceptions, so handlers must be ready
-        crate::kprintln!("[exception] Installing exception vector table...");
         crate::arch::aarch64::exception::init();
 
-        crate::kprintln!("  Enabling MMU with exception handling ready...");
+        crate::kprintln!("  Enabling MMU...");
 
         let mmu_config = crate::arch::aarch64::mmu::MmuConfig {
             ttbr1: root_phys,
