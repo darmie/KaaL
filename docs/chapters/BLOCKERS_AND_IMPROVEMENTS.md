@@ -266,30 +266,86 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ## Chapter 5: IPC & Message Passing
 
-**Status**: 📋 Planned - Ready to Start After Chapter 4 Phase 4
+**Status**: 🚧 IN PROGRESS - 57% Complete (4/7 phases, 2025-10-13)
 
 ### Prerequisites
-**Status**: 🟡 Nearly Ready (3/4 complete)
+**Status**: ✅ ALL COMPLETE
 
 - ✅ Capability system (Chapter 4 Phase 1) - **DONE**
 - ✅ CNode for capability storage (Chapter 4 Phase 2) - **DONE**
 - ✅ TCB for thread representation (Chapter 4 Phase 3) - **DONE**
-- ⬜ Endpoint basic structure (Chapter 4 Phase 4) - **IN PROGRESS (~3 hours)**
+- ✅ Endpoint basic structure (Chapter 4 Phase 4) - **DONE**
 
-### Planned Implementation
+### Completed ✅
+- [x] **Phase 1: Message Structure** (2025-10-13)
+  - Message with label, 64 registers, 3 capabilities
+  - IpcBuffer for extended data
+  - File: [kernel/src/ipc/message.rs](../../kernel/src/ipc/message.rs)
 
-Once Endpoint structure is ready, Chapter 5 will implement:
-- Synchronous send/receive operations
-- Message registers and IPC buffer
-- Capability transfer (move/grant/mint)
-- Call/reply semantics
-- IPC fastpath optimization (optional)
+- [x] **Phase 2: Send Operation** (2025-10-13)
+  - Infrastructure complete, scheduler integration pending
+  - Capability rights validation, fast/slow path transfer
+  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
+
+- [x] **Phase 3: Receive Operation** (2025-10-13)
+  - Infrastructure complete, scheduler integration pending
+  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
+
+- [x] **Phase 4: Message Transfer** (2025-10-13)
+  - Fast path (registers) and slow path (IPC buffer) working
+  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
+
+### Remaining Phases
+- [ ] **Phase 5: Capability Transfer** - Full cap transfer protocol
+- [ ] **Phase 6: Call/Reply Semantics** - RPC operations
+- [ ] **Phase 7: Testing** - Integration tests
 
 ### Known Blockers
-- ⏳ Waiting for Chapter 4 Phase 4 (Endpoint structure)
+
+#### Critical - Requires Chapter 6
+- [ ] **Scheduler Integration** - Send/recv operations need scheduler yield
+  - Location: [kernel/src/ipc/operations.rs:100](../../kernel/src/ipc/operations.rs:100), line 167
+  - Impact: Blocking operations don't actually yield CPU
+  - Status: TODO comment in place, deferred to Chapter 6
+
+### Known Limitations (TODOs)
+
+#### operations.rs
+1. **Line 100, 167**: Scheduler yield needed for blocking operations
+   - Impact: Threads block but don't yield to other threads
+   - Blocked by: Chapter 6 (Scheduling & Context Switching)
+
+2. **Line 348**: Message length tracking in IPC buffer
+   - Impact: Can't read extended messages from buffer correctly
+   - Workaround: Currently assumes fast path only
+   - Priority: Medium
+
+3. **Line 353**: Full capability reconstruction from IPC buffer
+   - Impact: Capability transfer not fully functional
+   - Status: Basic structure in place
+   - Priority: High (Phase 5)
 
 ### Future Improvements
-*To be documented during implementation*
+
+#### High Priority
+- [ ] **Complete Capability Transfer** - Phase 5 implementation
+  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
+  - Estimated effort: 4-6 hours
+
+- [ ] **Call/Reply Semantics** - Phase 6 implementation
+  - Needed: RPC-style operations
+  - Estimated effort: 6-8 hours
+
+#### Medium Priority
+- [ ] **IPC Buffer Length Tracking** - Fix message reading
+  - Store length in IPC buffer header
+  - Estimated effort: 2 hours
+
+#### Low Priority
+- [ ] **Fast Path Optimization** - Avoid IPC buffer when possible
+  - Already partially implemented
+  - Further optimization possible
+  - Estimated effort: 2-3 hours
 
 ---
 

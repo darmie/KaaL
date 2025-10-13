@@ -27,9 +27,11 @@ pub mod capability;
 pub mod cnode;
 pub mod endpoint;
 pub mod tcb;
+pub mod untyped;
 
 // Re-export main types
 pub use capability::{Capability, CapType, CapRights, CapError};
 pub use cnode::CNode;
 pub use endpoint::Endpoint;
 pub use tcb::{TCB, ThreadState};
+pub use untyped::{UntypedMemory, ObjectType};

@@ -35,3 +35,4 @@ pub mod config;
 pub mod memory;
 pub mod objects;
 pub mod syscall;
+pub mod ipc;

@@ -318,6 +318,12 @@ pub enum CapError {
 
     /// Capability slot already occupied
     SlotOccupied,
+
+    /// Invalid argument
+    InvalidArgument,
+
+    /// Insufficient memory
+    InsufficientMemory,
 }
 
 impl fmt::Debug for Capability {

@@ -158,13 +158,27 @@ impl Endpoint {
         }
     }
 
+    /// Dequeue the first thread from the send queue
+    ///
+    /// Returns the TCB pointer if a sender is waiting, or None if the queue is empty.
+    pub fn dequeue_sender(&mut self) -> Option<*mut TCB> {
+        self.send_queue.dequeue()
+    }
+
+    /// Dequeue the first thread from the receive queue
+    ///
+    /// Returns the TCB pointer if a receiver is waiting, or None if the queue is empty.
+    pub fn dequeue_receiver(&mut self) -> Option<*mut TCB> {
+        self.recv_queue.dequeue()
+    }
+
     /// Dequeue a specific thread from the send queue
     ///
     /// Used for cancellation or timeout scenarios.
     ///
     /// # Safety
     /// - `tcb` must be a valid pointer that was previously queued
-    pub unsafe fn dequeue_sender(&mut self, tcb: *mut TCB) -> bool {
+    pub unsafe fn dequeue_specific_sender(&mut self, tcb: *mut TCB) -> bool {
         self.send_queue.remove(tcb)
     }
 
@@ -174,7 +188,7 @@ impl Endpoint {
     ///
     /// # Safety
     /// - `tcb` must be a valid pointer that was previously queued
-    pub unsafe fn dequeue_receiver(&mut self, tcb: *mut TCB) -> bool {
+    pub unsafe fn dequeue_specific_receiver(&mut self, tcb: *mut TCB) -> bool {
         self.recv_queue.remove(tcb)
     }
 
