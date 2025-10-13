@@ -181,14 +181,27 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DEVICE,
         ).expect("Failed to map UART");
 
-        // Initialize MMU (setup but don't enable yet - Phase 4 WIP)
-        crate::kprintln!("  Setting up MMU registers (not enabling yet)...");
-        crate::kprintln!("  TODO: Enable MMU after verifying all mappings are correct");
+        // Initialize and ENABLE MMU!
+        crate::kprintln!("  Enabling MMU with page tables...");
         crate::kprintln!("  Root page table at: {:#x}", root_phys.as_usize());
 
-        // For now, just verify the page table structure is correct
+        let mmu_config = crate::arch::aarch64::mmu::MmuConfig {
+            ttbr1: root_phys,
+            ttbr0: None, // No user space yet
+        };
+
+        unsafe {
+            crate::arch::aarch64::mmu::init_mmu(mmu_config);
+        }
+
         let mmu_enabled = crate::arch::aarch64::mmu::is_mmu_enabled();
-        crate::kprintln!("  MMU currently enabled: {}", mmu_enabled);
+        crate::kprintln!("  MMU enabled: {}", mmu_enabled);
+
+        if !mmu_enabled {
+            panic!("MMU failed to enable!");
+        }
+
+        crate::kprintln!("  ✓ MMU enabled successfully!");
 
         // Phase 5: Kernel heap allocator
         crate::kprintln!("[memory] Initializing kernel heap...");
