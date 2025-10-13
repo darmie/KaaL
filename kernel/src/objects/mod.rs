@@ -24,6 +24,10 @@
 //! - Capabilities stored in CNodes
 
 pub mod capability;
+pub mod cnode;
+pub mod tcb;
 
 // Re-export main types
 pub use capability::{Capability, CapType, CapRights, CapError};
+pub use cnode::CNode;
+pub use tcb::{TCB, ThreadState};
