@@ -99,9 +99,9 @@ pub unsafe fn call(
     // Server will receive the reply capability via the message badge/label
     let reply_cap = create_reply_capability(caller);
 
-    // Add reply cap to message (if there's room)
-    // For now, we'll use the badge field to encode the reply cap
-    // Real implementation would add to msg.caps array
+    // Mark message as having reply capability
+    // Phase 6 approach: Use label flag + global table lookup
+    // Future: Pass reply cap in msg.caps[] array and allocate proper Reply objects
     msg.set_label(msg.label() | REPLY_CAP_FLAG);
 
     // Store reply cap in caller's context so reply() can find it
