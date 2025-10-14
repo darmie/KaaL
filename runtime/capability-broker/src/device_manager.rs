@@ -53,13 +53,33 @@ impl DeviceManager {
         device_id: DeviceId,
         irq_cap: Option<usize>,
     ) -> Result<DeviceResource> {
-        // TODO: Query kernel for device information from device tree
         // TODO: Track allocated device to prevent double-allocation
 
         match device_id {
             DeviceId::Uart(port) => {
-                // QEMU virt platform UART0 base address
-                let mmio_base = 0x0900_0000 + (port * 0x1000);
+                // Make syscall to kernel to get device MMIO base
+                let device_num = port as u64;
+                let mmio_base = unsafe {
+                    let mut base: usize;
+                    core::arch::asm!(
+                        "mov x8, {syscall_num}",
+                        "mov x0, {device_id}",
+                        "svc #0",
+                        "mov {result}, x0",
+                        syscall_num = in(reg) 0x12u64, // SYS_DEVICE_REQUEST
+                        device_id = in(reg) device_num,
+                        result = out(reg) base,
+                        out("x8") _,
+                        out("x0") _,
+                    );
+                    base
+                };
+
+                // Check for error (u64::MAX = -1)
+                if mmio_base == usize::MAX {
+                    return Err(BrokerError::DeviceNotFound);
+                }
+
                 let mmio_size = 0x1000; // 4KB
 
                 Ok(DeviceResource {

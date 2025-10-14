@@ -80,7 +80,25 @@ impl EndpointManager {
     ///
     /// Allocates a capability slot and creates an endpoint in the kernel.
     pub(crate) fn create_endpoint(&mut self, cap_slot: usize) -> Result<Endpoint> {
-        // TODO: Make syscall to kernel to create IPC endpoint
+        // Make syscall to kernel to create IPC endpoint
+        let result_slot = unsafe {
+            let mut slot: usize;
+            core::arch::asm!(
+                "mov x8, {syscall_num}",
+                "svc #0",
+                "mov {result}, x0",
+                syscall_num = in(reg) 0x13u64, // SYS_ENDPOINT_CREATE
+                result = out(reg) slot,
+                out("x8") _,
+                out("x0") _,
+            );
+            slot
+        };
+
+        // Check for error (u64::MAX = -1)
+        if result_slot == usize::MAX {
+            return Err(crate::BrokerError::SyscallFailed(result_slot));
+        }
 
         let id = self.next_endpoint_id;
         self.next_endpoint_id += 1;

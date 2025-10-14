@@ -44,19 +44,38 @@ impl MemoryManager {
     ///
     /// Returns a `MemoryRegion` describing the allocated memory.
     pub(crate) fn allocate(&mut self, size: usize, cap_slot: usize) -> Result<MemoryRegion> {
-        // TODO: Make syscall to kernel to allocate physical memory
-        // TODO: Optionally map to virtual address space
-        // TODO: Track allocation
-
         // Round up to page size (4KB)
         let page_size = 4096;
         let aligned_size = (size + page_size - 1) & !(page_size - 1);
 
-        // For now, return a placeholder
-        // In a real implementation, this would make a syscall to the kernel
+        // Make syscall to kernel to allocate physical memory
+        let phys_addr = unsafe {
+            let mut addr: usize;
+            core::arch::asm!(
+                "mov x8, {syscall_num}",
+                "mov x0, {size}",
+                "svc #0",
+                "mov {result}, x0",
+                syscall_num = in(reg) 0x11u64, // SYS_MEMORY_ALLOCATE
+                size = in(reg) aligned_size as u64,
+                result = out(reg) addr,
+                out("x8") _,
+                out("x0") _,
+            );
+            addr
+        };
+
+        // Check for error (u64::MAX = -1)
+        if phys_addr == usize::MAX {
+            return Err(crate::BrokerError::OutOfMemory);
+        }
+
+        // TODO: Optionally map to virtual address space
+        // TODO: Track allocation
+
         Ok(MemoryRegion {
-            phys_addr: 0x8000_0000, // Placeholder physical address
-            virt_addr: None,         // Not mapped yet
+            phys_addr,
+            virt_addr: None, // Not mapped yet
             size: aligned_size,
             cap_slot,
         })

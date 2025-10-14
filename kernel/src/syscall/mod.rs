@@ -22,6 +22,13 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEBUG_PUTCHAR => sys_debug_putchar(args[0]),
         numbers::SYS_DEBUG_PRINT => sys_debug_print(args[0], args[1]),
         numbers::SYS_YIELD => sys_yield(),
+
+        // Chapter 9: Capability management syscalls
+        numbers::SYS_CAP_ALLOCATE => sys_cap_allocate(),
+        numbers::SYS_MEMORY_ALLOCATE => sys_memory_allocate(args[0]),
+        numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
+        numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
+
         _ => {
             kprintln!("[syscall] Unknown syscall number: {}", syscall_num);
             u64::MAX // Error: invalid syscall
@@ -75,4 +82,98 @@ fn sys_debug_print(ptr: u64, len: u64) -> u64 {
 fn sys_yield() -> u64 {
     kprintln!("[syscall] yield (no-op, scheduler not implemented)");
     0 // Success
+}
+
+//
+// Chapter 9: Capability Management Syscalls
+//
+
+// Global capability slot counter (simplified for Chapter 9 Phase 1)
+static mut NEXT_CAP_SLOT: u64 = 100;
+
+/// Allocate a capability slot
+///
+/// Returns a capability slot number that can be used to store capabilities.
+/// This is a simplified implementation; a full implementation would track
+/// allocated slots and support deallocation.
+fn sys_cap_allocate() -> u64 {
+    unsafe {
+        let slot = NEXT_CAP_SLOT;
+        NEXT_CAP_SLOT += 1;
+        kprintln!("[syscall] cap_allocate -> slot {}", slot);
+        slot
+    }
+}
+
+/// Allocate physical memory
+///
+/// Args: size (bytes)
+/// Returns: physical address of allocated memory
+///
+/// This allocates physical memory frames using the kernel's frame allocator.
+/// For simplicity in Chapter 9 Phase 1, we only allocate single frames.
+/// Multi-frame allocation will be added in Phase 2.
+fn sys_memory_allocate(size: u64) -> u64 {
+    use crate::memory::{alloc_frame, PAGE_SIZE};
+
+    let page_size = PAGE_SIZE as u64;
+    let pages_needed = ((size + page_size - 1) / page_size);
+
+    kprintln!("[syscall] memory_allocate: {} bytes ({} pages)", size, pages_needed);
+
+    // For now, only support single-page allocations
+    // TODO Chapter 9 Phase 2: Support multi-page allocations
+    if pages_needed > 1 {
+        kprintln!("[syscall] memory_allocate: multi-page allocation not yet supported");
+        return u64::MAX; // Error: too large
+    }
+
+    // Allocate a physical frame
+    match alloc_frame() {
+        Some(pfn) => {
+            let phys_addr = pfn.phys_addr().as_u64();
+            kprintln!("[syscall] memory_allocate -> 0x{:x}", phys_addr);
+            phys_addr
+        }
+        None => {
+            kprintln!("[syscall] memory_allocate: out of memory");
+            u64::MAX // Error: out of memory
+        }
+    }
+}
+
+/// Request device resources
+///
+/// Args: device_id (0 = UART0, 1 = Timer, etc.)
+/// Returns: MMIO base address for the device
+///
+/// This is a simplified implementation that returns known MMIO addresses
+/// for QEMU virt platform devices.
+fn sys_device_request(device_id: u64) -> u64 {
+    let mmio_base = match device_id {
+        0 => 0x0900_0000, // UART0
+        1 => 0x0901_0000, // UART1
+        2 => 0x0A00_0000, // RTC
+        _ => {
+            kprintln!("[syscall] device_request: unknown device {}", device_id);
+            return u64::MAX; // Error: unknown device
+        }
+    };
+
+    kprintln!("[syscall] device_request(device={}) -> MMIO 0x{:x}", device_id, mmio_base);
+    mmio_base
+}
+
+/// Create IPC endpoint
+///
+/// Returns: endpoint capability slot
+///
+/// This allocates a capability slot and associates it with a new IPC endpoint.
+/// The actual endpoint data structure would be created in a full implementation.
+fn sys_endpoint_create() -> u64 {
+    // For now, just allocate a capability slot
+    // In a full implementation, this would create an actual endpoint object
+    let slot = sys_cap_allocate();
+    kprintln!("[syscall] endpoint_create -> slot {}", slot);
+    slot
 }
