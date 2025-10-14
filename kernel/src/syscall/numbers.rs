@@ -49,3 +49,16 @@ pub const SYS_ENDPOINT_CREATE: u64 = 0x13;
 /// Args: entry_point, stack_pointer, page_table_root, cspace_root
 /// Returns: process ID, or -1 on error
 pub const SYS_PROCESS_CREATE: u64 = 0x14;
+
+/// Map physical memory into caller's virtual address space
+/// Args: physical_addr, size, permissions (read=1, write=2, exec=4)
+/// Returns: virtual address, or -1 on error
+///
+/// This allows userspace to access allocated physical memory by mapping
+/// it into a free region of its virtual address space.
+pub const SYS_MEMORY_MAP: u64 = 0x15;
+
+/// Unmap virtual memory from caller's address space
+/// Args: virtual_addr, size
+/// Returns: 0 on success, -1 on error
+pub const SYS_MEMORY_UNMAP: u64 = 0x16;

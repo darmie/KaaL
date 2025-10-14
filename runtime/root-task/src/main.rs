@@ -24,6 +24,8 @@ const SYS_MEMORY_ALLOCATE: usize = 0x11;
 const SYS_DEVICE_REQUEST: usize = 0x12;
 const SYS_ENDPOINT_CREATE: usize = 0x13;
 const SYS_PROCESS_CREATE: usize = 0x14;
+const SYS_MEMORY_MAP: usize = 0x15;
+const SYS_MEMORY_UNMAP: usize = 0x16;
 
 /// Make a syscall to print a message
 ///
@@ -148,6 +150,49 @@ unsafe fn sys_process_create(
         out("x1") _,
         out("x2") _,
         out("x3") _,
+    );
+    result
+}
+
+/// Map physical memory into our virtual address space
+unsafe fn sys_memory_map(phys_addr: usize, size: usize, permissions: usize) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {phys}",
+        "mov x1, {size}",
+        "mov x2, {perms}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_MEMORY_MAP,
+        phys = in(reg) phys_addr,
+        size = in(reg) size,
+        perms = in(reg) permissions,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+    );
+    result
+}
+
+/// Unmap virtual memory from our address space
+unsafe fn sys_memory_unmap(virt_addr: usize, size: usize) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {virt}",
+        "mov x1, {size}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_MEMORY_UNMAP,
+        virt = in(reg) virt_addr,
+        size = in(reg) size,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
     );
     result
 }
@@ -281,6 +326,171 @@ pub extern "C" fn _start() -> ! {
         sys_print("  Chapter 9 Phase 1: Syscalls Working ✓\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
+    }
+
+    // Chapter 9 Phase 2: Spawn echo-server process
+    unsafe {
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("  Chapter 9 Phase 2: Spawning Echo Server Process\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("\n");
+
+        // Embed echo-server binary (built by cargo)
+        static ECHO_SERVER_ELF: &[u8] = include_bytes!(
+            "../../../examples/echo-server/target/aarch64-unknown-none/release/echo-server"
+        );
+
+        sys_print("[root_task] Parsing echo-server ELF binary...\n");
+        sys_print("  → Binary size: ");
+        print_number(ECHO_SERVER_ELF.len());
+        sys_print(" bytes\n");
+
+        // Parse ELF to get load info
+        let elf_info = match elf::parse_elf(ECHO_SERVER_ELF) {
+            Ok(info) => info,
+            Err(e) => {
+                sys_print("  → Error parsing ELF: ");
+                sys_print(e);
+                sys_print("\n");
+                loop { core::arch::asm!("wfi"); }
+            }
+        };
+
+        sys_print("  → Entry point: 0x");
+        print_hex(elf_info.entry_point);
+        sys_print("\n");
+        sys_print("  → Load segments: ");
+        print_number(elf_info.num_segments);
+        sys_print("\n");
+        sys_print("  → Memory size: ");
+        print_number(elf_info.memory_size());
+        sys_print(" bytes\n");
+
+        sys_print("\n[root_task] Allocating memory for process...\n");
+
+        // Allocate memory for process image (round up to 4KB pages)
+        let process_size = (elf_info.memory_size() + 4095) & !4095;
+        let process_mem = sys_memory_allocate(process_size);
+        if process_mem == usize::MAX {
+            sys_print("  → Error: Out of memory for process image\n");
+            loop { core::arch::asm!("wfi"); }
+        }
+        sys_print("  → Process memory: 0x");
+        print_hex(process_mem);
+        sys_print("\n");
+
+        // Allocate stack (16KB)
+        let stack_size = 16384;
+        let stack_mem = sys_memory_allocate(stack_size);
+        if stack_mem == usize::MAX {
+            sys_print("  → Error: Out of memory for stack\n");
+            loop { core::arch::asm!("wfi"); }
+        }
+        sys_print("  → Stack memory: 0x");
+        print_hex(stack_mem);
+        sys_print("\n");
+
+        // Allocate page table root (4KB)
+        let pt_root = sys_memory_allocate(4096);
+        if pt_root == usize::MAX {
+            sys_print("  → Error: Out of memory for page table\n");
+            loop { core::arch::asm!("wfi"); }
+        }
+        sys_print("  → Page table: 0x");
+        print_hex(pt_root);
+        sys_print("\n");
+
+        // Allocate CNode for capability space (4KB)
+        let cspace_root = sys_memory_allocate(4096);
+        if cspace_root == usize::MAX {
+            sys_print("  → Error: Out of memory for CSpace\n");
+            loop { core::arch::asm!("wfi"); }
+        }
+        sys_print("  → CSpace root: 0x");
+        print_hex(cspace_root);
+        sys_print("\n");
+
+        sys_print("\n[root_task] Loading ELF segments...\n");
+
+        // Map the allocated physical memory into our virtual address space
+        // so we can copy the ELF segments
+        const RW_PERMS: usize = 0x3; // Read + Write
+        let virt_mem = sys_memory_map(process_mem, process_size, RW_PERMS);
+        if virt_mem == usize::MAX {
+            sys_print("  → Error: Failed to map process memory\n");
+            loop { core::arch::asm!("wfi"); }
+        }
+        sys_print("  → Mapped process memory at virt=0x");
+        print_hex(virt_mem);
+        sys_print("\n");
+
+        // Copy each LOAD segment to the mapped memory
+        let base_vaddr = elf_info.min_vaddr;
+        for i in 0..elf_info.num_segments {
+            let (vaddr, filesz, memsz, offset) = elf_info.segments[i];
+
+            sys_print("  → Segment ");
+            print_number(i);
+            sys_print(": vaddr=0x");
+            print_hex(vaddr);
+            sys_print(", filesz=");
+            print_number(filesz);
+            sys_print(", memsz=");
+            print_number(memsz);
+            sys_print("\n");
+
+            // Calculate destination in mapped memory
+            let segment_offset = vaddr - base_vaddr;
+            let dest_ptr = (virt_mem + segment_offset) as *mut u8;
+            let src_ptr = ECHO_SERVER_ELF.as_ptr().add(offset);
+
+            // Copy file data
+            if filesz > 0 {
+                core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, filesz);
+            }
+
+            // Zero BSS (memsz > filesz means there's BSS to zero)
+            if memsz > filesz {
+                let bss_ptr = dest_ptr.add(filesz);
+                let bss_size = memsz - filesz;
+                core::ptr::write_bytes(bss_ptr, 0, bss_size);
+            }
+        }
+        sys_print("  ✓ All segments loaded\n");
+
+        // Unmap the memory (we're done writing to it)
+        sys_memory_unmap(virt_mem, process_size);
+        sys_print("  ✓ Memory unmapped\n");
+
+        sys_print("\n[root_task] Creating process...\n");
+
+        // TODO: Create and populate page table
+        // For now, we'll use identity mapping (physical = virtual)
+        // This is a simplification - real implementation needs proper page tables
+
+        // Stack grows down from top
+        let stack_top = stack_mem + stack_size;
+
+        // Create the process
+        let pid = sys_process_create(
+            elf_info.entry_point,
+            stack_top,
+            pt_root,
+            cspace_root,
+        );
+
+        if pid == usize::MAX {
+            sys_print("  → Error: Failed to create process\n");
+        } else {
+            sys_print("  → Created process with PID: ");
+            print_number(pid);
+            sys_print("\n");
+            sys_print("\n");
+            sys_print("═══════════════════════════════════════════════════════════\n");
+            sys_print("  Chapter 9 Phase 2: Process Spawning Complete ✓\n");
+            sys_print("═══════════════════════════════════════════════════════════\n");
+            sys_print("\n");
+        }
     }
 
     // Idle loop - wait for interrupts

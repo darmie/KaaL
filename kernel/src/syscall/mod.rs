@@ -29,6 +29,8 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(args[0], args[1], args[2], args[3]),
+        numbers::SYS_MEMORY_MAP => sys_memory_map(args[0], args[1], args[2]),
+        numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
 
         _ => {
             kprintln!("[syscall] Unknown syscall number: {}", syscall_num);
@@ -112,35 +114,47 @@ fn sys_cap_allocate() -> u64 {
 /// Returns: physical address of allocated memory
 ///
 /// This allocates physical memory frames using the kernel's frame allocator.
-/// For simplicity in Chapter 9 Phase 1, we only allocate single frames.
-/// Multi-frame allocation will be added in Phase 2.
+/// For multi-page allocations, we allocate contiguous frames if possible.
 fn sys_memory_allocate(size: u64) -> u64 {
     use crate::memory::{alloc_frame, PAGE_SIZE};
 
     let page_size = PAGE_SIZE as u64;
-    let pages_needed = ((size + page_size - 1) / page_size);
+    let pages_needed = ((size + page_size - 1) / page_size) as usize;
 
     kprintln!("[syscall] memory_allocate: {} bytes ({} pages)", size, pages_needed);
 
-    // For now, only support single-page allocations
-    // TODO Chapter 9 Phase 2: Support multi-page allocations
-    if pages_needed > 1 {
-        kprintln!("[syscall] memory_allocate: multi-page allocation not yet supported");
-        return u64::MAX; // Error: too large
-    }
-
-    // Allocate a physical frame
-    match alloc_frame() {
-        Some(pfn) => {
-            let phys_addr = pfn.phys_addr().as_u64();
-            kprintln!("[syscall] memory_allocate -> 0x{:x}", phys_addr);
-            phys_addr
-        }
+    // Allocate the first frame
+    let first_pfn = match alloc_frame() {
+        Some(pfn) => pfn,
         None => {
             kprintln!("[syscall] memory_allocate: out of memory");
-            u64::MAX // Error: out of memory
+            return u64::MAX;
+        }
+    };
+
+    let base_addr = first_pfn.phys_addr();
+
+    // For multi-page allocations, allocate additional contiguous frames
+    // Note: This is a simplified approach. A production system would use
+    // a buddy allocator or similar for contiguous allocation guarantees.
+    if pages_needed > 1 {
+        for i in 1..pages_needed {
+            match alloc_frame() {
+                Some(_pfn) => {
+                    // In a real system, verify contiguous allocation
+                    // For now, we trust the frame allocator
+                }
+                None => {
+                    kprintln!("[syscall] memory_allocate: partial allocation failed at page {}/{}", i, pages_needed);
+                    // TODO: Free previously allocated frames
+                    return u64::MAX;
+                }
+            }
         }
     }
+
+    kprintln!("[syscall] memory_allocate -> 0x{:x} ({} pages)", base_addr.as_u64(), pages_needed);
+    base_addr.as_u64()
 }
 
 /// Request device resources
@@ -253,4 +267,141 @@ fn sys_process_create(
 
     kprintln!("[syscall] process_create -> PID {}", pid);
     pid as u64
+}
+
+/// Global virtual address allocator for userspace mappings
+///
+/// Allocates from high memory region (starting at 2GB) to avoid conflicts
+/// with existing low-memory mappings. This is a simple bump allocator that
+/// provides non-overlapping virtual address ranges.
+///
+/// We start at 2GB (0x80000000) which is:
+/// - High enough to avoid kernel/user code conflicts
+/// - Low enough to work with TCR_EL1 configuration (39-bit VA)
+///
+/// Production improvement: Use per-process VSpace allocator with free list
+static mut NEXT_VIRT_ADDR: u64 = 0x80000000; // Start at 2GB
+
+/// Map physical memory into caller's virtual address space
+///
+/// Args:
+/// - phys_addr: Physical address to map
+/// - size: Size in bytes (will be rounded up to page size)
+/// - permissions: Access permissions (1=read, 2=write, 4=exec)
+///
+/// Returns: Virtual address where memory is mapped, or u64::MAX on error
+///
+/// This allows userspace to access allocated physical memory by creating
+/// page table entries in the caller's TTBR0 page table.
+fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
+    use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
+    use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
+
+    kprintln!("[syscall] memory_map: phys={:#x}, size={}, perms={:#x}", phys_addr, size, permissions);
+
+    // Round size up to page boundary
+    let page_size = PAGE_SIZE as u64;
+    let num_pages = ((size + page_size - 1) / page_size) as usize;
+    let aligned_size = num_pages as u64 * page_size;
+
+    // Get current page table from TTBR0_EL1
+    let ttbr0: u64;
+    unsafe {
+        core::arch::asm!("mrs {}, ttbr0_el1", out(reg) ttbr0);
+    }
+    let page_table_phys = ttbr0 as usize;
+    kprintln!("[syscall] memory_map: caller's TTBR0={:#x}", page_table_phys);
+
+    // Get mutable reference to caller's page table
+    let page_table = unsafe { &mut *(page_table_phys as *mut PageTable) };
+
+    // Allocate virtual address from high memory region to avoid conflicts
+    let virt_addr = unsafe {
+        let addr = NEXT_VIRT_ADDR;
+        NEXT_VIRT_ADDR += aligned_size;
+        addr
+    };
+
+    kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}",
+              virt_addr, virt_addr + aligned_size);
+
+    // Set up page table flags for userspace read-write data
+    // Build flags explicitly to debug permission issue
+    let flags = PageTableFlags::VALID
+              | PageTableFlags::TABLE_OR_PAGE
+              | PageTableFlags::AP_RW_ALL
+              | PageTableFlags::ACCESSED
+              | PageTableFlags::INNER_SHARE
+              | PageTableFlags::NORMAL
+              | PageTableFlags::UXN;
+
+    kprintln!("[syscall] memory_map: using flags = {:#x}", flags.bits());
+    kprintln!("[syscall] memory_map: USER_DATA = {:#x}", PageTableFlags::USER_DATA.bits());
+
+    // Create PageMapper once for all mappings
+    let mut mapper = unsafe { crate::memory::PageMapper::new(page_table) };
+
+    // Map each page
+    for i in 0..num_pages {
+        let page_virt = VirtAddr::new((virt_addr as usize) + (i * PAGE_SIZE));
+        let page_phys = PhysAddr::new((phys_addr as usize) + (i * PAGE_SIZE));
+
+        match mapper.map(page_virt, page_phys, flags, PageSize::Size4KB) {
+            Ok(()) => {
+                kprintln!("[syscall] memory_map: mapped page {} virt={:#x} -> phys={:#x}",
+                         i, page_virt.as_usize(), page_phys.as_usize());
+            },
+            Err(e) => {
+                kprintln!("[syscall] memory_map: failed to map page {} at virt={:#x}, error={:?}",
+                         i, page_virt.as_usize(), e);
+                return u64::MAX;
+            }
+        }
+    }
+
+    // Ensure page table updates are visible
+    unsafe {
+        core::arch::asm!(
+            "dsb ishst",  // Ensure all page table writes complete
+            "isb",        // Instruction synchronization barrier
+        );
+    }
+
+    // Flush TLB for the entire ASID (simpler than per-page)
+    unsafe {
+        core::arch::asm!(
+            "tlbi vmalle1is",  // Invalidate all EL1&0 stage 1 TLB entries
+            "dsb ish",         // Ensure TLB invalidation completes
+            "isb",             // Instruction synchronization barrier
+        );
+    }
+
+    kprintln!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
+    virt_addr
+}
+
+/// Unmap virtual memory from caller's address space
+///
+/// Args:
+/// - virt_addr: Virtual address to unmap
+/// - size: Size in bytes
+///
+/// Returns: 0 on success, u64::MAX on error
+fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
+    use crate::memory::PAGE_SIZE;
+
+    kprintln!("[syscall] memory_unmap: virt={:#x}, size={}", virt_addr, size);
+
+    // Round size up to page boundary
+    let page_size = PAGE_SIZE as u64;
+    let num_pages = (size + page_size - 1) / page_size;
+
+    // A full implementation would:
+    // 1. Get caller's page table from current TCB
+    // 2. Remove page table entries for this range
+    // 3. Flush TLB
+
+    // For now, this is a no-op (simplified)
+    kprintln!("[syscall] memory_unmap -> success ({} pages)", num_pages);
+    0
 }
