@@ -784,92 +784,137 @@ Chapter 9 bridges the microkernel with user-space components, implementing the *
 
 #### Phase 1: Runtime Services Foundation (2 weeks)
 
-1. Implement Capability Broker service
-   - Hide seL4/KaaL capability complexity
+**Location**: `runtime/` directory (userspace runtime libraries)
+
+1. **Capability Broker** (`runtime/capability-broker/`)
+   - Hide KaaL capability complexity from applications
    - Device resource allocation
    - Untyped memory management
    - IPC endpoint creation
-2. Implement Memory Manager service
+
+2. **Memory Manager** (`runtime/memory-manager/`)
    - Physical memory allocation
    - Virtual address space management
    - Page table management
 
+3. **Enhanced Root Task** (`runtime/root-task/`)
+   - Replace dummy-roottask with functional implementation
+   - Uses capability broker and memory manager
+   - Spawns initial system services
+
 #### Phase 2: IPC Integration Testing (1 week)
+
+**Location**: `tests/integration/` directory
 
 1. **Full IPC end-to-end tests** (deferred from Chapter 5)
    - Multi-component send/receive
    - Capability transfer (grant/mint/derive)
    - Call/reply RPC semantics
    - FIFO ordering verification
-2. IPC performance benchmarking
+
+2. **IPC performance benchmarking**
    - Measure IPC latency
    - Compare with seL4 baseline
    - Optimize fastpath
 
-#### Phase 3: DDDK & Basic Drivers (2 weeks)
+#### Phase 3: KaaL SDK (2 weeks)
 
-1. Device Driver Development Kit
+**Location**: `sdk/` directory (developer-facing SDK)
+
+1. **Core SDK** (`sdk/kaal-sdk/`)
+   - Syscall wrappers
+   - IPC helpers
+   - Capability management abstractions
+   - Re-exports all SDK components
+
+2. **Device Driver Development Kit** (`sdk/dddk/`)
    - Driver trait abstractions
    - Interrupt handling framework
    - DMA buffer management
-2. Implement example drivers
-   - UART driver (user-space)
+   - `#[derive(Driver)]` procedural macros
+
+3. **SDK Examples** (`sdk/examples/`)
+   - hello-world: Minimal component
+   - echo-server: IPC service example
+   - Custom allocator example
+
+#### Phase 4: Example Drivers & Applications (1-2 weeks)
+
+**Location**: `examples/` directory (using the SDK)
+
+1. **Example Drivers** (`examples/drivers/`)
+   - UART driver (user-space, using DDDK)
    - Timer driver
    - GPIO driver
 
-#### Phase 4: System Services (2-3 weeks)
-
-1. Basic VFS implementation
-   - File abstraction layer
-   - Mount point management
-   - Simple RAM filesystem
-2. Network stack foundation
-   - Socket abstractions
-   - Protocol handlers
-   - Buffer management
+2. **Example Services** (`examples/services/`)
+   - Simple shell
+   - Echo server
+   - File server stub
 
 ### Deliverables
 
 ```text
-components/
-├── runtime/
-│   ├── capability-broker/     # ~5K LOC
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── main.rs
-│   │       ├── device_manager.rs
-│   │       ├── memory_manager.rs
-│   │       └── endpoint_manager.rs
-│   └── memory-manager/         # ~3K LOC
-│       ├── Cargo.toml
-│       └── src/
-│           ├── main.rs
-│           ├── physical.rs
-│           └── virtual.rs
+runtime/                        # Runtime services (userspace libraries)
+├── capability-broker/          # ~5K LOC
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs              # Public API
+│       ├── device_manager.rs   # Device allocation
+│       ├── memory_manager.rs   # Memory management
+│       └── endpoint_manager.rs # IPC endpoint creation
+│
+├── memory-manager/             # ~3K LOC
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs              # Public API
+│       ├── physical.rs         # Physical allocator
+│       └── virtual.rs          # Virtual address spaces
+│
+└── root-task/                  # Enhanced root task
+    ├── Cargo.toml
+    └── src/
+        └── main.rs             # Root task using runtime services
+
+sdk/                            # KaaL SDK (developer-facing)
+├── kaal-sdk/                   # Main SDK (~2K LOC)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs              # Re-exports all SDK components
+│       ├── syscall.rs          # Syscall wrappers
+│       ├── ipc.rs              # IPC helpers
+│       └── capability.rs       # Capability abstractions
+│
+├── dddk/                       # Device Driver Development Kit (~3K LOC)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs              # DDDK public API
+│       ├── driver.rs           # Driver trait
+│       ├── interrupt.rs        # Interrupt handling
+│       ├── dma.rs              # DMA buffer management
+│       └── macros.rs           # #[derive(Driver)]
+│
+└── examples/                   # SDK usage examples
+    ├── hello-world/            # Minimal component
+    ├── echo-server/            # IPC service
+    └── custom-allocator/       # Memory management
+
+examples/                       # Example applications (using SDK)
 ├── drivers/
-│   ├── dddk/                   # Driver Development Kit
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── traits.rs
-│   │       ├── interrupt.rs
-│   │       └── dma.rs
-│   └── uart/                   # Example: UART driver
-│       ├── Cargo.toml
-│       └── src/
-│           └── main.rs
+│   ├── uart/                   # UART driver using DDDK
+│   ├── timer/                  # Timer driver
+│   └── gpio/                   # GPIO driver
+│
 └── services/
-    └── vfs/                    # Basic VFS
-        ├── Cargo.toml
-        └── src/
-            ├── main.rs
-            └── ramfs.rs
+    ├── simple-shell/           # Basic shell
+    ├── echo-server/            # Echo service
+    └── file-server/            # File server stub
 
 tests/
 └── integration/
     ├── ipc_full_test.rs        # Complete IPC testing
-    ├── capability_transfer.rs  # Cap transfer tests
-    └── benchmark.rs            # Performance tests
+    ├── capability_transfer.rs  # Capability transfer tests
+    └── benchmark.rs            # Performance benchmarks
 ```
 
 ### Testing Criteria
@@ -885,33 +930,52 @@ tests/
 
 #### Runtime Services
 
-- ✅ Capability Broker can allocate resources
-- ✅ Memory Manager provides memory to components
+- ✅ Capability Broker can allocate device resources
+- ✅ Memory Manager provides physical/virtual memory
+- ✅ Root task successfully uses runtime services
 - ✅ Components can communicate via IPC
 
-#### Drivers & Services
+#### SDK & Drivers
 
-- ✅ DDDK simplifies driver development
-- ✅ Example drivers work
-- ✅ Basic VFS functional
+- ✅ KaaL SDK provides clean API for applications
+- ✅ DDDK simplifies driver development (73% code reduction target)
+- ✅ Example drivers work (UART, Timer, GPIO)
+- ✅ SDK examples demonstrate common patterns
 
 ### Documentation
 
-- Create `docs/chapters/CHAPTER_09_STATUS.md`
-- Create `docs/FRAMEWORK_ARCHITECTURE.md`
-- Create `components/README.md` (guide to Framework structure)
-- Update `docs/ARCHITECTURE.md` with implementation details
+- Create `docs/chapters/CHAPTER_09_STATUS.md` - Implementation progress
+- Create `sdk/README.md` - SDK usage guide
+- Create `runtime/README.md` - Runtime services guide
+- Create `examples/README.md` - Examples index
+- Update `docs/ARCHITECTURE.md` with runtime/SDK layers
 
 ### Key Achievements
 
 By completing Chapter 9, we achieve:
 
 1. **Full IPC Validation** - All deferred Chapter 5 tests pass with real components
-2. **Framework Foundation** - Runtime services enable higher-level components
-3. **Driver Framework** - DDDK reduces driver complexity
-4. **Microkernel + Framework Integration** - Proven end-to-end system
+2. **Runtime Foundation** - Capability Broker and Memory Manager provide OS services
+3. **Developer SDK** - Clean API for building drivers and applications
+4. **Driver Framework** - DDDK reduces driver complexity (73% code reduction)
+5. **Microkernel + Runtime Integration** - Proven end-to-end system
+
+### Directory Structure Summary
+
+```
+├── kernel/             # Chapters 0-7: Microkernel (EL1)
+├── runtime/            # Chapter 9 Phase 1: Runtime services (EL0 libraries)
+├── sdk/                # Chapter 9 Phase 3: Developer SDK
+├── examples/           # Chapter 9 Phase 4: Example applications
+└── tests/integration/  # Chapter 9 Phase 2: IPC integration tests
+```
 
 **Note**: Chapter 9 marks the transition from **microkernel development** to **ecosystem building**. Chapters 0-8 built the kernel; Chapter 9 builds the world on top of it.
+
+**Key Distinction**:
+- **`runtime/`**: Core userspace libraries (like libc) - capability broker, memory manager, root task
+- **`sdk/`**: Developer-facing SDK for building components
+- **`examples/`**: Sample code using the SDK
 
 ---
 
