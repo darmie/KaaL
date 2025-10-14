@@ -36,3 +36,4 @@ pub mod memory;
 pub mod objects;
 pub mod syscall;
 pub mod ipc;
+pub mod scheduler;
