@@ -1,8 +1,14 @@
-//! Minimal root task binary for Chapter 7
+//! KaaL Root Task - Chapters 7-9
 //!
 //! This is the first userspace program that runs on the KaaL microkernel.
-//! It receives boot parameters from the kernel and demonstrates EL0 execution
-//! by calling the sys_print syscall.
+//!
+//! **Chapter 7**: Demonstrates basic EL0 execution and syscalls
+//! **Chapter 9**: Demonstrates runtime services (capability broker, memory manager)
+//!
+//! The root task is responsible for:
+//! - Initializing runtime services
+//! - Spawning initial system components
+//! - Managing system-wide resources
 
 #![no_std]
 #![no_main]
@@ -80,6 +86,30 @@ pub extern "C" fn _start() -> ! {
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("  Chapter 7: COMPLETE ✓\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("\n");
+    }
+
+    // Chapter 9: Demonstrate Runtime Services
+    // TODO: Once syscalls are implemented in kernel, uncomment this
+    unsafe {
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("  Chapter 9: Runtime Services (Preview)\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("\n");
+        sys_print("[root_task] Capability Broker API Design:\n");
+        sys_print("  • init() - Initialize broker\n");
+        sys_print("  • request_device(DeviceId::Uart(0)) - Get UART device\n");
+        sys_print("  • allocate_memory(4096) - Allocate 4KB memory\n");
+        sys_print("  • create_endpoint() - Create IPC endpoint\n");
+        sys_print("\n");
+        sys_print("[root_task] Next Steps:\n");
+        sys_print("  1. Implement capability syscalls in kernel\n");
+        sys_print("  2. Integrate capability broker library\n");
+        sys_print("  3. Spawn example components\n");
+        sys_print("\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("  Chapter 9 Phase 1: Foundation Ready\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
     }
