@@ -15,12 +15,15 @@
 
 use core::panic::PanicInfo;
 
+mod elf;
+
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;
 const SYS_CAP_ALLOCATE: usize = 0x10;
 const SYS_MEMORY_ALLOCATE: usize = 0x11;
 const SYS_DEVICE_REQUEST: usize = 0x12;
 const SYS_ENDPOINT_CREATE: usize = 0x13;
+const SYS_PROCESS_CREATE: usize = 0x14;
 
 /// Make a syscall to print a message
 ///
@@ -114,6 +117,37 @@ unsafe fn sys_endpoint_create() -> usize {
         result = out(reg) result,
         out("x8") _,
         out("x0") _,
+    );
+    result
+}
+
+/// Create a new process
+unsafe fn sys_process_create(
+    entry_point: usize,
+    stack_pointer: usize,
+    page_table_root: usize,
+    cspace_root: usize,
+) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {entry}",
+        "mov x1, {stack}",
+        "mov x2, {pt}",
+        "mov x3, {cspace}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_PROCESS_CREATE,
+        entry = in(reg) entry_point,
+        stack = in(reg) stack_pointer,
+        pt = in(reg) page_table_root,
+        cspace = in(reg) cspace_root,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+        out("x3") _,
     );
     result
 }
