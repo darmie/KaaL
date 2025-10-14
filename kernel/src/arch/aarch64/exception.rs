@@ -179,11 +179,16 @@ global_asm!(
 );
 
 /// Lower EL exception handler stub - saves context, calls Rust handler, restores context
+///
+/// Chapter 9: This handler implements page table switching for secure syscall handling.
+/// When transitioning from EL0->EL1, we save the user's TTBR0 and restore it on return.
+/// The kernel runs with TTBR1 (upper address space), so we need to ensure TTBR0 doesn't
+/// interfere with kernel memory access during exception handling.
 global_asm!(
     ".global handle_lower_el_aarch64_sync",
     "handle_lower_el_aarch64_sync:",
-    // Save all context to stack (288 bytes)
-    "    sub sp, sp, #288",
+    // Save all context to stack (296 bytes = 288 + 8 for TTBR0)
+    "    sub sp, sp, #296",
     "    stp x0, x1, [sp, #0]",
     "    stp x2, x3, [sp, #16]",
     "    stp x4, x5, [sp, #32]",
@@ -208,9 +213,19 @@ global_asm!(
     "    stp x0, x1, [sp, #248]",
     "    stp x2, x3, [sp, #264]",
     "    str x4, [sp, #280]",
-    "    mov x0, sp",                 // Pass TrapFrame* to handler
+    // Chapter 9: Save user's TTBR0 and switch to kernel page table
+    "    mrs x5, ttbr0_el1",           // Save user's page table
+    "    str x5, [sp, #288]",          // Store at offset 288
+    "    mrs x6, ttbr1_el1",           // Get kernel page table
+    "    msr ttbr0_el1, x6",           // Use kernel PT for TTBR0 during exception
+    "    isb",                         // Ensure page table switch completes
+    "    mov x0, sp",                  // Pass TrapFrame* to handler
     // Call Rust handler
     "    bl exception_lower_el_aarch64_sync_handler",
+    // Chapter 9: Restore user's TTBR0 before returning to EL0
+    "    ldr x5, [sp, #288]",          // Load saved user page table
+    "    msr ttbr0_el1, x5",           // Restore user's page table
+    "    isb",                         // Ensure page table switch completes
     // Restore context (including potentially modified syscall return value in x0)
     "    ldp x0, x1, [sp, #0]",
     "    ldp x2, x3, [sp, #16]",
@@ -234,7 +249,7 @@ global_asm!(
     "    msr sp_el0, x1",
     "    msr elr_el1, x2",
     "    msr spsr_el1, x3",
-    "    add sp, sp, #288",
+    "    add sp, sp, #296",            // Adjusted for new stack frame size
     "    eret",
 );
 

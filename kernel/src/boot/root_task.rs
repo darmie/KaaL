@@ -60,37 +60,11 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     // Create page mapper for user page table
     let mut mapper = crate::memory::PageMapper::new(user_page_table);
 
-    // Step 1.5: Map kernel into user page table for syscall handling
-    // This is necessary because syscall handlers run in kernel mode but with
-    // user's page table (TTBR0). Kernel code/data must be accessible.
-    extern "C" {
-        static _kernel_start: u8;
-        static _kernel_end: u8;
-    }
-    let kernel_start_addr = &_kernel_start as *const u8 as usize;
-    let kernel_end_addr = &_kernel_end as *const u8 as usize;
-
-    crate::kprintln!("  Mapping kernel in user PT: {:#x} - {:#x}",
-        kernel_start_addr, kernel_end_addr);
-
-    // SECURITY NOTE: Mapping kernel into user page table creates security risks:
-    // - Meltdown-style attacks could leak kernel data
-    // - Kernel addresses become predictable (KASLR bypass)
-    // TODO Chapter 9 Phase 2: Implement proper page table switching in exception handler
-    crate::memory::paging::identity_map_region(
-        &mut mapper,
-        kernel_start_addr,
-        kernel_end_addr - kernel_start_addr,
-        PageTableFlags::KERNEL_RWX,
-    ).map_err(|_| RootTaskError::MemoryMapping)?;
-
-    // Also map UART for kprintln! in syscalls
-    crate::memory::paging::identity_map_region(
-        &mut mapper,
-        0x9000000,
-        PAGE_SIZE,
-        PageTableFlags::KERNEL_DEVICE,
-    ).map_err(|_| RootTaskError::MemoryMapping)?;
+    // Chapter 9: Page table switching implemented in exception handler!
+    // The exception handler (handle_lower_el_aarch64_sync) now switches from user's
+    // TTBR0 to kernel's TTBR1 when entering EL1 for syscall handling, then restores
+    // TTBR0 before returning to EL0. This provides proper isolation and security.
+    // No need to map kernel into user page table anymore!
 
     // Step 2: Map root task memory (code + data + rodata)
     // IMPORTANT: The elfloader embeds the entire ELF file (including headers),
