@@ -28,6 +28,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_MEMORY_ALLOCATE => sys_memory_allocate(args[0]),
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
+        numbers::SYS_PROCESS_CREATE => sys_process_create(args[0], args[1], args[2], args[3]),
 
         _ => {
             kprintln!("[syscall] Unknown syscall number: {}", syscall_num);
@@ -176,4 +177,80 @@ fn sys_endpoint_create() -> u64 {
     let slot = sys_cap_allocate();
     kprintln!("[syscall] endpoint_create -> slot {}", slot);
     slot
+}
+
+/// Create a new process with full isolation
+///
+/// Args:
+/// - entry_point: Initial program counter (ELR_EL1)
+/// - stack_pointer: Initial stack pointer (SP_EL0)
+/// - page_table_root: Physical address of page table (TTBR0)
+/// - cspace_root: Physical address of CNode (capability space root)
+///
+/// Returns: Process ID (TID), or u64::MAX on error
+///
+/// This creates a fully isolated process with:
+/// - Separate address space (VSpace via page_table_root)
+/// - Separate capability space (CSpace via cspace_root)
+/// - Dedicated stack
+/// - Independent execution context
+fn sys_process_create(
+    entry_point: u64,
+    stack_pointer: u64,
+    page_table_root: u64,
+    cspace_root: u64,
+) -> u64 {
+    use crate::memory::{alloc_frame, VirtAddr};
+    use crate::objects::{TCB, CNode};
+    use crate::scheduler;
+
+    kprintln!("[syscall] process_create:");
+    kprintln!("  entry: {:#x}", entry_point);
+    kprintln!("  stack: {:#x}", stack_pointer);
+    kprintln!("  page_table: {:#x}", page_table_root);
+    kprintln!("  cspace: {:#x}", cspace_root);
+
+    // Allocate frame for TCB
+    let tcb_frame = match alloc_frame() {
+        Some(pfn) => pfn.phys_addr(),
+        None => {
+            kprintln!("[syscall] process_create: out of memory (TCB)");
+            return u64::MAX;
+        }
+    };
+
+    kprintln!("  allocated TCB at: {:#x}", tcb_frame.as_usize());
+
+    // Generate process ID (use frame address for now - unique per process)
+    let pid = tcb_frame.as_usize();
+
+    // Get CNode pointer
+    let cspace_ptr = cspace_root as *mut CNode;
+
+    // Allocate IPC buffer (for now, placeholder address)
+    // TODO: Should allocate actual IPC buffer frame
+    let ipc_buffer = VirtAddr::new(0x8000_0000);
+
+    // Create TCB
+    let tcb_ptr = tcb_frame.as_usize() as *mut TCB;
+    unsafe {
+        let tcb = TCB::new(
+            pid,
+            cspace_ptr,
+            page_table_root as usize,
+            ipc_buffer,
+            entry_point,
+            stack_pointer,
+        );
+        core::ptr::write(tcb_ptr, tcb);
+
+        // Set state to Runnable
+        (*tcb_ptr).set_state(crate::objects::ThreadState::Runnable);
+
+        // Add to scheduler
+        scheduler::enqueue(tcb_ptr);
+    }
+
+    kprintln!("[syscall] process_create -> PID {}", pid);
+    pid as u64
 }

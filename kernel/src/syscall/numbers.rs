@@ -44,3 +44,8 @@ pub const SYS_DEVICE_REQUEST: u64 = 0x12;
 /// Create IPC endpoint
 /// Returns: endpoint capability slot, or -1 on error
 pub const SYS_ENDPOINT_CREATE: u64 = 0x13;
+
+/// Create a new process with full isolation
+/// Args: entry_point, stack_pointer, page_table_root, cspace_root
+/// Returns: process ID, or -1 on error
+pub const SYS_PROCESS_CREATE: u64 = 0x14;
