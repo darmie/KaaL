@@ -37,6 +37,7 @@ pub mod message;
 pub mod operations;
 pub mod cap_transfer;
 pub mod call;
+pub mod test_runner;
 
 // Re-export main types
 pub use message::{Message, IpcBuffer, IpcError, MAX_MSG_REGS, FAST_PATH_REGS, MAX_CAPS};

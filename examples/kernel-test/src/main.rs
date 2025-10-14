@@ -345,10 +345,27 @@ pub extern "C" fn _start() -> ! {
     kprintln!("═══════════════════════════════════════════════════════════");
     kprintln!("");
 
+    // ========================================================================
+    // IPC Tests
+    // ========================================================================
+
+    kprintln!("═══════════════════════════════════════════════════════════");
+    kprintln!("  KaaL Kernel IPC Unit Tests");
+    kprintln!("═══════════════════════════════════════════════════════════");
+    kprintln!("");
+
+    let (ipc_passed, ipc_failed) = kaal_kernel::ipc::test_runner::run_all_ipc_tests();
+
+    kprintln!("");
+    kprintln!("═══════════════════════════════════════════════════════════");
+    kprintln!("  IPC Test Results: {} passed, {} failed", ipc_passed, ipc_failed);
+    kprintln!("═══════════════════════════════════════════════════════════");
+    kprintln!("");
+
     // Overall results
-    let total_passed = passed + obj_passed;
-    let total_failed = failed + obj_failed;
-    let total_tests = total + obj_total;
+    let total_passed = passed + obj_passed + ipc_passed;
+    let total_failed = failed + obj_failed + ipc_failed;
+    let total_tests = total + obj_total + ipc_passed + ipc_failed;
 
     kprintln!("═══════════════════════════════════════════════════════════");
     kprintln!("  Overall Test Results: {} passed, {} failed out of {}",

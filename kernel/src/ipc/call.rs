@@ -230,7 +230,7 @@ static mut NEXT_REPLY_ID: usize = 1; // 0 reserved for null
 ///
 /// Returns a capability that encodes the caller's pointer.
 /// In real implementation, would allocate a proper Reply object.
-unsafe fn create_reply_capability(caller: *mut TCB) -> Capability {
+pub unsafe fn create_reply_capability(caller: *mut TCB) -> Capability {
     // Find free slot in reply table
     let reply_id = NEXT_REPLY_ID;
     NEXT_REPLY_ID = (NEXT_REPLY_ID + 1) % MAX_REPLY_CAPS;
