@@ -287,8 +287,22 @@ pub unsafe fn unblock(tcb: *mut TCB) {
     // Add to ready queue
     enqueue(tcb);
 
-    // TODO (Phase 3): Check if we should preempt current thread
+    // Check if we should preempt current thread
     // If unblocked thread has higher priority than current, should reschedule
+    let current = current_thread();
+    if !current.is_null() {
+        let current_priority = (*current).priority();
+        let unblocked_priority = tcb_ref.priority();
+
+        // Lower priority number = higher priority
+        // If unblocked thread has higher priority, preempt current
+        if unblocked_priority < current_priority {
+            crate::kprintln!("[sched] Preempting: unblocked TCB {} (pri {}) > current TCB {} (pri {})",
+                           tcb_ref.tid(), unblocked_priority,
+                           (*current).tid(), current_priority);
+            yield_current();
+        }
+    }
 }
 
 /// Set thread priority and reschedule if needed
@@ -331,6 +345,19 @@ pub unsafe fn set_priority(tcb: *mut TCB, priority: u8) {
         tcb_ref.set_priority(priority);
     }
 
-    // TODO (Phase 3): Check if we should reschedule
+    // Check if we should reschedule
     // If priority increased above current thread, should preempt
+    let current = current_thread();
+    if !current.is_null() && tcb != current {
+        let current_priority = (*current).priority();
+
+        // Lower priority number = higher priority
+        // If modified thread now has higher priority than current, preempt
+        if priority < current_priority && tcb_ref.state() == crate::objects::ThreadState::Runnable {
+            crate::kprintln!("[sched] Preempting: TCB {} priority changed to {} (higher than current TCB {} pri {})",
+                           tcb_ref.tid(), priority,
+                           (*current).tid(), current_priority);
+            yield_current();
+        }
+    }
 }
