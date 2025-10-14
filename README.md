@@ -1,4 +1,15 @@
-# KaaL - Kernel-as-a-Library
+```
+$$╲   $$╲                    $$╲
+$$ │ $$  │                   $$ │
+$$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │
+$$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │
+$$  $$<   $$$$$$$ │ $$$$$$$ │$$ │
+$$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │
+$$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲
+╲__│  ╲__│╲_______│ ╲_______│╲________│
+```
+
+# KaaL Framework
 
 **A composable OS development framework with a native Rust microkernel**
 
@@ -14,8 +25,6 @@ KaaL is a **framework for composable operating system development**. It provides
 - **Multi-Platform**: ARM64 support (QEMU, Raspberry Pi, custom boards)
 
 Think of KaaL as the **skeleton** upon which you build your custom OS for embedded, IoT, or security-critical systems.
-
-**Mac Silicon Users**: See [QUICKSTART.md](QUICKSTART.md) for 3-command setup with Docker!
 
 ---
 
@@ -146,7 +155,9 @@ Add new platforms by configuring [build-config.toml](build-config.toml).
 
 ## 📝 License
 
-MIT OR Apache-2.0
+MIT License - see [LICENSE](LICENSE) for details.
+
+Copyright (c) 2025 Damilare Darmie Akinlaja
 
 ---
 
