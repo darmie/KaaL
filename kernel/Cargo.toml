@@ -2,6 +2,10 @@
 name = "kaal-kernel"
 version = "0.1.0"
 edition = "2021"
+authors = ["Damilare Darmie Akinlaja"]
+license = "MIT"
+description = "KaaL microkernel - A capability-based microkernel for ARM64"
+repository = "https://github.com/darmie/kaal"
 
 [[bin]]
 name = "kaal-kernel"
