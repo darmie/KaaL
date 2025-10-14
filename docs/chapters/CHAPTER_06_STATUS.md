@@ -1,16 +1,24 @@
 # Chapter 6: Scheduling & Context Switching - Status
 
-**Status**: 🚧 IN PROGRESS - 0% Complete (0/6 phases)
+**Status**: 🚧 IN PROGRESS - 67% Complete (4/6 phases)
 **Started**: 2025-10-14
 **Target Completion**: TBD
 
+## Recent Progress
+
+**Phase 1 ✅ COMPLETE**: Scheduler infrastructure with O(1) priority scheduling
+**Phase 4 ✅ COMPLETE**: ARM64 context switching in assembly
+**Phase 5 ✅ COMPLETE**: IPC integration with scheduler blocking/unblocking
+
+**Note**: Phases 2-3 (round-robin & priority) are effectively complete within Phase 1 implementation
+
 ## Objectives
 
-1. ⬜ Implement scheduler infrastructure (types, traits, global state)
-2. ⬜ Implement round-robin scheduler
-3. ⬜ Add priority-based scheduling
-4. ⬜ Build context switching mechanism
-5. ⬜ Integrate with IPC (yield points for send/recv/call/reply)
+1. ✅ Implement scheduler infrastructure (types, traits, global state)
+2. ✅ Implement round-robin scheduler (within Phase 1)
+3. ✅ Add priority-based scheduling (within Phase 1)
+4. ✅ Build context switching mechanism
+5. ✅ Integrate with IPC (yield points for send/recv/call/reply)
 6. ⬜ Support timer-based preemption
 
 ## Overview
@@ -63,7 +71,7 @@ The scheduler integrates tightly with:
 
 ## Implementation Plan
 
-### Phase 1: Scheduler Infrastructure ⬜ NOT STARTED
+### Phase 1: Scheduler Infrastructure ✅ COMPLETE
 
 Create basic types and global scheduler state.
 
@@ -103,7 +111,7 @@ struct ThreadQueue {
 - [x] Global scheduler instance created
 - [x] Basic enqueue/dequeue operations
 
-### Phase 2: Round-Robin Scheduler ⬜ NOT STARTED
+### Phase 2: Round-Robin Scheduler ✅ COMPLETE (within Phase 1)
 
 Implement simple round-robin scheduling within each priority level.
 
@@ -149,7 +157,7 @@ pub fn yield_current() {
 - [x] Round-robin within priority level
 - [x] Yield operation works
 
-### Phase 3: Priority Scheduling ⬜ NOT STARTED
+### Phase 3: Priority Scheduling ✅ COMPLETE (within Phase 1)
 
 Add priority management and dynamic priority changes.
 
@@ -180,7 +188,7 @@ pub fn effective_priority(tcb: *mut TCB) -> u8 {
 - [x] 256 priority levels supported
 - [x] Priority 0 = highest, 255 = lowest
 
-### Phase 4: Context Switching ⬜ NOT STARTED
+### Phase 4: Context Switching ✅ COMPLETE
 
 Implement low-level context switching in assembly.
 
@@ -212,7 +220,7 @@ pub unsafe fn switch_context(current: *mut TCB, next: *mut TCB) {
 - [x] Saves/restores ELR and SPSR
 - [x] Works correctly with interrupts
 
-### Phase 5: IPC Integration ⬜ NOT STARTED
+### Phase 5: IPC Integration ✅ COMPLETE
 
 Integrate scheduler with IPC operations to enable proper yielding.
 
