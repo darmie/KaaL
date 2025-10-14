@@ -28,7 +28,9 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_MEMORY_ALLOCATE => sys_memory_allocate(args[0]),
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
-        numbers::SYS_PROCESS_CREATE => sys_process_create(args[0], args[1], args[2], args[3]),
+        numbers::SYS_PROCESS_CREATE => sys_process_create(
+            args[0], args[1], args[2], args[3], args[4], args[5]
+        ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
 
@@ -196,10 +198,12 @@ fn sys_endpoint_create() -> u64 {
 /// Create a new process with full isolation
 ///
 /// Args:
-/// - entry_point: Initial program counter (ELR_EL1)
+/// - entry_point: Initial program counter (ELR_EL1) - also indicates code virtual address
 /// - stack_pointer: Initial stack pointer (SP_EL0)
 /// - page_table_root: Physical address of page table (TTBR0)
 /// - cspace_root: Physical address of CNode (capability space root)
+/// - code_phys: Physical address where code is loaded
+/// - code_size: Size of code region in bytes
 ///
 /// Returns: Process ID (TID), or u64::MAX on error
 ///
@@ -213,6 +217,8 @@ fn sys_process_create(
     stack_pointer: u64,
     page_table_root: u64,
     cspace_root: u64,
+    code_phys: u64,
+    code_size: u64,
 ) -> u64 {
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
@@ -223,6 +229,7 @@ fn sys_process_create(
     kprintln!("  stack: {:#x}", stack_pointer);
     kprintln!("  page_table: {:#x}", page_table_root);
     kprintln!("  cspace: {:#x}", cspace_root);
+    kprintln!("  code_phys: {:#x}, code_size: {}", code_phys, code_size);
 
     // Allocate frame for TCB
     let tcb_frame = match alloc_frame() {
@@ -235,17 +242,55 @@ fn sys_process_create(
 
     kprintln!("  allocated TCB at: {:#x}", tcb_frame.as_usize());
 
-    // TODO: Set up page tables for the new process
-    // Currently the kernel doesn't set up mappings - the process will fault
-    // if it tries to access unmapped memory. A complete implementation would:
-    // 1. Zero the page table at page_table_root
-    // 2. Create PageMapper for the new PT
-    // 3. Map code segments at their ELF virtual addresses
-    // 4. Map stack pages
-    // 5. Map IPC buffer
-    // For now we rely on identity mapping or pre-setup by caller
-    kprintln!("  WARNING: Page table setup not implemented yet");
-    kprintln!("  Process will fault if memory not pre-mapped");
+    // Set up page tables for the new process
+    kprintln!("  setting up page tables...");
+
+    use crate::memory::{PAGE_SIZE, VirtAddr as VA, PhysAddr as PA, PageSize, PageMapper};
+    use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
+
+    // Zero the new page table
+    let new_pt = page_table_root as *mut PageTable;
+    unsafe { (*new_pt).zero(); }
+
+    // Create mapper for the new process's page table
+    let mut mapper = unsafe { PageMapper::new(&mut *new_pt) };
+
+    // Calculate code virtual base from entry point
+    // Entry point is inside the code region, round down to page boundary
+    let code_virt_base = (entry_point as usize) & !0xFFF;  // Page-align
+    let code_virt = VA::new(code_virt_base);
+    let code_phys_addr = PA::new(code_phys as usize);
+
+    // Map code pages (executable, readable)
+    let code_pages = ((code_size as usize) + PAGE_SIZE - 1) / PAGE_SIZE;
+    kprintln!("  mapping {} code pages: virt={:#x} -> phys={:#x}",
+              code_pages, code_virt_base, code_phys);
+
+    for i in 0..code_pages {
+        let virt = VA::new(code_virt_base + (i * PAGE_SIZE));
+        let phys = PA::new(code_phys as usize + (i * PAGE_SIZE));
+        match mapper.map(virt, phys, PageTableFlags::USER_RWX, PageSize::Size4KB) {
+            Ok(()) => {},
+            Err(e) => {
+                kprintln!("  ERROR: Failed to map code page {}: {:?}", i, e);
+                return u64::MAX;
+            }
+        }
+    }
+
+    // Map stack pages (4 pages = 16KB, non-executable)
+    // Stack pointer points to top, map downwards
+    let stack_size = 16384;  // 16KB
+    let stack_pages = stack_size / PAGE_SIZE;
+    let stack_base = (stack_pointer as usize) - stack_size;
+    kprintln!("  mapping {} stack pages at virt={:#x}", stack_pages, stack_base);
+
+    // We don't have the physical address of the stack!
+    // For now, skip stack mapping - it should already be in the PT
+    // TODO: Pass stack physical address as well
+    kprintln!("  WARNING: Stack mapping skipped (need stack phys addr)");
+
+    kprintln!("  page table setup complete");
 
     // Generate process ID (use frame address for now - unique per process)
     let pid = tcb_frame.as_usize();

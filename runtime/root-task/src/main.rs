@@ -129,6 +129,8 @@ unsafe fn sys_process_create(
     stack_pointer: usize,
     page_table_root: usize,
     cspace_root: usize,
+    code_phys: usize,
+    code_size: usize,
 ) -> usize {
     let result: usize;
     core::arch::asm!(
@@ -137,6 +139,8 @@ unsafe fn sys_process_create(
         "mov x1, {stack}",
         "mov x2, {pt}",
         "mov x3, {cspace}",
+        "mov x4, {code_phys}",
+        "mov x5, {code_size}",
         "svc #0",
         "mov {result}, x0",
         syscall_num = in(reg) SYS_PROCESS_CREATE,
@@ -144,12 +148,16 @@ unsafe fn sys_process_create(
         stack = in(reg) stack_pointer,
         pt = in(reg) page_table_root,
         cspace = in(reg) cspace_root,
+        code_phys = in(reg) code_phys,
+        code_size = in(reg) code_size,
         result = out(reg) result,
         out("x8") _,
         out("x0") _,
         out("x1") _,
         out("x2") _,
         out("x3") _,
+        out("x4") _,
+        out("x5") _,
     );
     result
 }
@@ -477,6 +485,8 @@ pub extern "C" fn _start() -> ! {
             stack_top,
             pt_root,
             cspace_root,
+            process_mem,  // Physical address of loaded code
+            process_size,  // Size of code region
         );
 
         if pid == usize::MAX {
