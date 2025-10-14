@@ -33,7 +33,7 @@ The KaaL microkernel is built from scratch in Rust, implementing capability-base
 | [Chapter 4](#chapter-4) | Kernel Object Model | 4-5 weeks | ✅ Complete |
 | [Chapter 5](#chapter-5) | IPC & Message Passing | 3-4 weeks | ✅ Complete* |
 | [Chapter 6](#chapter-6) | Scheduling & Context Switching | 3-4 weeks | ✅ Complete |
-| [Chapter 7](#chapter-7) | Root Task & Boot Protocol | 2-3 weeks | 📋 Planned |
+| [Chapter 7](#chapter-7) | Root Task & Boot Protocol | 2-3 weeks | ✅ Complete |
 | [Chapter 8](#chapter-8) | Verification & Hardening | 4-6 weeks | 📋 Planned |
 | [Chapter 9](#chapter-9) | Framework Integration & Runtime Services | 6-8 weeks | 📋 Planned |
 
