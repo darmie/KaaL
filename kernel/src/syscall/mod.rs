@@ -318,15 +318,13 @@ fn sys_process_create(
         // Set state to Runnable
         (*tcb_ptr).set_state(crate::objects::ThreadState::Runnable);
 
-        // Add to scheduler (if initialized)
-        // TODO: Scheduler is not initialized during boot yet
-        // For now we create the process but don't schedule it
-        // scheduler::enqueue(tcb_ptr);
-        kprintln!("  WARNING: Scheduler not initialized, skipping enqueue");
+        // Add to scheduler
+        // Note: scheduler::enqueue handles uninitialized scheduler gracefully
+        scheduler::enqueue(tcb_ptr);
     }
 
     kprintln!("[syscall] process_create -> PID {:#x}", pid);
-    kprintln!("[syscall] process_create: TCB created, state=Runnable");
+    kprintln!("[syscall] process_create: TCB created and enqueued");
     pid as u64
 }
 

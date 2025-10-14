@@ -133,12 +133,21 @@ pub unsafe fn test_set_current_thread(tcb: *mut TCB) {
 ///
 /// # Safety
 ///
-/// - Scheduler must be initialized
 /// - tcb must be valid
 /// - Thread must not already be in a queue
+///
+/// # Note
+///
+/// If scheduler is not initialized, this is a no-op. This allows early
+/// boot code to create processes before scheduler init.
 pub unsafe fn enqueue(tcb: *mut TCB) {
     if tcb.is_null() {
         return;
+    }
+
+    // Check if scheduler is initialized
+    if SCHEDULER.is_none() {
+        return; // Silently skip if not initialized
     }
 
     scheduler().enqueue(tcb);
