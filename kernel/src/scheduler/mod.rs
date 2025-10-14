@@ -206,12 +206,14 @@ pub unsafe fn yield_current() {
     next_tcb.set_state(crate::objects::ThreadState::Running);
     set_current_thread(next);
 
-    // TODO (Phase 4): Actual context switch
-    // For now, just update the current pointer
-    // Real implementation will call switch_context(current, next)
-
     crate::kprintln!("[sched] Yielding from TCB {} to TCB {}",
                      current_tcb.tid(), next_tcb.tid());
+
+    // Perform context switch (assembly)
+    // This saves current thread's registers and restores next thread's registers
+    crate::arch::aarch64::context_switch::switch_context(current, next);
+
+    // Note: Execution continues here AFTER another thread yields back to us
 }
 
 /// Block the current thread
@@ -247,9 +249,13 @@ pub unsafe fn block_current() {
     next_tcb.set_state(crate::objects::ThreadState::Running);
     set_current_thread(next);
 
-    // TODO (Phase 4): Actual context switch
     crate::kprintln!("[sched] Blocking TCB {}, switching to TCB {}",
                      (*current).tid(), next_tcb.tid());
+
+    // Perform context switch (assembly)
+    crate::arch::aarch64::context_switch::switch_context(current, next);
+
+    // Note: Execution continues here AFTER we're unblocked and scheduled again
 }
 
 /// Unblock a thread and make it runnable
