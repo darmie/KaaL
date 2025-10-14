@@ -17,9 +17,6 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
     let syscall_num = tf.syscall_number();
     let args = tf.syscall_args();
 
-    kprintln!("[syscall] Syscall {} with args: [{:#x}, {:#x}, {:#x}, {:#x}, {:#x}, {:#x}]",
-        syscall_num, args[0], args[1], args[2], args[3], args[4], args[5]);
-
     // Dispatch based on syscall number
     let result = match syscall_num {
         numbers::SYS_DEBUG_PUTCHAR => sys_debug_putchar(args[0]),

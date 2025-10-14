@@ -150,15 +150,15 @@ pub fn kernel_entry() -> ! {
         // Map necessary memory regions for kernel operation
         use crate::arch::aarch64::page_table::PageTableFlags;
 
-        // 1. Map DTB region (at RAM start)
+        // 1. Map DTB + elfloader + root task region (everything before kernel)
         crate::kprintln!("  Mapping DTB: {:#x} - {:#x}",
             info.memory_start,
-            info.memory_start + 0x200000  // DTB + elfloader region (2MB)
+            kernel_start
         );
         crate::memory::paging::identity_map_region(
             &mut mapper,
             info.memory_start,
-            0x200000,
+            kernel_start - info.memory_start,
             PageTableFlags::KERNEL_DATA,
         ).expect("Failed to map DTB region");
 
@@ -282,20 +282,16 @@ pub fn kernel_entry() -> ! {
     crate::kprintln!("");
 
     unsafe {
-        // Verify root task boot info
-        match root_task::verify_root_task_boot_info() {
+        // Create and start root task in EL0
+        match root_task::create_and_start_root_task() {
             Ok(()) => {
-                crate::kprintln!("");
-                crate::kprintln!("═══════════════════════════════════════════════════════════");
-                crate::kprintln!("  Chapter 7: COMPLETE ✓");
-                crate::kprintln!("═══════════════════════════════════════════════════════════");
-                crate::kprintln!("");
-                crate::kprintln!("Note: Full root task creation with EL0 transition deferred");
-                crate::kprintln!("      to follow-up work (requires PageMapper API updates)");
+                // Should never reach here - transitioned to EL0
+                crate::kprintln!("[ERROR] Unexpected return from EL0 transition");
+                panic!("Root task creation failed: unexpected return");
             }
             Err(e) => {
-                crate::kprintln!("[ERROR] Failed to verify boot info: {:?}", e);
-                panic!("Boot info verification failed");
+                crate::kprintln!("[ERROR] Failed to create root task: {:?}", e);
+                panic!("Root task creation failed");
             }
         };
     }

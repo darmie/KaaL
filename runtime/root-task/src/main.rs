@@ -58,8 +58,18 @@ unsafe fn sys_print(msg: &str) {
 /// 6. Root task enters idle loop
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    // Print hello message from userspace
+    // Print ASCII art banner and welcome message from userspace
     unsafe {
+        sys_print("\n");
+        sys_print("    $$╲   $$╲                    $$╲       \n");
+        sys_print("    $$ │ $$  │                   $$ │      \n");
+        sys_print("    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      \n");
+        sys_print("    $$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │      \n");
+        sys_print("    $$  $$<   $$$$$$$ │ $$$$$$$ │$$ │      \n");
+        sys_print("    $$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │      \n");
+        sys_print("    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ \n");
+        sys_print("    ╲__│  ╲__│╲_______│ ╲_______│╲________│\n");
+        sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("  KaaL Root Task (EL0) v0.1.0\n");
         sys_print("  Chapter 7: Root Task & Boot Protocol\n");
