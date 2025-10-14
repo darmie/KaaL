@@ -1,0 +1,23 @@
+[package]
+name = "kaal-capability-broker"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Contributors"]
+description = "Capability broker runtime service for KaaL Framework"
+license = "MIT"
+
+[lib]
+name = "capability_broker"
+path = "src/lib.rs"
+
+[dependencies]
+# No dependencies for now - we'll add kaal-syscalls later
+
+[features]
+default = []
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary

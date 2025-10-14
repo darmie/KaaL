@@ -1,27 +1,27 @@
 [workspace]
 members = [
-    "runtime/cap_broker",
-    "runtime/ipc",
-    "runtime/allocator",
-    "runtime/dddk",
-    "runtime/dddk-runtime",
-    "runtime/sel4-platform",
-    "runtime/sel4-mock",
-    "runtime/sel4-rust-mock",
-    "components/vfs",
-    "components/posix",
-    "components/network",
-    "components/drivers",
-    "tools/kaal-compose",
+    # Chapter 9: Runtime Services (native Rust microkernel)
+    "runtime/capability-broker",
+    "runtime/memory-manager",
 ]
-# Exclude rust-sel4 submodule - it has platform-specific code (x86 asm) that fails on macOS ARM
-# We only use specific crates from it via [workspace.dependencies]
-# Exclude elfloader - it's a standalone bootloader with different target (aarch64-unknown-none)
-# Exclude elfloader-builder - it's a host tool, not part of target build
-# Exclude bootable-demo - it's a standalone bootable example with different target
-# Exclude kernel - it's a standalone pure Rust microkernel with different target and no seL4 dependencies
-# Exclude root-task - it's a standalone userspace binary with different target (aarch64-unknown-none)
-exclude = ["external/rust-sel4", "runtime/elfloader", "runtime/elfloader-builder", "runtime/root-task", "examples/bootable-demo", "kernel", "examples/kernel-test"]
+
+# Exclude standalone crates with different build targets
+exclude = [
+    # Bootloaders and kernel (aarch64-unknown-none target)
+    "runtime/elfloader",
+    "runtime/elfloader-builder",
+    "runtime/root-task",
+    "kernel",
+
+    # Examples (different targets)
+    "examples/bootable-demo",
+    "examples/kernel-test",
+
+    # Archived seL4 integration (reference only)
+    "archive/sel4-integration",
+    "external/rust-sel4",
+]
+
 resolver = "2"
 
 [workspace.package]
@@ -30,54 +30,12 @@ edition = "2021"
 authors = ["Damilare Darmie Akinlaja"]
 license = "MIT"
 repository = "https://github.com/darmie/kaal"
-description = "KaaL Framework: A Rust microkernel framework for ARM64 with seL4-inspired design"
-keywords = ["microkernel", "operating-system", "arm64", "embedded", "seL4"]
+description = "KaaL Framework: Native Rust ARM64 microkernel and runtime services"
+keywords = ["microkernel", "operating-system", "arm64", "embedded", "capability"]
 categories = ["embedded", "no-std", "os"]
 
 [workspace.dependencies]
-# seL4 Dual-Mode Integration:
-# - Mode 1 (Default): Mock bindings for development/testing on all platforms
-# - Mode 2 (Production): Direct Rust seL4 runtime with full syscalls
-#
-# Switch modes with features:
-# - cargo build                                    # Mock mode (default for dev/test)
-# - cargo build --no-default-features --features runtime  # Real seL4 runtime
-#
-# Real seL4 bindings from rust-sel4 project
-sel4 = { path = "external/rust-sel4/crates/sel4", default-features = false }
-sel4-sys = { path = "external/rust-sel4/crates/sel4/sys" }
-sel4-config = { path = "external/rust-sel4/crates/sel4/config" }
-sel4-logging = { path = "external/rust-sel4/crates/sel4-logging" }
-sel4-shared-ring-buffer = { path = "external/rust-sel4/crates/sel4-shared-ring-buffer" }
-
-# Mock bindings (for testing only - renamed to avoid conflicts)
-sel4-mock-sys = { path = "runtime/sel4-mock" }
-sel4-mock = { path = "runtime/sel4-rust-mock" }
-
-# Common dependencies
-thiserror = "2.0.17"
-log = "0.4"
-bitflags = "2.4"
-static_assertions = "1.1"
-
-# Async/concurrency
-crossbeam = "0.8"
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-bincode = "1.3"
-
-# Testing
-criterion = "0.7.0"
-
-[workspace.metadata.sel4]
-# Dual-mode configuration metadata
-# Features are managed by individual crates via sel4-platform
-modes = ["runtime", "mock"]
-default-mode = "microkit"
-
-# Note: Workspace manifests cannot have [features]
-# Individual crates use sel4-platform with features: mock, microkit, runtime
+# No dependencies yet - will add as needed
 
 [profile.dev]
 opt-level = 0

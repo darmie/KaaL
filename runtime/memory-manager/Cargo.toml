@@ -1,0 +1,24 @@
+[package]
+name = "kaal-memory-manager"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Contributors"]
+description = "Memory manager runtime service for KaaL Framework"
+license = "MIT"
+
+[lib]
+name = "memory_manager"
+path = "src/lib.rs"
+
+[dependencies]
+# Add kaal-capability-broker for types
+capability-broker = { path = "../capability-broker", package = "kaal-capability-broker" }
+
+[features]
+default = []
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary
