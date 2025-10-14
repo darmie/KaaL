@@ -312,6 +312,29 @@ impl TCB {
             self.state = ThreadState::Runnable;
         }
     }
+
+    /// Set the entry point (program counter) for userspace execution
+    ///
+    /// This sets ELR_EL1 which will be used as the return address when
+    /// performing an exception return to EL0.
+    pub fn set_entry_point(&mut self, entry: usize) {
+        self.context.elr_el1 = entry as u64;
+    }
+
+    /// Set the stack pointer for userspace execution
+    ///
+    /// This sets SP_EL0 which is the stack pointer used when running at EL0.
+    pub fn set_stack_pointer(&mut self, sp: usize) {
+        self.context.sp_el0 = sp as u64;
+    }
+
+    /// Set the page table (VSpace root) for this thread
+    ///
+    /// This physical address will be loaded into TTBR0_EL1 when switching
+    /// to this thread, defining its virtual address space.
+    pub fn set_page_table(&mut self, page_table: usize) {
+        self.vspace_root = page_table;
+    }
 }
 
 impl core::fmt::Debug for TCB {

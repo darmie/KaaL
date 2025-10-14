@@ -291,7 +291,7 @@ pub fn kernel_entry() -> ! {
                 crate::kprintln!("═══════════════════════════════════════════════════════════");
                 crate::kprintln!("");
                 crate::kprintln!("Note: Full root task creation with EL0 transition deferred");
-                crate::kprintln!("      to Chapter 8 (User/Kernel Memory Isolation)");
+                crate::kprintln!("      to follow-up work (requires PageMapper API updates)");
             }
             Err(e) => {
                 crate::kprintln!("[ERROR] Failed to verify boot info: {:?}", e);

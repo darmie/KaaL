@@ -3,9 +3,8 @@
 //! For Chapter 7, we verify that boot information is correctly passed
 //! from elfloader to kernel and stored globally.
 //!
-//! Full root task creation with EL0 transition is deferred to Chapter 8
-//! (User/Kernel Memory Isolation) as it requires proper user address space
-//! management and additional TCB infrastructure.
+//! Full root task creation with EL0 transition is deferred to a follow-up
+//! as it requires additional infrastructure (PageMapper API fixes, etc.).
 
 use crate::boot::bootinfo;
 
