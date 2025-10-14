@@ -2,429 +2,591 @@
 
 ## Overview
 
-This guide explains how to compose a complete KaaL system by integrating the Capability Broker, Component Spawner, and device drivers. It demonstrates the complete workflow from bootinfo parsing to running multi-component systems.
+This guide explains how to compose a complete KaaL-based operating system by combining the native Rust microkernel with userspace components and services. It demonstrates the architecture, workflow, and patterns for building composable systems.
 
 ## Architecture Layers
 
 ```
-┌──────────────────────────────────────────────────┐
-│            Root Task (System Manager)            │
-│  • Bootinfo parsing                             │
-│  • Capability Broker init                       │
-│  • Component spawning                           │
-└────────────┬─────────────────────────────────────┘
-             │
-   ┌─────────┴──────────┬───────────────┬──────────┐
-   │                    │               │          │
-┌──▼────┐         ┌─────▼──────┐  ┌────▼─────┐  ┌─▼──────┐
-│Serial │         │  Network   │  │ Storage  │  │  More  │
-│Driver │         │   Driver   │  │ Driver   │  │Drivers │
-└───────┘         └────────────┘  └──────────┘  └────────┘
-    │                    │              │
-    └────────────────────┴──────────────┴─────────────┐
-                                                       │
-                                                  ┌────▼────┐
-                                                  │  IPC    │
-                                                  │ Layer   │
-                                                  └─────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Applications & Services                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   VFS    │  │ Network  │  │ Process  │  │   App    │   │
+│  │ Service  │  │  Stack   │  │ Manager  │  │          │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└────────┬──────────────┬──────────────┬──────────────┬──────┘
+         │              │              │              │
+         └──────────────┴──────────────┴──────────────┘
+                              │
+                    IPC (Message Passing)
+                              │
+┌─────────────────────────────▼───────────────────────────────┐
+│                    Runtime Services (EL0)                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Serial  │  │  Timer   │  │  Block   │  │ Network  │   │
+│  │  Driver  │  │  Driver  │  │  Driver  │  │  Driver  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└────────┬──────────────┬──────────────┬──────────────┬──────┘
+         │              │              │              │
+         └──────────────┴──────────────┴──────────────┘
+                              │
+                        System Calls
+                              │
+┌─────────────────────────────▼───────────────────────────────┐
+│              KaaL Microkernel (Native Rust, EL1)            │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Core Mechanisms:                                   │   │
+│  │  • Memory Management (MMU, Page Tables)             │   │
+│  │  • Thread Control Blocks (TCBs)                     │   │
+│  │  • IPC (Endpoints, Notifications)                   │   │
+│  │  • Capability System                                │   │
+│  │  • Exception Handling                               │   │
+│  │  • Scheduling                                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────▼───────────────────────────────┐
+│                        Hardware (ARM64)                      │
+│  • CPU (Exception Levels: EL0, EL1, EL2, EL3)              │
+│  • MMU (Memory Management Unit)                             │
+│  • GIC (Generic Interrupt Controller)                       │
+│  • Devices (UART, Timer, Storage, Network)                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Complete System Composition Workflow
+## Component Architecture
 
-### Step 1: System Initialization
+### Kernel Layer (EL1)
 
-The root task starts by parsing bootinfo from the seL4 kernel and initializing the Capability Broker:
+The KaaL microkernel provides **core mechanisms only**:
 
-```rust
-use cap_broker::{BootInfo, DefaultCapBroker};
+- **Memory Management**: Page tables, address spaces, frame allocation
+- **Thread Management**: TCBs, scheduling, context switching
+- **IPC**: Synchronous message passing, endpoints, notifications
+- **Capabilities**: Fine-grained access control, delegation
+- **Exception Handling**: System calls, interrupts, faults
 
-unsafe {
-    // Parse bootinfo from seL4 kernel
-    let bootinfo = BootInfo::get().expect("Failed to get bootinfo");
+**What the kernel does NOT do:**
+- File systems (done in userspace)
+- Network protocols (done in userspace)
+- Device drivers (done in userspace)
+- Policy decisions (done in userspace)
 
-    // Key bootinfo fields:
-    // - cspace_root: CSpace root capability (slot 1)
-    // - vspace_root: VSpace root capability (slot 2)
-    // - tcb: Initial TCB (slot 3)
-    // - irq_control: IRQ control capability (slot 4)
-    // - empty: Available capability slot range (e.g., 100-4096)
-    // - untyped: Available untyped memory regions
+This keeps the kernel small, secure, and verifiable.
 
-    // Initialize capability broker
-    let mut broker = DefaultCapBroker::init()
-        .expect("Failed to initialize broker");
-}
-```
+### Runtime Services Layer (EL0)
 
-**What Happens:**
-1. Bootinfo is read from seL4 kernel memory
-2. Critical capability slots are extracted (CSpace root, VSpace root, TCB, IRQ control)
-3. CSpace allocator is initialized with empty slot range
-4. Untyped memory regions are registered
-5. Device database is prepared for allocation
-
-### Step 2: Component Spawner Setup
-
-Create a ComponentSpawner to manage isolated execution contexts:
+Components running in userspace that provide OS services:
 
 ```rust
-use cap_broker::ComponentSpawner;
-
-let mut spawner = ComponentSpawner::new(
-    bootinfo.cspace_root,  // CSpace root capability
-    bootinfo.vspace_root,  // VSpace root capability
-    0x4000_0000,           // VSpace base address (1GB)
-    512 * 1024 * 1024,     // VSpace size (512MB)
-);
-```
-
-**What Happens:**
-1. ComponentSpawner is initialized with CSpace and VSpace roots
-2. Virtual address space region is reserved for components
-3. TCB and VSpace managers are created internally
-4. Component tracking structures are initialized
-
-### Step 3: Spawn Components with Devices
-
-Spawn driver components with automatic device resource allocation:
-
-```rust
-use cap_broker::{ComponentConfig, DeviceId, DEFAULT_STACK_SIZE};
-
-// Capability slot allocator
-let mut next_slot = bootinfo.empty.start;
-let mut slot_allocator = || {
-    let slot = next_slot;
-    next_slot += 1;
-    Ok(slot)
-};
-
-// Serial driver configuration
-let serial_config = ComponentConfig {
+Component {
     name: "serial_driver",
-    entry_point: 0x400000,        // Driver entry function
-    stack_size: DEFAULT_STACK_SIZE, // 64KB stack
-    priority: 200,                 // High priority
-    device: Some(DeviceId::Serial { port: 0 }),
-    fault_ep: None,
-};
-
-// Spawn component with device
-let serial_component = spawner.spawn_component_with_device(
-    serial_config,
-    &mut slot_allocator,
-    10, // untyped_cap for memory allocation
-    &mut broker,
-).expect("Failed to spawn serial driver");
-```
-
-**What Happens:**
-1. Component configuration specifies requirements (stack, priority, device)
-2. `spawn_component_with_device()` orchestrates:
-   - Allocates capability slots (TCB, VSpace, endpoint, notification, frames)
-   - Creates TCB for the component
-   - Allocates virtual address space for stack and IPC buffer
-   - Maps stack frames into VSpace
-   - Creates IPC endpoints and notification
-   - **Requests device bundle from broker** (MMIO + IRQ + DMA)
-   - Configures TCB with entry point, stack pointer, registers
-   - Returns Component handle
-
-3. Device bundle includes:
-   - MMIO regions (memory-mapped device registers)
-   - IRQ handler (interrupt capability + notification)
-   - DMA pool (for device DMA operations)
-
-### Step 4: Spawn Software-Only Components
-
-Not all components need hardware devices:
-
-```rust
-let fs_config = ComponentConfig {
-    name: "filesystem",
-    entry_point: 0x600000,
-    stack_size: 256 * 1024,  // 256KB stack
-    priority: 100,            // Lower priority
-    device: None,             // No hardware device
-    fault_ep: None,
-};
-
-let fs_component = spawner.spawn_component(
-    fs_config,
-    &mut slot_allocator,
-    12, // untyped_cap
-).expect("Failed to spawn filesystem");
-```
-
-**What Happens:**
-1. Similar to device-backed components, but without device allocation
-2. Component gets TCB, VSpace, stack, and IPC endpoints
-3. No MMIO/IRQ/DMA resources allocated
-4. Useful for pure software services (VFS, network stack, etc.)
-
-### Step 5: Start Components
-
-Resume TCBs to start component execution:
-
-```rust
-spawner.start_component(&serial_component)
-    .expect("Failed to start serial driver");
-
-spawner.start_component(&fs_component)
-    .expect("Failed to start filesystem");
-```
-
-**What Happens:**
-1. TCB is resumed using `seL4_TCB_Resume()`
-2. Component begins executing at configured entry point
-3. Registers are set (PC, SP, etc.) - architecture-specific (x86_64/aarch64)
-4. Component can now:
-   - Access MMIO regions (for drivers)
-   - Wait for IRQs on notification
-   - Send/receive IPC on endpoints
-
-### Step 6: System Status
-
-Query system state:
-
-```rust
-println!("Total components: {}", spawner.component_count());
-println!("Running: {}", spawner.running_component_count());
-println!("Slots used: {}", next_slot - bootinfo.empty.start);
-```
-
-## Component Lifecycle
-
-```
-┌─────────────┐
-│   Created   │  ← spawn_component() / spawn_component_with_device()
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Configured │  ← TCB configured, resources allocated
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   Running   │  ← start_component() (TCB resumed)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Suspended  │  ← stop_component() (TCB suspended)
-└─────────────┘
-```
-
-## Device Resource Allocation
-
-When `device: Some(DeviceId)` is specified:
-
-1. **Device Identification:**
-   ```rust
-   DeviceId::Serial { port: 0 }
-   DeviceId::Pci { vendor: 0x8086, device: 0x100E }
-   DeviceId::Platform { name: "uart0" }
-   ```
-
-2. **Resource Allocation:**
-   - **MMIO**: Physical device registers mapped to virtual address space
-   - **IRQ**: Interrupt handler capability bound to notification
-   - **DMA**: DMA buffer pool allocated from untyped memory
-
-3. **Device Bundle:**
-   ```rust
-   pub struct DeviceBundle {
-       pub mmio_regions: Vec<MappedRegion>,
-       pub irq: IrqHandlerImpl,
-       pub dma_pool: DmaPool,
-   }
-   ```
-
-## Example: Complete System
-
-See [`examples/system-composition/src/main.rs`](../examples/system-composition/src/main.rs) for a complete working example that demonstrates:
-
-- ✅ Bootinfo parsing
-- ✅ Capability Broker initialization
-- ✅ Serial driver with device resources
-- ✅ Network driver with PCI device
-- ✅ Filesystem (software-only component)
-- ✅ Starting all components
-- ✅ System status monitoring
-
-**Run it:**
-```bash
-cargo run --bin system-composition
-```
-
-**Expected Output:**
-```
-🚀 STEP 1: System Initialization
-  ✓ Parsed bootinfo from seL4 kernel
-  ✓ Initialized Capability Broker
-
-🏗️  STEP 2: Component Spawner Setup
-  ✓ Created ComponentSpawner
-
-📡 STEP 3: Spawn Serial Driver Component
-  ✓ Spawned serial driver component
-    • Device resources allocated: MMIO, IRQ, DMA
-
-🌐 STEP 4: Spawn Network Driver Component
-  ✓ Spawned network driver component
-
-💾 STEP 5: Spawn Filesystem Component
-  ✓ Spawned filesystem component (no device)
-
-▶️  STEP 6: Start Components
-  ✓ Started all components
-
-📊 STEP 7: System Status
-  Total components: 3
-  Running components: 3
-```
-
-## Architecture-Specific Notes
-
-### x86_64 TCB Configuration
-```rust
-// PC = RIP, SP = RSP
-regs.rip = entry_point;
-regs.rsp = stack_pointer;
-regs.rflags = 0x200; // IF (interrupt enable)
-```
-
-### aarch64 TCB Configuration
-```rust
-// PC, SP, processor state
-regs.pc = entry_point;
-regs.sp = stack_pointer;
-regs.spsr = 0x0; // EL0t (user mode), interrupts enabled
-```
-
-**Both architectures fully supported!** Tested on Mac Silicon (aarch64).
-
-## Integration Points
-
-### With DDDK (Device Driver Development Kit)
-
-Drivers using DDDK macros can request resources:
-
-```rust
-#[derive(Driver)]
-#[pci(vendor = 0x8086, device = 0x100E)]
-#[resources(mmio = "bar0", irq = "auto", dma = "4MB")]
-pub struct E1000Driver {
-    #[mmio]
-    regs: &'static mut E1000Registers,
-
-    #[dma_ring(size = 256)]
-    rx_ring: DmaRing<RxDescriptor>,
+    privileges: Minimal,        // Only what's needed
+    address_space: Isolated,    // Can't access other components
+    capabilities: [
+        MemoryMap(0x09000000),  // UART MMIO region
+        Interrupt(IRQ_UART),    // UART interrupt
+        IpcEndpoint(serial_ep), // IPC with other components
+    ],
 }
 ```
 
-The DDDK probe function calls `broker.request_device()` to get resources automatically.
+Each component:
+- Runs in its own address space (isolation)
+- Has only the capabilities it needs (least privilege)
+- Communicates via IPC (no shared memory by default)
+- Can crash without affecting others (fault isolation)
 
-### With IPC Layer
+### Application Layer (EL0)
 
-Components communicate via endpoints and notifications:
+User applications and high-level services:
 
 ```rust
-// Component A sends to Component B
-let message = MyMessage { data: 42 };
-ipc_send(component_b.endpoint(), &message)?;
-
-// Component B receives
-let message: MyMessage = ipc_recv()?;
+Component {
+    name: "web_server",
+    capabilities: [
+        IpcEndpoint(network_ep),  // Talk to network driver
+        IpcEndpoint(fs_ep),       // Talk to filesystem
+    ],
+}
 ```
 
-Shared memory IPC provides <1μs latency for bulk transfers.
+Applications have even fewer privileges than drivers:
+- No hardware access
+- No memory management
+- Only IPC to authorized services
 
-### With Real seL4
+## System Composition Workflow
 
-When switching from mocks to real seL4 (see [`SEL4_INTEGRATION_ROADMAP.md`](SEL4_INTEGRATION_ROADMAP.md)):
+### Step 1: Boot Sequence
 
-1. Replace `sel4-sys` dependency with real seL4 bindings
-2. Build seL4 kernel image
-3. Link root task with kernel
-4. Boot in QEMU or hardware
+```
+1. Power On / Reset
+   ↓
+2. Elfloader (EL2)
+   • Loads kernel binary
+   • Loads root task binary
+   • Sets up initial page tables
+   • Jumps to kernel
+   ↓
+3. Kernel Initialization (EL1)
+   • Chapter 1: UART, device tree, early init
+   • Chapter 2: Frame allocator, MMU setup
+   • Chapter 3: Exception vectors, syscalls
+   • Chapter 7: Root task creation
+   ↓
+4. Transition to EL0
+   • Kernel calls ERET
+   • CPU drops to userspace
+   ↓
+5. Root Task Starts (EL0)
+   • First userspace program
+   • Spawns system components
+   • Configures system
+```
 
-**All code remains the same!** The `#[cfg(feature = "sel4-real")]` guards handle the switch.
+### Step 2: Root Task Initialization
+
+The root task is the first userspace program. It bootstraps the system:
+
+```rust
+// runtime/root-task/src/main.rs
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    // 1. Initialize root task environment
+    init_heap();
+    init_logging();
+
+    // 2. Parse kernel boot info
+    let boot_info = parse_kernel_bootinfo();
+
+    // 3. Spawn system components
+    spawn_serial_driver(boot_info);
+    spawn_timer_driver(boot_info);
+    spawn_block_driver(boot_info);
+
+    // 4. Spawn system services
+    spawn_filesystem_service();
+    spawn_network_stack();
+    spawn_process_manager();
+
+    // 5. Enter event loop
+    root_task_event_loop();
+}
+```
+
+### Step 3: Component Spawning
+
+Each component is created by the root task:
+
+```rust
+fn spawn_serial_driver(boot_info: &BootInfo) {
+    // 1. Allocate resources
+    let tcb = create_tcb(
+        priority: 200,      // High priority for drivers
+        affinity: Core0,    // Pin to core 0
+    );
+
+    let address_space = create_address_space(
+        size: 4MB,          // Small address space
+    );
+
+    let stack = allocate_stack(
+        size: 64KB,         // Driver stack
+    );
+
+    // 2. Grant capabilities
+    let caps = [
+        // Hardware access
+        Capability::MemoryMap {
+            physical: 0x09000000,  // UART base address
+            size: 4096,            // One page
+            permissions: ReadWrite,
+        },
+        Capability::Interrupt {
+            irq: IRQ_UART,
+        },
+
+        // IPC endpoints
+        Capability::Endpoint {
+            id: serial_ep,
+            rights: SendRecv,
+        },
+    ];
+
+    // 3. Load component binary
+    load_elf_binary(
+        path: "serial_driver.elf",
+        address_space: address_space,
+    );
+
+    // 4. Configure TCB
+    configure_tcb(tcb, {
+        entry_point: 0x1000,      // From ELF
+        stack_pointer: stack_top,
+        capabilities: caps,
+    });
+
+    // 5. Start component
+    syscall::tcb_resume(tcb);
+}
+```
+
+### Step 4: IPC Communication
+
+Components communicate via message passing:
+
+```rust
+// Application wants to print to serial
+
+// Send message to serial driver
+let message = SerialMessage {
+    command: Write,
+    data: b"Hello, World!\n",
+};
+
+syscall::ipc_send(serial_ep, &message)?;
+
+// Serial driver receives
+let message: SerialMessage = syscall::ipc_recv()?;
+match message.command {
+    Write => {
+        // Write to UART hardware
+        uart_write(message.data);
+
+        // Send reply
+        syscall::ipc_reply(Ok(()));
+    }
+}
+```
+
+**IPC Properties:**
+- Synchronous (blocking until reply)
+- Type-safe (Rust types)
+- Fast (<1μs for small messages)
+- Secure (capability-protected)
+
+## Component Patterns
+
+### Pattern 1: Device Driver
+
+```rust
+// Minimal driver structure
+pub struct SerialDriver {
+    uart_base: *mut u8,          // MMIO base
+    irq_notification: Notification,  // IRQ signaling
+    tx_buffer: RingBuffer,       // Transmit queue
+    rx_buffer: RingBuffer,       // Receive queue
+}
+
+impl SerialDriver {
+    pub fn init() -> Self {
+        // Map MMIO region
+        let uart_base = map_device(UART_BASE, 4096);
+
+        // Register IRQ handler
+        let irq_notification = register_irq(IRQ_UART);
+
+        Self {
+            uart_base,
+            irq_notification,
+            tx_buffer: RingBuffer::new(1024),
+            rx_buffer: RingBuffer::new(1024),
+        }
+    }
+
+    pub fn run(&mut self) -> ! {
+        loop {
+            // Wait for IPC or IRQ
+            let event = syscall::wait();
+
+            match event {
+                Event::IpcMessage(msg) => self.handle_request(msg),
+                Event::Interrupt => self.handle_irq(),
+            }
+        }
+    }
+
+    fn handle_request(&mut self, msg: SerialMessage) {
+        match msg.command {
+            Write => {
+                self.tx_buffer.push(msg.data);
+                self.start_transmission();
+            }
+        }
+    }
+
+    fn handle_irq(&mut self) {
+        // Read from hardware, push to rx_buffer
+        // Continue transmission from tx_buffer
+    }
+}
+```
+
+### Pattern 2: System Service
+
+```rust
+// Filesystem service (no hardware access)
+pub struct FilesystemService {
+    block_driver_ep: Endpoint,   // Talk to block driver
+    cache: PageCache,            // In-memory cache
+    mount_table: Vec<Mount>,     // Mounted filesystems
+}
+
+impl FilesystemService {
+    pub fn run(&mut self) -> ! {
+        loop {
+            // Wait for file operations
+            let request: FileRequest = syscall::ipc_recv()?;
+
+            let result = match request.op {
+                Open(path) => self.open(path),
+                Read(fd, buf) => self.read(fd, buf),
+                Write(fd, data) => self.write(fd, data),
+                Close(fd) => self.close(fd),
+            };
+
+            // Reply to caller
+            syscall::ipc_reply(result)?;
+        }
+    }
+
+    fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> Result<usize> {
+        // Check cache
+        if let Some(data) = self.cache.get(fd) {
+            return Ok(data.copy_to(buf));
+        }
+
+        // Cache miss - read from block driver via IPC
+        let block_request = BlockRequest::Read {
+            block: fd.block,
+            count: 1,
+        };
+
+        let data = syscall::ipc_call(self.block_driver_ep, block_request)?;
+
+        // Update cache
+        self.cache.insert(fd, data);
+
+        Ok(data.copy_to(buf))
+    }
+}
+```
+
+### Pattern 3: Application
+
+```rust
+// Web server application
+pub struct WebServer {
+    network_ep: Endpoint,        // Network stack
+    filesystem_ep: Endpoint,     // Filesystem
+    connections: Vec<Connection>,
+}
+
+impl WebServer {
+    pub fn run(&mut self) -> ! {
+        loop {
+            // Wait for network events
+            let event: NetworkEvent = syscall::ipc_recv()?;
+
+            match event {
+                NewConnection(conn) => {
+                    self.connections.push(conn);
+                }
+
+                DataReceived(conn, data) => {
+                    let request = parse_http_request(data)?;
+                    let response = self.handle_request(request)?;
+
+                    // Send response via network stack
+                    syscall::ipc_send(
+                        self.network_ep,
+                        NetworkRequest::Send(conn, response)
+                    )?;
+                }
+            }
+        }
+    }
+
+    fn handle_request(&self, req: HttpRequest) -> Result<HttpResponse> {
+        // Read file from filesystem
+        let file = syscall::ipc_call(
+            self.filesystem_ep,
+            FileRequest::Open(req.path)
+        )?;
+
+        let content = syscall::ipc_call(
+            self.filesystem_ep,
+            FileRequest::Read(file, 4096)
+        )?;
+
+        Ok(HttpResponse {
+            status: 200,
+            body: content,
+        })
+    }
+}
+```
+
+## Development Status
+
+### ✅ Currently Working
+
+- **Kernel boot** (Chapters 1-3, 7)
+- **Memory management** (frame allocator, page tables)
+- **Exception handling** (syscalls, traps)
+- **Userspace execution** (EL0 transition)
+
+**You can build:**
+- Boot to userspace
+- Make syscalls from root task
+- Run simple userspace programs
+
+### 🚧 In Progress
+
+- **TCB management** (Chapter 4) - Creating and managing threads
+- **IPC** (Chapter 5) - Message passing between components
+- **Capabilities** (Chapter 6) - Fine-grained access control
+
+### 📝 Planned
+
+- **Interrupts** (Chapter 8) - Hardware interrupt handling
+- **Virtual memory** (Chapter 9) - Dynamic memory management
+- **Device management** (Chapter 10) - Standardized driver interface
+- **Scheduling** (Chapter 11) - Multi-threaded execution
+- **Advanced features** (Chapter 12) - Notifications, shared memory
+
+## Building a Complete System
+
+### Example: Minimal System
+
+```bash
+# Define your system in build-config.toml
+
+[system]
+name = "minimal-system"
+
+[[components]]
+name = "root-task"
+path = "runtime/root-task"
+
+[[components]]
+name = "serial-driver"
+path = "drivers/serial"
+
+[[components]]
+name = "hello-app"
+path = "apps/hello"
+
+# Build
+./build.sh --platform qemu-virt
+
+# Run
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+```
+
+### Example: Full System
+
+```
+System Components:
+├── root-task (EL0)           - System bootstrap
+├── Drivers (EL0)
+│   ├── serial-driver         - UART console
+│   ├── timer-driver          - System clock
+│   ├── block-driver          - VirtIO disk
+│   └── network-driver        - VirtIO network
+├── System Services (EL0)
+│   ├── filesystem-service    - VFS and file I/O
+│   ├── network-stack         - TCP/IP stack
+│   └── process-manager       - Process lifecycle
+└── Applications (EL0)
+    ├── shell                 - Command line
+    ├── web-server            - HTTP server
+    └── user-apps             - Custom applications
+```
 
 ## Best Practices
 
-1. **Capability Slot Management:**
-   - Use a simple incrementing allocator for slots
-   - Track `next_slot` to avoid conflicts
-   - Reserve ranges for specific purposes
+### 1. Keep Components Small
 
-2. **Priority Assignment:**
-   - Drivers: 150-255 (high priority)
-   - System services: 100-149 (medium)
-   - Applications: 1-99 (low)
+- Each component should do one thing well
+- Small address spaces (faster context switches)
+- Minimal capabilities (better security)
 
-3. **Stack Sizing:**
-   - Drivers: 64KB (`DEFAULT_STACK_SIZE`)
-   - Network stack: 128KB
-   - Application components: 256KB+
+### 2. Use IPC for Everything
 
-4. **Virtual Address Layout:**
-   - 0x4000_0000 - 0x6000_0000: Component address spaces
-   - Keep regions non-overlapping
-   - Leave room for future components
+- No shared memory by default (better isolation)
+- Explicit communication (easier to reason about)
+- Type-safe messages (catch errors at compile time)
 
-5. **Error Handling:**
-   - Always check return values from spawn operations
-   - Handle device allocation failures gracefully
-   - Provide fallback components if drivers fail
+### 3. Fail Gracefully
+
+- Components should handle errors locally
+- Use Result types for all operations
+- Don't panic in drivers (restart instead)
+
+### 4. Design for Composability
+
+- Well-defined interfaces (IPC message types)
+- Stateless when possible (easier to restart)
+- Small, focused components (easier to replace)
 
 ## Testing
 
-Run integration tests:
+### Unit Tests
+
 ```bash
-cargo test --test integration_test
+# Test individual kernel modules
+cd kernel
+cargo test
+
+# Test components in isolation
+cd drivers/serial
+cargo test --lib
 ```
 
-Current test coverage:
-- ✅ 86 tests passing (77 unit + 9 integration)
-- ✅ Full system initialization
-- ✅ Multi-component spawning
-- ✅ Device resource allocation
-- ✅ Component lifecycle management
+### Integration Tests
+
+```bash
+# Build complete system
+./build.sh --platform qemu-virt
+
+# Run automated tests in QEMU
+./test.sh --integration
+```
+
+### Hardware Testing
+
+```bash
+# Build for real hardware
+./build.sh --platform rpi4
+
+# Flash to SD card
+dd if=bootimage.bin of=/dev/sdX bs=4M
+
+# Boot on hardware
+# (connect serial console to see output)
+```
 
 ## Next Steps
 
-1. **Real seL4 Integration** (~4 hours)
-   - Replace mocks with real kernel
-   - Test in QEMU
-   - Validate on hardware
-
-2. **IPC Message Passing**
-   - Implement `seL4_Call/Reply`
-   - Message marshalling
-   - RPC framework
-
-3. **Driver Implementation**
-   - Serial port driver (16550 UART)
-   - Network driver (e1000)
-   - Timer driver
-
-4. **System Services**
-   - VFS implementation
-   - Network stack integration
-   - Device manager
+1. **Understand the architecture** (you're here!)
+2. **Read the code** - Start with `kernel/src/main.rs`
+3. **Study boot process** - Follow the boot from elfloader to root task
+4. **Build examples** - Try the example components
+5. **Create your own component** - Start with a simple driver
+6. **Contribute** - Help implement the next chapter!
 
 ## References
 
-- [Technical Architecture](../internal_resource/technical_arch_implementation.md)
-- [Implementation Plan](IMPLEMENTATION_PLAN.md)
-- [seL4 Integration Roadmap](SEL4_INTEGRATION_ROADMAP.md)
-- [Example: System Composition](../examples/system-composition/src/main.rs)
-- [Example: Serial Driver](../examples/serial-driver/src/main.rs)
+- **[GETTING_STARTED.md](GETTING_STARTED.md)** - Build and run instructions
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed architecture design
+- **[MICROKERNEL_CHAPTERS.md](MICROKERNEL_CHAPTERS.md)** - Development roadmap
+- **[HOBBYIST_GUIDE.md](HOBBYIST_GUIDE.md)** - Beginner-friendly guide
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-10-05
-**Author:** KaaL Team
+**Document Version:** 2.0
+**Last Updated:** 2025-10-14
+**Status:** KaaL Framework - Native Rust Microkernel (Chapter 7 Complete)

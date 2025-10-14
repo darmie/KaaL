@@ -1,366 +1,479 @@
 # KaaL Hobbyist Guide: Build Your OS in Hours, Not Years
 
-## Welcome! 🎉
+## Welcome!
 
-You're about to build your own operating system on top of the formally verified seL4 microkernel. No PhD required!
+You're about to build your own operating system using a clean-room native Rust microkernel. No PhD required!
 
 ## What Makes KaaL Special?
 
-- ⚡ **Fast**: Get a working OS in hours, not years
-- 🔒 **Secure**: Built on formally verified seL4
-- 🎯 **Simple**: Start minimal, add incrementally
-- 🔧 **Composable**: Clean callback-based architecture
+- **Native Rust Microkernel**: Built from scratch in pure Rust for ARM64
+- **Fast to Start**: Get a working kernel in minutes
+- **Simple & Clean**: Capability-based security without complexity
+- **Composable**: Build your OS incrementally, component by component
+- **MIT Licensed**: Use it however you want
 
 ## Quick Start (5 Minutes)
 
-### 1. Run the Minimal Example
+### 1. Install Prerequisites
+
+You only need two things:
 
 ```bash
-cd kaal
-# Build with Microkit (default - production seL4)
-cargo build --bin minimal-component
+# 1. Install Rust nightly
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default nightly
+rustup target add aarch64-unknown-none
 
-# For quick testing on macOS, use mock mode
-cargo run --features mock-sel4 --bin minimal-component
+# 2. Install QEMU (for testing)
+# macOS:
+brew install qemu
+
+# Linux:
+sudo apt install qemu-system-aarch64
+```
+
+### 2. Build and Run
+
+```bash
+# Clone the repository
+git clone https://github.com/darmie/kaal.git
+cd kaal
+
+# Build the kernel
+./build.sh --platform qemu-virt
+
+# Run in QEMU
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 ```
 
 **You'll see:**
 ```
-╔═══════════════════════════════════════════════╗
-║        Minimal KaaL System Example          ║
-║     Perfect for Hobbyists Getting Started   ║
-╚═══════════════════════════════════════════════╝
+╔═══════════════════════════════════════════╗
+║            KaaL Framework                 ║
+║     Native Rust ARM64 Microkernel        ║
+╚═══════════════════════════════════════════╝
 
-📋 Step 1: Initialize Root Task
-  ✓ Root task initialized
+[Elfloader] Loading kernel...
+[Kernel] Chapter 1: Bare Metal Boot - OK
+[Kernel] Chapter 2: Memory Management - OK
+[Kernel] Chapter 3: Exception Handling - OK
+[Kernel] Chapter 7: Root Task Boot - OK
+[Kernel] Transitioning to EL0...
 
-📋 Step 2 & 3: Run System (Composable Pattern)
-  • Using run_with() for composability
-  • Spawning components via closure
-
-🚀 Spawning Components (via callback)...
-  ✓ Spawned: hello_world
-  ✓ Started: hello_world (running!)
-
-✅ System Ready!
-   • 1 component(s) running
+Hello from userspace!
 ```
 
-**Congratulations!** You just ran a micro-OS with:
-- Capability-based security
-- Component isolation
-- Private address spaces
-- IPC ready
+**Congratulations!** You just booted a capability-based microkernel with:
+- Memory isolation
+- Syscall interface
+- Userspace execution
+- ARM64 exception handling
 
-### 2. Understand the Code
+### 3. Exit QEMU
 
-Open `examples/minimal-component/src/main.rs`:
+Press `Ctrl-A` then `X` to exit.
 
-```rust
-// Initialize the root task
-let root = unsafe { RootTask::init(RootTaskConfig::default())? };
+## Understanding KaaL Architecture
 
-// Use composable pattern to spawn components
-root.run_with(|broker| {
-    // Your components here!
-    spawn_hello_component(broker);
-    spawn_my_driver(broker);
-});
+### The Big Picture
+
+```
+┌─────────────────────────────────────────┐
+│         Userspace (EL0)                 │
+│  • Root Task                            │
+│  • Components (your OS services)        │
+│  • Applications                         │
+└──────────────┬──────────────────────────┘
+               │ syscalls
+┌──────────────▼──────────────────────────┐
+│         Kernel (EL1)                    │
+│  • Memory Management                    │
+│  • Capability System                    │
+│  • Thread Scheduling                    │
+│  • Exception Handling                   │
+│  • IPC                                  │
+└─────────────────────────────────────────┘
 ```
 
-That's it! The **composable callback pattern** makes it clean and extensible.
+KaaL is a **microkernel**, which means:
+- The kernel is small (core mechanisms only)
+- Most OS services run in userspace
+- Everything communicates via IPC
+- Components are isolated for security
 
-## Building Your Own System
+### Key Concepts
 
-### Pattern 1: Minimal Component
+#### 1. Native Rust Microkernel
+
+Unlike other teaching OS projects, KaaL is:
+- **Clean-room implementation**: Written from scratch in Rust
+- **No C dependencies**: 100% Rust, no legacy code
+- **ARM64-native**: Targets modern 64-bit ARM processors
+- **Capability-based**: Fine-grained access control built-in
+
+#### 2. Composable Components
+
+Build your OS by composing isolated components:
 
 ```rust
-// 1. Define component entry point
-pub extern "C" fn my_component() -> ! {
+// Each component is an isolated program
+Component {
+    name: "filesystem",
+    entry_point: fs_main,
+    memory: 512KB,
+    capabilities: [ReadDisk, WriteCache],
+}
+```
+
+Components:
+- Run in their own address space
+- Have minimal privileges (only what they need)
+- Communicate via IPC (Inter-Process Communication)
+- Can't crash other components
+
+#### 3. Capabilities = Access Rights
+
+Instead of "root can do anything", KaaL uses **capabilities**:
+- A capability is a token that grants a specific right
+- No capability = no access (even for "root")
+- Capabilities can't be forged or stolen
+- Fine-grained: access specific memory, not all memory
+
+Example:
+```rust
+// Component can ONLY write to serial port
+capabilities: [
+    SerialWrite(port: 0),  // Can write to serial0
+    // No SerialRead - can't read
+    // No DiskAccess - can't touch disk
+]
+```
+
+## Building Your First Component
+
+### Step 1: Write the Component
+
+Create `my-component/src/main.rs`:
+
+```rust
+#![no_std]
+#![no_main]
+
+// Your component's entry point
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    // Your code here!
+    let message = "Hello from my component!\n";
+
+    // Make a syscall to print
+    unsafe {
+        syscall::print(message);
+    }
+
+    // Component loop
     loop {
-        // Your logic here
-        core::hint::spin_loop();
+        // Wait for events
+        syscall::wait();
     }
 }
 
-// 2. Spawn function
-fn spawn_my_component(broker: &mut DefaultCapBroker) {
-    let bootinfo = unsafe { BootInfo::get().unwrap() };
-    let mut spawner = ComponentSpawner::new(...);
-
-    let config = ComponentConfig {
-        name: "my_component",
-        entry_point: my_component as usize,
-        stack_size: DEFAULT_STACK_SIZE,
-        priority: 100,
-        device: None,  // No hardware needed
-        fault_ep: None,
-    };
-
-    let component = spawner.spawn_component(config, ...).unwrap();
-    spawner.start_component(&component).unwrap();
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
 }
-
-// 3. Use in root task
-root.run_with(|broker| {
-    spawn_my_component(broker);
-});
 ```
 
-### Pattern 2: Driver with DDDK
+### Step 2: Configure Your Component
 
-```rust
-// 1. Define driver with macros (future)
-#[derive(Driver)]
-#[pci(vendor = 0x8086, device = 0x100E)]
-#[resources(mmio = "bar0", irq = "auto", dma = "4MB")]
-pub struct MyDriver {
-    #[mmio]
-    regs: &'static mut Registers,
-}
+Create `my-component/Cargo.toml`:
 
-// 2. Auto-generated probe (DDDK does this!)
-impl MyDriver {
-    #[init]
-    fn initialize(&mut self) -> Result<()> {
-        // Your init code - that's it!
-        Ok(())
-    }
+```toml
+[package]
+name = "my-component"
+version = "0.1.0"
+edition = "2021"
 
-    #[interrupt]
-    fn handle_irq(&mut self) {
-        // Your IRQ handler
-    }
-}
+[dependencies]
+# Add KaaL runtime dependencies here
 
-// 3. Spawn in root task
-root.run_with(|broker| {
-    let driver = MyDriver::probe(broker).unwrap();
-    // Driver is ready!
-});
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "z"
+```
+
+### Step 3: Integrate with Build System
+
+Add to `build-config.toml`:
+
+```toml
+[[components]]
+name = "my-component"
+path = "components/my-component"
+```
+
+### Step 4: Build and Test
+
+```bash
+./build.sh --platform qemu-virt
+# Your component will be included in the boot image
 ```
 
 ## Incremental Development Path
 
-Start simple, add complexity as needed:
+Start simple, add features as you learn:
 
-### Level 1: Hello World ✅
-- **What**: One component, no devices
-- **Time**: 5 minutes
-- **Example**: `examples/minimal-component`
+### Level 1: Hello World (5 minutes)
+- **Goal**: Get one component running
+- **What you'll learn**: Build system, bootloader, syscalls
+- **Code**: ~20 lines
+- **Status**: ✅ Working (you just did this!)
 
-### Level 2: Multiple Components
-- **What**: 2-3 software components communicating via IPC
-- **Time**: 30 minutes
-- **Add**: IPC ring buffers, message passing
+### Level 2: Multiple Components (30 minutes)
+- **Goal**: Run 2-3 components simultaneously
+- **What you'll learn**: Component isolation, address spaces
+- **Code**: ~100 lines
+- **Status**: 🚧 In progress (Chapter 4)
 
-### Level 3: Simple Driver
-- **What**: Serial port or timer driver
-- **Time**: 2 hours
-- **Add**: MMIO access, IRQ handling
+### Level 3: IPC Communication (1 hour)
+- **Goal**: Components talk to each other
+- **What you'll learn**: Message passing, shared memory
+- **Code**: ~200 lines
+- **Status**: 📝 Planned (Chapter 5)
 
-### Level 4: Network/Storage
-- **What**: E1000 network or AHCI storage
-- **Time**: 4-6 hours
-- **Add**: DMA, advanced IRQ handling
+### Level 4: Simple Driver (2 hours)
+- **Goal**: Serial port or timer driver
+- **What you'll learn**: MMIO, interrupts, device management
+- **Code**: ~300 lines
+- **Status**: 📝 Planned (Chapter 8)
 
-### Level 5: Full System
-- **What**: VFS, network stack, multiple drivers
-- **Time**: 1-2 weeks
-- **Add**: System services, process management
+### Level 5: Storage & Filesystem (4 hours)
+- **Goal**: Read/write files from disk
+- **What you'll learn**: VirtIO, block devices, filesystem basics
+- **Code**: ~500 lines
+- **Status**: 📝 Planned (Chapter 10)
 
-## Key Concepts (15-Minute Read)
+### Level 6: Network Stack (6 hours)
+- **Goal**: Send/receive network packets
+- **What you'll learn**: VirtIO-net, TCP/IP basics
+- **Code**: ~800 lines
+- **Status**: 📝 Planned (Chapter 11)
 
-### 1. Root Task = Your Main Function
+## Development Workflow
 
-```rust
-let root = unsafe { RootTask::init(config)? };
-root.run_with(|broker| {
-    // All your system initialization here
-});
-```
-
-The root task is **your** program. It:
-- Runs first after seL4 kernel boots
-- Has access to all capabilities
-- Spawns your components
-- Never exits
-
-### 2. Components = Isolated Programs
-
-Each component:
-- Runs in its own address space (isolation!)
-- Has its own thread (TCB)
-- Communicates via IPC
-- Can have device access (optional)
-
-```rust
-ComponentConfig {
-    name: "my_service",
-    entry_point: my_service_main as usize,
-    stack_size: 64 * 1024,
-    priority: 150,
-    device: None,  // or Some(DeviceId::...)
-    fault_ep: None,
-}
-```
-
-### 3. Capability Broker = Resource Manager
-
-The broker manages:
-- **Capabilities**: seL4 access tokens
-- **Devices**: MMIO, IRQ, DMA
-- **Memory**: Untyped memory allocation
-
-```rust
-// Request device resources
-let device = broker.request_device(DeviceId::Serial { port: 0 })?;
-// Now you have: MMIO regions, IRQ handler, DMA pool
-```
-
-### 4. IPC = Communication
-
-Components talk via:
-- **Shared memory**: Zero-copy, <1μs latency
-- **Notifications**: seL4 signals for events
-- **Endpoints**: Request/reply messaging
-
-```rust
-// Send data via shared ring buffer
-ring.push(data)?;
-// Signal the consumer
-seL4_Signal(notification);
-```
-
-## Common Tasks
-
-### Add a New Component
-
-1. **Create entry function:**
-```rust
-pub extern "C" fn my_component() -> ! {
-    loop { /* work */ }
-}
-```
-
-2. **Spawn it:**
-```rust
-root.run_with(|broker| {
-    spawn_my_component(broker);
-});
-```
-
-### Add Device Access
-
-```rust
-ComponentConfig {
-    device: Some(DeviceId::Pci {
-        vendor: 0x8086,
-        device: 0x100E,
-    }),
-    // ... rest of config
-}
-```
-
-The broker automatically allocates MMIO/IRQ/DMA!
-
-### Debug with Logging
-
-```rust
-// Use log macros (already configured)
-log::info!("Component started!");
-log::debug!("Processing: {:?}", data);
-log::error!("Failed: {:?}", err);
-```
-
-### Test in QEMU
+### Daily Development
 
 ```bash
-# 1. Build components (Microkit mode - default)
-cargo build --release
+# Edit kernel code
+cd kernel
+vim src/my_feature.rs
 
-# 2. Create system.xml for Microkit
-# See examples/system-composition/system.xml
+# Build and test
+./build.sh --platform qemu-virt
 
-# 3. Generate bootable image
-microkit build system.xml
+# Run in QEMU
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 
-# 4. Run in QEMU
-qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel loader.img -nographic
+# Exit with Ctrl-A then X
 ```
 
-**Note:** Microkit requires Linux. On macOS:
-- Use Docker: `docker run -it --rm -v $(pwd):/kaal rustlang/rust:nightly`
-- Use Lima: `lima cargo build`
-- Or use mocks for testing: `cargo test --features mock-sel4`
+### Debugging
 
-## Examples to Study
+```bash
+# Terminal 1: Start QEMU with GDB stub
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader \
+  -s -S
 
-1. **[minimal-component](../examples/minimal-component/)** ⭐
-   - Start here!
-   - Single component
-   - Composable pattern
+# Terminal 2: Connect debugger
+lldb runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+(lldb) gdb-remote localhost:1234
+(lldb) breakpoint set --name _start
+(lldb) continue
+```
 
-2. **[system-composition](../examples/system-composition/)**
-   - Multi-component system
-   - DDDK integration
-   - IPC demonstrations
+### Clean Builds
 
-3. **[serial-driver](../examples/serial-driver/)**
-   - DDDK driver example
-   - Device resources
-   - Metadata & probing
+```bash
+# Clean everything
+./build.sh --clean
+
+# Or just kernel
+cd kernel && cargo clean
+```
+
+## Current Status (Chapter 7 Complete)
+
+KaaL is under active development. Here's what works today:
+
+### ✅ Implemented (Ready to Use)
+
+- **Chapter 1**: Bare metal boot, UART output, device tree parsing
+- **Chapter 2**: Frame allocator, MMU setup, kernel page tables
+- **Chapter 3**: Exception vectors, syscall interface, trap handling
+- **Chapter 7**: Root task creation, EL0 transition, userspace execution
+
+**This means you can:**
+- Boot the kernel
+- Run code in userspace
+- Make syscalls
+- Allocate memory
+- Handle exceptions
+
+### 🚧 In Progress
+
+- **Chapter 4**: Thread Control Blocks (TCBs)
+- **Chapter 5**: IPC endpoints and message passing
+- **Chapter 6**: Capability space management
+
+### 📝 Planned
+
+- **Chapter 8**: Interrupt handling
+- **Chapter 9**: Virtual memory management
+- **Chapter 10**: Device management
+- **Chapter 11**: Scheduling
+- **Chapter 12**: Advanced features
+
+## Learning Resources
+
+### Documentation
+
+- **[GETTING_STARTED.md](GETTING_STARTED.md)** - Setup and first build
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design and structure
+- **[MICROKERNEL_CHAPTERS.md](MICROKERNEL_CHAPTERS.md)** - Development roadmap
+- **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current implementation status
+
+### Code Examples
+
+1. **Kernel Entry** (`kernel/src/main.rs`)
+   - Boot sequence
+   - Initialization flow
+   - Chapter progression
+
+2. **Root Task** (`runtime/root-task/src/main.rs`)
+   - First userspace program
+   - Syscall examples
+   - Component template
+
+3. **Elfloader** (`runtime/elfloader/src/boot.rs`)
+   - Bootloader implementation
+   - Binary loading
+   - Address space setup
+
+### External Resources
+
+- **ARM64 Architecture**: ARM Architecture Reference Manual
+- **Microkernel Design**: "The seL4 Whitepaper" (for concepts, not code)
+- **Rust Embedded**: The Embedded Rust Book
+- **OS Development**: OSDev Wiki
+
+## Common Questions
+
+### "Why ARM64 instead of x86?"
+
+- **Simpler**: ARM64 has cleaner exception handling and memory management
+- **Modern**: Most new hardware is ARM (phones, tablets, servers, laptops)
+- **Native Development**: If you have Apple Silicon, you're already on ARM64!
+- **Future-proof**: ARM is the future of computing
+
+### "Can I run this on real hardware?"
+
+Yes! KaaL is designed for real ARM64 hardware:
+- Raspberry Pi 4 (work in progress)
+- Other ARM64 boards (planned)
+- Currently, QEMU is the easiest way to develop
+
+### "Do I need to know seL4?"
+
+No! KaaL is a **clean-room implementation** - not based on seL4 code.
+
+While KaaL takes inspiration from seL4's security model (capabilities, isolation), you don't need to know anything about seL4 to use KaaL.
+
+### "Is this a toy or production-ready?"
+
+Currently: **Learning/hobby project** (Chapter 7 of 12)
+
+Future goal: **Production-capable** microkernel for embedded and IoT
+
+Right now, it's perfect for:
+- Learning OS development
+- Experimenting with microkernels
+- Understanding ARM64 architecture
+- Building hobby operating systems
+
+### "How can I contribute?"
+
+1. **Try it out**: Build and run the kernel
+2. **Report issues**: Found a bug? Open an issue!
+3. **Write docs**: Help improve guides and documentation
+4. **Implement features**: Pick a chapter and start coding
+5. **Share feedback**: What's confusing? What's great?
 
 ## Troubleshooting
 
-### "Component didn't spawn"
-- Check bootinfo has available slots
-- Verify untyped memory available
-- Check capability allocation
+### Build Errors
 
-### "IRQ already allocated"
-- Each IRQ can only be allocated once
-- Use different IRQ numbers
+**"aarch64-unknown-none target not found"**
+```bash
+rustup target add aarch64-unknown-none
+```
 
-### "Out of memory"
-- Increase heap size in RootTaskConfig
-- Check untyped regions in bootinfo
+**"nightly required"**
+```bash
+rustup default nightly
+```
+
+**"linker error"**
+```bash
+# Make sure you're in the kaal directory
+./build.sh --clean
+./build.sh --platform qemu-virt
+```
+
+### Runtime Issues
+
+**QEMU hangs with no output**
+- Make sure you're using `-nographic` flag
+- Try adding `-serial mon:stdio` for more debug output
+- Press `Ctrl-A` then `X` to force exit
+
+**"No output after kernel loads"**
+- Check that root task binary was built
+- Look for error messages in elfloader output
+- Try running with `-d int,guest_errors` for QEMU debug logs
+
+### Getting Help
+
+- **Check docs**: Most questions are answered in documentation
+- **GitHub Issues**: Report bugs or ask questions
+- **Read code**: The kernel is small enough to understand fully
+- **Experiment**: Try changing things and see what happens!
 
 ## Next Steps
 
-1. **Run Examples**: Try all examples in `examples/`
-2. **Read Code**: Study the implementations
-3. **Modify**: Change stack sizes, priorities, etc.
-4. **Build**: Create your own components!
-
-## Resources
-
-- **[SEL4_INTEGRATION.md](SEL4_INTEGRATION.md)** - Dual-mode seL4 deployment (Microkit/Runtime)
-- **[SYSTEM_COMPOSITION.md](SYSTEM_COMPOSITION.md)** - Complete integration guide
-- **Build Scripts:**
-  - `./scripts/build-microkit.sh` - Production deployment (default)
-  - `./scripts/build-runtime.sh` - Advanced Rust seL4 runtime
-  - `./scripts/build-mock.sh` - Unit tests only
-
-## Join the Community
-
-- 💬 GitHub Discussions: [github.com/your-org/kaal/discussions](https://github.com/your-org/kaal/discussions)
-- 🐛 Report Issues: [github.com/your-org/kaal/issues](https://github.com/your-org/kaal/issues)
-- 📧 Email: team@kaal.dev
+1. ✅ **You've built and run KaaL** - Great start!
+2. 📖 **Read [ARCHITECTURE.md](ARCHITECTURE.md)** - Understand the design
+3. 🔍 **Explore the code** - Start with `kernel/src/main.rs`
+4. 🚀 **Implement a feature** - Pick a chapter from [MICROKERNEL_CHAPTERS.md](MICROKERNEL_CHAPTERS.md)
+5. 🤝 **Join development** - Contribute to the project!
 
 ## Philosophy
 
-**Start minimal. Build incrementally. The system is yours!**
+**Start minimal. Build incrementally. Learn deeply.**
 
 You don't need:
-- ❌ All features day 1
-- ❌ Perfect architecture
-- ❌ Every driver
+- Complex toolchains
+- Gigabytes of dependencies
+- Years of experience
+- A CS degree
 
 You just need:
-- ✅ One working component
-- ✅ Willingness to iterate
-- ✅ Curiosity to experiment
+- Curiosity about how computers work
+- Willingness to read and experiment
+- Rust and QEMU installed
+- This guide
 
 **Welcome to OS development!** 🚀
 
@@ -368,4 +481,4 @@ You just need:
 
 **Happy Hacking!**
 
-*"From Hello World to Full OS - One Component at a Time"*
+*"From bare metal to userspace - one chapter at a time"*
