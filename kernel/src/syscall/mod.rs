@@ -363,17 +363,21 @@ fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
     unsafe {
         core::arch::asm!(
             "dsb ishst",  // Ensure all page table writes complete
-            "isb",        // Instruction synchronization barrier
         );
     }
 
-    // Flush TLB for the entire ASID (simpler than per-page)
+    // Flush TLB only for the mapped virtual address range (not all entries!)
+    // This preserves root-task's code/stack TLB entries
     unsafe {
-        core::arch::asm!(
-            "tlbi vmalle1is",  // Invalidate all EL1&0 stage 1 TLB entries
-            "dsb ish",         // Ensure TLB invalidation completes
-            "isb",             // Instruction synchronization barrier
-        );
+        for i in 0..num_pages {
+            let addr = ((virt_addr as usize) + (i * PAGE_SIZE)) >> 12; // VA >> 12 for TLBI
+            core::arch::asm!(
+                "tlbi vaae1is, {0}",  // Invalidate by VA, all ASID, EL1
+                "dsb ish",            // Ensure completion
+                in(reg) addr
+            );
+        }
+        core::arch::asm!("isb");  // Final instruction sync
     }
 
     kprintln!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
