@@ -117,6 +117,36 @@ bitflags! {
                             | Self::INNER_SHARE.bits()
                             | Self::NORMAL.bits()
                             | Self::UXN.bits();  // PXN=0 allows EL1 execution
+
+        /// User RWX (read-write-execute) - for user code
+        const USER_RWX      = Self::VALID.bits()
+                            | Self::TABLE_OR_PAGE.bits()
+                            | Self::AP_RW_ALL.bits()  // Accessible from all ELs
+                            | Self::ACCESSED.bits()
+                            | Self::INNER_SHARE.bits()
+                            | Self::NORMAL.bits()
+                            | Self::NOT_GLOBAL.bits();  // UXN=0, PXN=0 allows execution
+
+        /// User data (read-write, no execute)
+        const USER_DATA     = Self::VALID.bits()
+                            | Self::TABLE_OR_PAGE.bits()
+                            | Self::AP_RW_ALL.bits()  // Accessible from all ELs
+                            | Self::ACCESSED.bits()
+                            | Self::INNER_SHARE.bits()
+                            | Self::NORMAL.bits()
+                            | Self::UXN.bits()  // No user execution
+                            | Self::PXN.bits()  // No privileged execution
+                            | Self::NOT_GLOBAL.bits();
+
+        /// User device memory (read-write, no execute)
+        const USER_DEVICE   = Self::VALID.bits()
+                            | Self::TABLE_OR_PAGE.bits()
+                            | Self::AP_RW_ALL.bits()
+                            | Self::ACCESSED.bits()
+                            | Self::DEVICE.bits()
+                            | Self::UXN.bits()
+                            | Self::PXN.bits()
+                            | Self::NOT_GLOBAL.bits();
     }
 }
 

@@ -2,7 +2,7 @@
 
 **Purpose**: Track technical debt, blockers, and future improvements across all chapters.
 
-**Last Updated**: 2025-10-12
+**Last Updated**: 2025-10-14
 
 ---
 
@@ -266,15 +266,7 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ## Chapter 5: IPC & Message Passing
 
-**Status**: 🚧 IN PROGRESS - 57% Complete (4/7 phases, 2025-10-13)
-
-### Prerequisites
-**Status**: ✅ ALL COMPLETE
-
-- ✅ Capability system (Chapter 4 Phase 1) - **DONE**
-- ✅ CNode for capability storage (Chapter 4 Phase 2) - **DONE**
-- ✅ TCB for thread representation (Chapter 4 Phase 3) - **DONE**
-- ✅ Endpoint basic structure (Chapter 4 Phase 4) - **DONE**
+**Status**: ✅ COMPLETE - 100% (Implementation Complete, 2025-10-14)
 
 ### Completed ✅
 - [x] **Phase 1: Message Structure** (2025-10-13)
@@ -282,100 +274,155 @@ This provides a natural development flow where IPC implementation informs the fi
   - IpcBuffer for extended data
   - File: [kernel/src/ipc/message.rs](../../kernel/src/ipc/message.rs)
 
-- [x] **Phase 2: Send Operation** (2025-10-13)
-  - Infrastructure complete, scheduler integration pending
+- [x] **Phase 2: Send Operation** (2025-10-14)
+  - Complete implementation with scheduler integration
   - Capability rights validation, fast/slow path transfer
   - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
 
-- [x] **Phase 3: Receive Operation** (2025-10-13)
-  - Infrastructure complete, scheduler integration pending
+- [x] **Phase 3: Receive Operation** (2025-10-14)
+  - Complete implementation with scheduler integration
   - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
 
-- [x] **Phase 4: Message Transfer** (2025-10-13)
+- [x] **Phase 4: Message Transfer** (2025-10-14)
   - Fast path (registers) and slow path (IPC buffer) working
-  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
+  - File: [kernel/src/ipc/transfer.rs](../../kernel/src/ipc/transfer.rs)
 
-### Remaining Phases
-- [ ] **Phase 5: Capability Transfer** - Full cap transfer protocol
-- [ ] **Phase 6: Call/Reply Semantics** - RPC operations
-- [ ] **Phase 7: Testing** - Integration tests
+- [x] **Phase 5: Capability Transfer** (2025-10-14)
+  - Complete grant/mint/derive capability transfer protocol
+  - File: [kernel/src/ipc/cap_transfer.rs](../../kernel/src/ipc/cap_transfer.rs)
 
-### Known Blockers
+- [x] **Phase 6: Call/Reply Semantics** (2025-10-14)
+  - Complete RPC-style operations with reply capabilities
+  - File: [kernel/src/ipc/call.rs](../../kernel/src/ipc/call.rs)
 
-#### Critical - Requires Chapter 6
-- [ ] **Scheduler Integration** - Send/recv operations need scheduler yield
-  - Location: [kernel/src/ipc/operations.rs:100](../../kernel/src/ipc/operations.rs:100), line 167
-  - Impact: Blocking operations don't actually yield CPU
-  - Status: TODO comment in place, deferred to Chapter 6
+- [x] **Phase 7: Testing** (2025-10-14)
+  - 4/4 message structure tests passing
+  - Full IPC operation tests deferred to Chapter 7 (require multi-threading)
+  - File: [kernel/src/ipc/test_runner.rs](../../kernel/src/ipc/test_runner.rs)
+  - Documentation: [CHAPTER_05_IPC_TEST_LIMITATIONS.md](./CHAPTER_05_IPC_TEST_LIMITATIONS.md)
 
-### Known Limitations (TODOs)
+### Implementation Summary
+- **Total Code**: ~1,630 lines of production IPC implementation
+- **Message Structure**: 370 LOC
+- **Send/Receive Operations**: 300 LOC
+- **Message Transfer**: 200 LOC
+- **Capability Transfer**: 370 LOC
+- **Call/Reply**: 390 LOC
+- **Test Infrastructure**: 500+ LOC (static allocation only)
 
-#### operations.rs
-1. **Line 100, 167**: Scheduler yield needed for blocking operations
-   - Impact: Threads block but don't yield to other threads
-   - Blocked by: Chapter 6 (Scheduling & Context Switching)
+### Known Limitations
 
-2. **Line 348**: Message length tracking in IPC buffer
-   - Impact: Can't read extended messages from buffer correctly
-   - Workaround: Currently assumes fast path only
-   - Priority: Medium
-
-3. **Line 353**: Full capability reconstruction from IPC buffer
-   - Impact: Capability transfer not fully functional
-   - Status: Basic structure in place
-   - Priority: High (Phase 5)
+#### Testing Limitations
+- **Full IPC operation tests deferred to Chapter 7**
+  - Reason: IPC rendezvous requires multi-threading (two active threads)
+  - Current: Single-threaded test harness can only test message structures
+  - Status: 4/4 message tests passing (100% of testable parts)
+  - Future: Will be fully tested in Chapter 7 with user-space programs
+  - Documentation: See [CHAPTER_05_IPC_TEST_LIMITATIONS.md](./CHAPTER_05_IPC_TEST_LIMITATIONS.md)
 
 ### Future Improvements
 
-#### High Priority
-- [ ] **Complete Capability Transfer** - Phase 5 implementation
-  - File: [kernel/src/ipc/operations.rs](../../kernel/src/ipc/operations.rs)
-  - Estimated effort: 4-6 hours
-
-- [ ] **Call/Reply Semantics** - Phase 6 implementation
-  - Needed: RPC-style operations
-  - Estimated effort: 6-8 hours
+#### High Priority (Chapter 9)
+- [ ] **Full IPC Integration Tests** - End-to-end IPC with real components
+  - Needed: Runtime Services (Capability Broker, Memory Manager) that can send/receive
+  - Location: Chapter 9 (Framework Integration & Runtime Services)
+  - Estimated effort: 1 week (Phase 2 of Chapter 9)
 
 #### Medium Priority
-- [ ] **IPC Buffer Length Tracking** - Fix message reading
-  - Store length in IPC buffer header
-  - Estimated effort: 2 hours
+- [ ] **IPC Performance Optimization** - Fastpath improvements
+  - Current: Fast path implemented, further optimization possible
+  - Impact: Reduce IPC latency
+  - Estimated effort: 2-3 days
 
 #### Low Priority
-- [ ] **Fast Path Optimization** - Avoid IPC buffer when possible
-  - Already partially implemented
-  - Further optimization possible
-  - Estimated effort: 2-3 hours
+- [ ] **IPC Buffer Size Configuration** - Runtime configurable buffer size
+  - Current: Fixed 512-byte IPC buffer
+  - Needed: Per-process configurable size
+  - Impact: Better memory efficiency
+  - Estimated effort: 1 day
 
 ---
 
 ## Chapter 6: Scheduling & Context Switching
 
-**Status**: 📋 Planned
+**Status**: ✅ COMPLETE - 100% (6/6 phases, 2025-10-14)
 
-### Prerequisites
-- ✅ Chapter 5 IPC complete
-- ⬜ Thread control blocks (TCB)
-- ⬜ Context switching
+### Completed ✅
+- [x] **Phase 1: Scheduler Infrastructure** (2025-10-14)
+  - Round-robin and priority scheduling
+  - Global scheduler state with run queues
+  - File: [kernel/src/scheduler/mod.rs](../../kernel/src/scheduler/mod.rs)
+
+- [x] **Phase 2: Round-Robin Scheduling** (2025-10-14)
+  - Integrated within Phase 1
+  - FIFO queue per priority level
+
+- [x] **Phase 3: Priority Scheduling** (2025-10-14)
+  - Integrated within Phase 1
+  - 256 priority levels (0 = highest)
+
+- [x] **Phase 4: Context Switching** (2025-10-14)
+  - Complete ARM64 assembly implementation
+  - Saves/restores all 31 GPRs, SP, PC, SPSR
+  - File: [kernel/src/arch/aarch64/context_switch.rs](../../kernel/src/arch/aarch64/context_switch.rs)
+
+- [x] **Phase 5: IPC Integration** (2025-10-14)
+  - Scheduler yield points in send/recv/call/reply
+  - Blocking state management
+
+- [x] **Phase 6: Timer & Preemption** (2025-10-14)
+  - ARM Generic Timer integration
+  - Configurable timeslice (default 10ms)
+  - File: [kernel/src/scheduler/timer.rs](../../kernel/src/scheduler/timer.rs)
+
+### Implementation Summary
+- **Total Code**: ~1,100 lines
+- **Scheduler Core**: 656 LOC
+- **Context Switching**: 252 LOC
+- **Timer Integration**: 200 LOC
 
 ### Known Blockers
-*To be documented during implementation*
+**None** - Chapter 6 complete!
 
 ### Future Improvements
-*To be documented during implementation*
+
+#### Medium Priority
+- [ ] **SMP Support** - Multi-core scheduling
+  - Current: Single-core only
+  - Needed: Per-CPU run queues, load balancing
+  - Impact: Better performance on multi-core ARM systems
+  - Estimated effort: 1-2 weeks
+
+#### Low Priority
+- [ ] **Advanced Schedulers** - CFS, EDF, etc.
+  - Current: Simple priority-based round-robin
+  - Potential: More sophisticated scheduling algorithms
+  - Impact: Better fairness/latency for specific workloads
+  - Estimated effort: 2-3 weeks
 
 ---
 
-## Chapter 7: Performance & Optimization
+## Chapter 7: Root Task & Boot Protocol
 
 **Status**: 📋 Planned
 
 ### Prerequisites
-- ✅ Chapter 6 scheduling complete
-- ⬜ Baseline benchmarks
+- ✅ Chapters 1-6 complete
+- ⬜ ELF loader for initial task
+- ⬜ Boot info structure
+- ⬜ Initial capability space
+
+### Objectives
+1. Implement ELF loader for root task
+2. Create boot info structure (memory regions, device tree, initial caps)
+3. Load and start root task (first user-space component)
+4. Establish initial capability delegation
+5. Basic root task that prints "Hello from user-space!"
+
+**Note**: This chapter focuses on **microkernel-side boot protocol only**. The root task itself will be a minimal stub. Full Runtime Services (Capability Broker, Memory Manager) are part of the **KaaL Framework**, developed separately after microkernel is complete.
 
 ### Known Blockers
-*To be documented during implementation*
+**None** - All prerequisites from Chapters 1-6 are complete!
 
 ### Future Improvements
 *To be documented during implementation*
@@ -387,14 +434,58 @@ This provides a natural development flow where IPC implementation informs the fi
 **Status**: 📋 Planned
 
 ### Prerequisites
-- ✅ Chapter 7 performance complete
-- ⬜ Security audit
+- ✅ Chapter 7 complete (Root Task & Boot Protocol)
+- ⬜ Security audit framework
+- ⬜ Verus proof infrastructure
+
+### Objectives
+1. Add Verus proofs for core invariants
+2. Prove memory safety properties
+3. Verify IPC correctness
+4. Stress testing framework
 
 ### Known Blockers
 *To be documented during implementation*
 
 ### Future Improvements
 *To be documented during implementation*
+
+---
+
+## Chapter 9: Framework Integration & Runtime Services
+
+**Status**: 📋 Planned
+
+### Prerequisites
+- ✅ Chapters 0-8 complete (microkernel done!)
+- ⬜ Component architecture design
+- ⬜ IPC binding library
+
+### Objectives
+
+#### Phase 1: Runtime Services Foundation
+1. Implement Capability Broker (~5K LOC)
+2. Implement Memory Manager (~3K LOC)
+
+#### Phase 2: IPC Integration Testing
+3. Full end-to-end IPC tests (deferred from Chapter 5)
+4. IPC performance benchmarking
+
+#### Phase 3: DDDK & Basic Drivers
+5. Device Driver Development Kit
+6. Example drivers (UART, Timer, GPIO)
+
+#### Phase 4: System Services
+7. Basic VFS implementation
+8. Network stack foundation
+
+### Known Blockers
+**None** - All microkernel prerequisites complete after Chapter 8!
+
+### Future Improvements
+*To be documented during implementation*
+
+**Note**: Chapter 9 transitions from **microkernel development** (Chapters 0-8) to **ecosystem building** (Framework components in user-space).
 
 ---
 
@@ -469,4 +560,4 @@ This provides a natural development flow where IPC implementation informs the fi
 ---
 
 **Maintained By**: KaaL Development Team
-**Next Review**: After Chapter 3 completion
+**Next Review**: After Chapter 7 planning

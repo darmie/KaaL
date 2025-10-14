@@ -10,6 +10,8 @@ use core::arch::asm;
 use crate::memory::VirtAddr;
 
 pub mod dtb;
+pub mod bootinfo;
+pub mod root_task;
 
 /// Boot parameters passed from elfloader
 #[repr(C)]
@@ -19,6 +21,7 @@ pub struct BootParams {
     pub root_p_end: usize,
     pub root_v_entry: usize,
     pub pv_offset: usize,
+    pub dtb_size: usize,
 }
 
 /// Kernel entry point (called from _start)
@@ -41,11 +44,25 @@ pub fn kernel_entry() -> ! {
     crate::kprintln!("═══════════════════════════════════════════════════════════");
     crate::kprintln!("");
     crate::kprintln!("Boot parameters:");
-    crate::kprintln!("  DTB:         {:#x}", params.dtb_addr);
+    crate::kprintln!("  DTB:         {:#x} (size: {} bytes)", params.dtb_addr, params.dtb_size);
     crate::kprintln!("  Root task:   {:#x} - {:#x}", params.root_p_start, params.root_p_end);
     crate::kprintln!("  Entry:       {:#x}", params.root_v_entry);
     crate::kprintln!("  PV offset:   {:#x}", params.pv_offset);
     crate::kprintln!("");
+
+    // Initialize global boot info
+    let boot_info = bootinfo::BootInfo::new(
+        crate::memory::PhysAddr::new(params.root_p_start),
+        crate::memory::PhysAddr::new(params.root_p_end),
+        params.pv_offset,
+        params.root_v_entry,
+        crate::memory::PhysAddr::new(params.dtb_addr),
+        params.dtb_size,
+    );
+    unsafe {
+        bootinfo::init_boot_info(boot_info);
+    }
+    crate::kprintln!("[boot] Boot info initialized and stored globally");
 
     // Parse device tree
     crate::kprintln!("Parsing device tree...");
@@ -256,10 +273,36 @@ pub fn kernel_entry() -> ! {
     }
 
     crate::kprintln!("Kernel initialization complete!");
-    crate::kprintln!("All systems operational. Entering idle loop.");
     crate::kprintln!("");
 
-    // Halt (later chapters will jump to scheduler)
+    // Chapter 7: Create and start root task
+    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    crate::kprintln!("  Chapter 7: Root Task & Boot Protocol");
+    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    crate::kprintln!("");
+
+    unsafe {
+        // Verify root task boot info
+        match root_task::verify_root_task_boot_info() {
+            Ok(()) => {
+                crate::kprintln!("");
+                crate::kprintln!("═══════════════════════════════════════════════════════════");
+                crate::kprintln!("  Chapter 7: COMPLETE ✓");
+                crate::kprintln!("═══════════════════════════════════════════════════════════");
+                crate::kprintln!("");
+                crate::kprintln!("Note: Full root task creation with EL0 transition deferred");
+                crate::kprintln!("      to Chapter 8 (User/Kernel Memory Isolation)");
+            }
+            Err(e) => {
+                crate::kprintln!("[ERROR] Failed to verify boot info: {:?}", e);
+                panic!("Boot info verification failed");
+            }
+        };
+    }
+
+    // Idle loop
+    crate::kprintln!("");
+    crate::kprintln!("Entering idle loop...");
     loop {
         unsafe {
             asm!("wfi"); // Wait for interrupt
@@ -269,7 +312,7 @@ pub fn kernel_entry() -> ! {
 
 /// Get boot parameters from saved registers
 ///
-/// The _start function saves x0-x4 into x19-x23
+/// The _start function saves x0-x5 into x19-x24
 /// We retrieve them here
 #[inline(always)]
 unsafe fn get_boot_params() -> BootParams {
@@ -278,19 +321,22 @@ unsafe fn get_boot_params() -> BootParams {
     let root_p_end: usize;
     let root_v_entry: usize;
     let pv_offset: usize;
+    let dtb_size: usize;
 
-    // Use specific registers to avoid clobbering x19-x23
+    // Use specific registers to avoid clobbering x19-x24
     asm!(
         "mov {dtb}, x19",
         "mov {root_start}, x20",
         "mov {root_end}, x21",
         "mov {entry}, x22",
         "mov {offset}, x23",
+        "mov {dtb_size}, x24",
         dtb = out(reg) dtb_addr,
         root_start = out(reg) root_p_start,
         root_end = out(reg) root_p_end,
         entry = out(reg) root_v_entry,
         offset = out(reg) pv_offset,
+        dtb_size = out(reg) dtb_size,
         options(nomem, nostack),
     );
 
@@ -300,5 +346,6 @@ unsafe fn get_boot_params() -> BootParams {
         root_p_end,
         root_v_entry,
         pv_offset,
+        dtb_size,
     }
 }

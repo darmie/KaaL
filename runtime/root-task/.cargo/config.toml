@@ -1,0 +1,8 @@
+[build]
+target = "aarch64-unknown-none"
+
+[target.aarch64-unknown-none]
+rustflags = [
+    "-C", "relocation-model=static",   # Static relocation
+    # Linker script passed by build.rs
+]

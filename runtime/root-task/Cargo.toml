@@ -3,10 +3,28 @@ name = "kaal-root-task"
 version = "0.1.0"
 edition = "2021"
 
+# Note: lib.rs has seL4 dependencies and is used for Chapter 9+
+# For Chapter 7, we only build the minimal binary (main.rs)
+# [lib]
+# path = "src/lib.rs"
+
+[[bin]]
+name = "root-task"
+path = "src/main.rs"
+
 [dependencies]
-sel4-platform = { path = "../sel4-platform" }
-cap-broker = { path = "../cap_broker" }
+# No dependencies for minimal root task binary
+
+[build-dependencies]
+toml = "0.8"
 
 [features]
 default = ["runtime"]
 runtime = []
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary
+strip = true          # Strip debug symbols

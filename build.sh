@@ -226,12 +226,12 @@ echo "✓ Kernel: $(ls -lh $KERNEL_ELF | awk '{print $5}')"
 echo ""
 echo "[2/4] Building root task..."
 if [ -d "$ROOTTASK_SOURCE_DIR" ]; then
-    cargo build \
+    KAAL_PLATFORM=$PLATFORM cargo build \
         --manifest-path $ROOTTASK_SOURCE_DIR/Cargo.toml \
         --release \
         --target aarch64-unknown-none \
         -Z build-std=core 2>&1 | grep -E "(Compiling|Finished|error)" || true
-    ROOTTASK_ELF="$ROOTTASK_SOURCE_DIR/target/aarch64-unknown-none/release/dummy-roottask"
+    ROOTTASK_ELF="$ROOTTASK_SOURCE_DIR/target/aarch64-unknown-none/release/root-task"
 else
     touch "$BUILD_DIR/roottask.bin"
     ROOTTASK_ELF="$BUILD_DIR/roottask.bin"

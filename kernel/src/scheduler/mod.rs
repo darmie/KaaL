@@ -105,6 +105,23 @@ unsafe fn set_current_thread(tcb: *mut TCB) {
     scheduler().set_current(tcb);
 }
 
+/// Set the current thread (public for testing)
+///
+/// **FOR TESTING ONLY** - Sets the scheduler's current thread pointer.
+/// In normal operation, this is managed internally by the scheduler.
+///
+/// # Safety
+///
+/// - Scheduler must be initialized
+/// - tcb must be valid
+/// - Thread should be in Running state
+pub unsafe fn test_set_current_thread(tcb: *mut TCB) {
+    if !tcb.is_null() {
+        (*tcb).set_state(crate::objects::ThreadState::Running);
+        set_current_thread(tcb);
+    }
+}
+
 /// Add a thread to the ready queue
 ///
 /// The thread is added to the tail of its priority's queue and becomes

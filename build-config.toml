@@ -12,10 +12,13 @@ bootimage_name = "kaal-boot.elf"
 # Component directories
 kernel_source_dir = "kernel"
 elfloader_source_dir = "runtime/elfloader"
-roottask_source_dir = "runtime/dummy-roottask"
+roottask_source_dir = "runtime/root-task"
 
 # Kernel stack size (applies to all platforms)
 kernel_stack_size = "0x4000" # 16KB
+
+# Root task configuration (applies to all platforms)
+root_task_stack_size = "0x10000" # 64KB
 
 # =============================================================================
 # QEMU virt platform (ARM64 Cortex-A53)
@@ -35,6 +38,7 @@ uart_base = "0x09000000" # PL011 UART
 
 # Boot memory layout offsets (relative to ram_base)
 dtb_offset = "0x0"            # DTB at ram_base + 0x0 = 0x40000000
+roottask_offset = "0x100000"  # Root task at ram_base + 0x100000 = 0x40100000
 elfloader_offset = "0x200000" # Elfloader at ram_base + 0x200000 = 0x40200000
 kernel_offset = "0x400000"    # Kernel at ram_base + 0x400000 = 0x40400000
 

@@ -1,0 +1,60 @@
+/* This is a reference copy. Actual linker script is in target/*/build/*/out/ */
+
+/*
+ * KaaL Root Task Linker Script (ARM64)
+ * AUTO-GENERATED - DO NOT EDIT
+ * Generated from build-config.toml
+ */
+
+ENTRY(_start)
+
+SECTIONS
+{
+    /*
+     * Placeholder load address for linker
+     * Actual address determined by elfloader at runtime and passed via boot info
+     */
+    . = 0x40100000;
+
+    /* Text section (code) */
+    .text : ALIGN(0x1000) {
+        *(.text._start)    /* Entry point first */
+        *(.text .text.*)   /* All other code */
+    }
+
+    /* Read-only data */
+    .rodata : ALIGN(0x1000) {
+        *(.rodata .rodata.*)
+    }
+
+    /* Data section */
+    .data : ALIGN(0x1000) {
+        *(.data .data.*)
+    }
+
+    /* BSS (zero-initialized data) */
+    .bss : ALIGN(0x1000) {
+        __bss_start = .;
+        *(.bss .bss.*)
+        *(COMMON)
+        __bss_end = .;
+    }
+
+    /* Stack */
+    . = ALIGN(0x1000);
+    __stack_start = .;
+    . += 0x10000;
+    __stack_end = .;
+
+    /* End marker */
+    . = ALIGN(0x1000);
+    __root_task_end = .;
+
+    /* Discard unwanted sections */
+    /DISCARD/ : {
+        *(.comment)
+        *(.gnu*)
+        *(.note*)
+        *(.eh_frame*)
+    }
+}

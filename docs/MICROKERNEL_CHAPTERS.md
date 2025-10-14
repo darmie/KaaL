@@ -28,13 +28,21 @@ The KaaL microkernel is built from scratch in Rust, implementing capability-base
 |---------|-------|----------|--------|
 | [Chapter 0](#chapter-0) | Project Setup & Infrastructure | 1 week | ✅ Complete |
 | [Chapter 1](#chapter-1) | Bare Metal Boot & Early Init | 2-3 weeks | ✅ Complete |
-| [Chapter 2](#chapter-2) | Memory Management & MMU | 3-4 weeks | 📋 Planned |
-| [Chapter 3](#chapter-3) | Exception Handling & Syscalls | 2-3 weeks | 📋 Planned |
-| [Chapter 4](#chapter-4) | Kernel Object Model | 4-5 weeks | 📋 Planned |
-| [Chapter 5](#chapter-5) | IPC & Message Passing | 3-4 weeks | 📋 Planned |
-| [Chapter 6](#chapter-6) | Scheduling & Context Switching | 3-4 weeks | 📋 Planned |
-| [Chapter 7](#chapter-7) | Performance & Optimization | 4-5 weeks | 📋 Planned |
-| [Chapter 8](#chapter-8) | Verification & Hardening | 6-8 weeks | 📋 Planned |
+| [Chapter 2](#chapter-2) | Memory Management & MMU | 3-4 weeks | ✅ Complete |
+| [Chapter 3](#chapter-3) | Exception Handling & Syscalls | 2-3 weeks | ✅ Complete |
+| [Chapter 4](#chapter-4) | Kernel Object Model | 4-5 weeks | ✅ Complete |
+| [Chapter 5](#chapter-5) | IPC & Message Passing | 3-4 weeks | ✅ Complete* |
+| [Chapter 6](#chapter-6) | Scheduling & Context Switching | 3-4 weeks | ✅ Complete |
+| [Chapter 7](#chapter-7) | Root Task & Boot Protocol | 2-3 weeks | 📋 Planned |
+| [Chapter 8](#chapter-8) | Verification & Hardening | 4-6 weeks | 📋 Planned |
+| [Chapter 9](#chapter-9) | Framework Integration & Runtime Services | 6-8 weeks | 📋 Planned |
+
+*\*Chapter 5: Implementation complete (~1,630 LOC), full IPC operation tests deferred to Chapter 9*
+
+**Note**:
+
+- **Chapters 0-8**: Core microkernel (kernel-space)
+- **Chapter 9**: KaaL Framework integration (user-space components)
 
 **Status Legend**: 📋 Planned | 🚧 In Progress | ✅ Complete | ⏸️ Blocked
 
@@ -669,34 +677,46 @@ Create `docs/chapters/chapter-06-scheduler.md`
 
 ---
 
-## Chapter 7: Performance & Optimization
+## Chapter 7: Root Task & Boot Protocol
 
-**Duration**: 4-5 weeks
+**Duration**: 2-3 weeks
 **Status**: 📋 Planned
-**Prerequisites**: Chapter 6
+**Prerequisites**: Chapters 1-6
 
 ### Objectives
 
-1. Optimize IPC fastpath
-2. Improve cache utilization
-3. Reduce syscall overhead
-4. Benchmark against seL4
+1. Implement ELF loader for root task
+2. Create boot info structure (memory regions, DTB, initial capabilities)
+3. Load and start root task (first user-space component)
+4. Establish initial capability delegation protocol
+5. Basic root task that prints "Hello from user-space!"
 
 ### Deliverables
 
-- IPC latency < 1000 cycles
-- Context switch < 500 cycles
-- Syscall overhead < 200 cycles
+```text
+kernel/src/boot/
+├── elf_loader.rs      # ELF64 parser and loader
+├── bootinfo.rs        # Boot info structure
+└── root_task.rs       # Root task initialization
+
+runtime/root-task/     # Minimal root task (user-space)
+├── Cargo.toml
+└── src/
+    └── main.rs        # Hello world from user-space
+```
 
 ### Testing Criteria
 
-- ✅ Performance matches C seL4
-- ✅ Memory footprint acceptable
-- ✅ No performance regressions
+- ✅ ELF loader parses and loads valid ELF64 binaries
+- ✅ Root task receives correct boot info
+- ✅ Root task can print to UART via syscall
+- ✅ Initial capability space correctly set up
 
 ### Documentation
 
-Create `docs/chapters/chapter-07-performance.md`
+Create `docs/chapters/CHAPTER_07_STATUS.md`
+
+**Note**: This chapter focuses on **microkernel-side boot protocol only**. The root task is a minimal stub. Full Runtime Services (Capability Broker, Memory Manager) are part of the **KaaL Framework**, developed separately after microkernel completion.
 
 ---
 
@@ -731,7 +751,167 @@ kernel/src/verification/
 
 ### Documentation
 
-Create `docs/chapters/chapter-08-verification.md`
+Create `docs/chapters/CHAPTER_08_STATUS.md`
+
+---
+
+## Chapter 9: Framework Integration & Runtime Services
+
+**Duration**: 6-8 weeks
+**Status**: 📋 Planned
+**Prerequisites**: Chapters 0-8 complete
+
+### Chapter Overview
+
+Chapter 9 bridges the microkernel with user-space components, implementing the **KaaL Framework** - the ecosystem of services, drivers, and applications that run on top of the microkernel. This is where we test full IPC, build the capability broker, and create the runtime environment.
+
+**Architecture Layers** (from ARCHITECTURE.md):
+
+- **Layer 1: Runtime Services** (~8K LOC)
+  - Capability Broker (5K LOC)
+  - Memory Manager (3K LOC)
+- **Layer 2: Driver & Device Layer** (~5-50K per driver)
+  - DDDK (Device Driver Development Kit)
+  - DDE-Linux compatibility layer
+- **Layer 3: System Services** (~75K LOC)
+  - VFS, Network Stack, Display Manager, Audio
+- **Layer 4: Compatibility Shims** (~20K LOC)
+  - LibC implementation, POSIX server
+- **Layer 5: Applications**
+  - POSIX programs, native Rust/C apps
+
+### Objectives
+
+#### Phase 1: Runtime Services Foundation (2 weeks)
+
+1. Implement Capability Broker service
+   - Hide seL4/KaaL capability complexity
+   - Device resource allocation
+   - Untyped memory management
+   - IPC endpoint creation
+2. Implement Memory Manager service
+   - Physical memory allocation
+   - Virtual address space management
+   - Page table management
+
+#### Phase 2: IPC Integration Testing (1 week)
+
+1. **Full IPC end-to-end tests** (deferred from Chapter 5)
+   - Multi-component send/receive
+   - Capability transfer (grant/mint/derive)
+   - Call/reply RPC semantics
+   - FIFO ordering verification
+2. IPC performance benchmarking
+   - Measure IPC latency
+   - Compare with seL4 baseline
+   - Optimize fastpath
+
+#### Phase 3: DDDK & Basic Drivers (2 weeks)
+
+1. Device Driver Development Kit
+   - Driver trait abstractions
+   - Interrupt handling framework
+   - DMA buffer management
+2. Implement example drivers
+   - UART driver (user-space)
+   - Timer driver
+   - GPIO driver
+
+#### Phase 4: System Services (2-3 weeks)
+
+1. Basic VFS implementation
+   - File abstraction layer
+   - Mount point management
+   - Simple RAM filesystem
+2. Network stack foundation
+   - Socket abstractions
+   - Protocol handlers
+   - Buffer management
+
+### Deliverables
+
+```text
+components/
+├── runtime/
+│   ├── capability-broker/     # ~5K LOC
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs
+│   │       ├── device_manager.rs
+│   │       ├── memory_manager.rs
+│   │       └── endpoint_manager.rs
+│   └── memory-manager/         # ~3K LOC
+│       ├── Cargo.toml
+│       └── src/
+│           ├── main.rs
+│           ├── physical.rs
+│           └── virtual.rs
+├── drivers/
+│   ├── dddk/                   # Driver Development Kit
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── traits.rs
+│   │       ├── interrupt.rs
+│   │       └── dma.rs
+│   └── uart/                   # Example: UART driver
+│       ├── Cargo.toml
+│       └── src/
+│           └── main.rs
+└── services/
+    └── vfs/                    # Basic VFS
+        ├── Cargo.toml
+        └── src/
+            ├── main.rs
+            └── ramfs.rs
+
+tests/
+└── integration/
+    ├── ipc_full_test.rs        # Complete IPC testing
+    ├── capability_transfer.rs  # Cap transfer tests
+    └── benchmark.rs            # Performance tests
+```
+
+### Testing Criteria
+
+#### IPC Testing (Chapter 5 deferred tests)
+
+- ✅ Send/receive with blocking works between components
+- ✅ Message data transfers correctly
+- ✅ Capability transfer (grant/mint/derive) works
+- ✅ Call/reply RPC semantics work
+- ✅ FIFO ordering maintained
+- ✅ IPC latency < 1000 cycles (target)
+
+#### Runtime Services
+
+- ✅ Capability Broker can allocate resources
+- ✅ Memory Manager provides memory to components
+- ✅ Components can communicate via IPC
+
+#### Drivers & Services
+
+- ✅ DDDK simplifies driver development
+- ✅ Example drivers work
+- ✅ Basic VFS functional
+
+### Documentation
+
+- Create `docs/chapters/CHAPTER_09_STATUS.md`
+- Create `docs/FRAMEWORK_ARCHITECTURE.md`
+- Create `components/README.md` (guide to Framework structure)
+- Update `docs/ARCHITECTURE.md` with implementation details
+
+### Key Achievements
+
+By completing Chapter 9, we achieve:
+
+1. **Full IPC Validation** - All deferred Chapter 5 tests pass with real components
+2. **Framework Foundation** - Runtime services enable higher-level components
+3. **Driver Framework** - DDDK reduces driver complexity
+4. **Microkernel + Framework Integration** - Proven end-to-end system
+
+**Note**: Chapter 9 marks the transition from **microkernel development** to **ecosystem building**. Chapters 0-8 built the kernel; Chapter 9 builds the world on top of it.
 
 ---
 

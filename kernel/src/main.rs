@@ -10,9 +10,9 @@ use core::arch::global_asm;
 //   x0 = user_img_start, x1 = user_img_end, x2 = pv_offset
 //   x3 = user_entry, x4 = dtb_addr, x5 = dtb_size
 //
-// Kernel expects parameters in x19-x23:
+// Kernel saves parameters in x19-x24:
 //   x19 = dtb_addr, x20 = root_p_start, x21 = root_p_end
-//   x22 = root_v_entry, x23 = pv_offset
+//   x22 = root_v_entry, x23 = pv_offset, x24 = dtb_size
 global_asm!(
     ".section .text._start",
     ".global _start",
@@ -29,6 +29,7 @@ global_asm!(
     "    mov x21, x1",      // x21 = user_img_end (from x1)
     "    mov x22, x3",      // x22 = user_entry (from x3)
     "    mov x23, x2",      // x23 = pv_offset (from x2)
+    "    mov x24, x5",      // x24 = dtb_size (from x5)
     "    b {kernel_entry}", // Jump to kernel_entry
     kernel_entry = sym kaal_kernel::boot::kernel_entry,
 );

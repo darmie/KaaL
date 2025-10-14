@@ -45,10 +45,33 @@ fn sys_debug_putchar(ch: u64) -> u64 {
     }
 }
 
-/// Debug syscall: print a string (stub - would need memory validation)
-fn sys_debug_print(_ptr: u64, _len: u64) -> u64 {
-    kprintln!("[syscall] debug_print not yet implemented (needs MMU)");
-    u64::MAX // Error: not implemented
+/// Debug syscall: print a string
+///
+/// This is a simple implementation that reads from the user's address space.
+/// In a production kernel, this would need proper memory validation and
+/// page table walking to ensure the address is valid and mapped.
+///
+/// For Chapter 7, we assume the root task has identity-mapped memory,
+/// so we can directly access the pointer.
+fn sys_debug_print(ptr: u64, len: u64) -> u64 {
+    // Validate length (prevent abuse)
+    if len > 4096 {
+        return u64::MAX; // Error: string too long
+    }
+
+    // Safety: We're assuming identity-mapped memory for now.
+    // TODO Chapter 8: Add proper memory validation via page table walk
+    unsafe {
+        let slice = core::slice::from_raw_parts(ptr as *const u8, len as usize);
+
+        // Validate UTF-8 (optional, but prevents panic)
+        if let Ok(s) = core::str::from_utf8(slice) {
+            crate::kprint!("{}", s);
+            0 // Success
+        } else {
+            u64::MAX // Error: invalid UTF-8
+        }
+    }
 }
 
 /// Yield syscall: give up CPU time slice
