@@ -69,6 +69,7 @@ pub struct TrapFrame {
     pub spsr_el1: u64,  // Saved processor status register
     pub esr_el1: u64,   // Exception syndrome register
     pub far_el1: u64,   // Fault address register
+    pub saved_ttbr0: u64, // Saved user page table (TTBR0_EL1)
 }
 
 impl TrapFrame {
@@ -84,6 +85,7 @@ impl TrapFrame {
             spsr_el1: 0,
             esr_el1: 0,
             far_el1: 0,
+            saved_ttbr0: 0,
         }
     }
 
@@ -165,5 +167,5 @@ impl fmt::Debug for TrapFrame {
 pub const TRAP_FRAME_SIZE: usize = core::mem::size_of::<TrapFrame>();
 
 // Compile-time assertions to ensure trap frame layout
-const _: () = assert!(TRAP_FRAME_SIZE == 36 * 8); // 31 GPRs + 5 special registers = 36 u64s
+const _: () = assert!(TRAP_FRAME_SIZE == 37 * 8); // 31 GPRs + 5 special registers + 1 saved_ttbr0 = 37 u64s
 const _: () = assert!(core::mem::align_of::<TrapFrame>() == 8); // Must be 8-byte aligned

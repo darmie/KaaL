@@ -29,7 +29,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(args[0], args[1], args[2], args[3]),
-        numbers::SYS_MEMORY_MAP => sys_memory_map(args[0], args[1], args[2]),
+        numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
 
         _ => {
@@ -293,7 +293,11 @@ static mut NEXT_VIRT_ADDR: u64 = 0x80000000; // Start at 2GB
 ///
 /// This allows userspace to access allocated physical memory by creating
 /// page table entries in the caller's TTBR0 page table.
-fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
+///
+/// NOTE: We receive the TrapFrame from the exception handler, which contains
+/// the caller's TTBR0 in saved_ttbr0. During the exception, TTBR0 is temporarily
+/// switched to the kernel page table, so we must use the saved value.
+fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u64) -> u64 {
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
 
@@ -304,13 +308,9 @@ fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
     let num_pages = ((size + page_size - 1) / page_size) as usize;
     let aligned_size = num_pages as u64 * page_size;
 
-    // Get current page table from TTBR0_EL1
-    let ttbr0: u64;
-    unsafe {
-        core::arch::asm!("mrs {}, ttbr0_el1", out(reg) ttbr0);
-    }
-    let page_table_phys = ttbr0 as usize;
-    kprintln!("[syscall] memory_map: caller's TTBR0={:#x}", page_table_phys);
+    // Get caller's page table from TrapFrame (saved during exception entry)
+    let page_table_phys = tf.saved_ttbr0 as usize;
+    kprintln!("[syscall] memory_map: caller's TTBR0={:#x} (from TrapFrame)", page_table_phys);
 
     // Get mutable reference to caller's page table
     let page_table = unsafe { &mut *(page_table_phys as *mut PageTable) };
@@ -325,18 +325,12 @@ fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
     kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}",
               virt_addr, virt_addr + aligned_size);
 
-    // Set up page table flags for userspace read-write data
-    // Build flags explicitly to debug permission issue
-    let flags = PageTableFlags::VALID
-              | PageTableFlags::TABLE_OR_PAGE
-              | PageTableFlags::AP_RW_ALL
-              | PageTableFlags::ACCESSED
-              | PageTableFlags::INNER_SHARE
-              | PageTableFlags::NORMAL
-              | PageTableFlags::UXN;
+    // Use USER_DATA preset for userspace read-write data
+    // This includes: VALID, TABLE_OR_PAGE, AP_RW_ALL, ACCESSED, INNER_SHARE,
+    //               NORMAL, UXN, PXN, NOT_GLOBAL
+    let flags = PageTableFlags::USER_DATA;
 
-    kprintln!("[syscall] memory_map: using flags = {:#x}", flags.bits());
-    kprintln!("[syscall] memory_map: USER_DATA = {:#x}", PageTableFlags::USER_DATA.bits());
+    kprintln!("[syscall] memory_map: using USER_DATA flags = {:#x}", flags.bits());
 
     // Create PageMapper once for all mappings
     let mut mapper = unsafe { crate::memory::PageMapper::new(page_table) };
@@ -365,6 +359,10 @@ fn sys_memory_map(phys_addr: u64, size: u64, permissions: u64) -> u64 {
             "dsb ishst",  // Ensure all page table writes complete
         );
     }
+
+    // Debug: Walk the page tables to verify the mapping
+    kprintln!("[syscall] memory_map: verifying mapping...");
+    mapper.debug_walk(VirtAddr::new(virt_addr as usize));
 
     // Flush TLB only for the mapped virtual address range (not all entries!)
     // This preserves root-task's code/stack TLB entries
