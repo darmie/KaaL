@@ -30,7 +30,7 @@ edition = "2021"
 authors = ["Damilare Darmie Akinlaja"]
 license = "MIT"
 repository = "https://github.com/darmie/kaal"
-description = "KaaL: A Rust microkernel for ARM64 with seL4-inspired design"
+description = "KaaL Framework: A Rust microkernel framework for ARM64 with seL4-inspired design"
 keywords = ["microkernel", "operating-system", "arm64", "embedded", "seL4"]
 categories = ["embedded", "no-std", "os"]
 
