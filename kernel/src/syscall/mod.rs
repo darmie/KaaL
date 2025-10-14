@@ -235,6 +235,18 @@ fn sys_process_create(
 
     kprintln!("  allocated TCB at: {:#x}", tcb_frame.as_usize());
 
+    // TODO: Set up page tables for the new process
+    // Currently the kernel doesn't set up mappings - the process will fault
+    // if it tries to access unmapped memory. A complete implementation would:
+    // 1. Zero the page table at page_table_root
+    // 2. Create PageMapper for the new PT
+    // 3. Map code segments at their ELF virtual addresses
+    // 4. Map stack pages
+    // 5. Map IPC buffer
+    // For now we rely on identity mapping or pre-setup by caller
+    kprintln!("  WARNING: Page table setup not implemented yet");
+    kprintln!("  Process will fault if memory not pre-mapped");
+
     // Generate process ID (use frame address for now - unique per process)
     let pid = tcb_frame.as_usize();
 
@@ -261,11 +273,15 @@ fn sys_process_create(
         // Set state to Runnable
         (*tcb_ptr).set_state(crate::objects::ThreadState::Runnable);
 
-        // Add to scheduler
-        scheduler::enqueue(tcb_ptr);
+        // Add to scheduler (if initialized)
+        // TODO: Scheduler is not initialized during boot yet
+        // For now we create the process but don't schedule it
+        // scheduler::enqueue(tcb_ptr);
+        kprintln!("  WARNING: Scheduler not initialized, skipping enqueue");
     }
 
-    kprintln!("[syscall] process_create -> PID {}", pid);
+    kprintln!("[syscall] process_create -> PID {:#x}", pid);
+    kprintln!("[syscall] process_create: TCB created, state=Runnable");
     pid as u64
 }
 
