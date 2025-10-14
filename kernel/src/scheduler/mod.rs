@@ -45,6 +45,8 @@ use crate::objects::TCB;
 use core::ptr;
 
 mod types;
+pub mod timer;
+
 pub use types::{Scheduler, ThreadQueue, SchedulerError};
 
 /// Global scheduler instance
