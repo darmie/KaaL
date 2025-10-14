@@ -32,7 +32,7 @@
 
 use super::message::{Message, IpcBuffer, IpcError, FAST_PATH_REGS, MAX_CAPS};
 use super::cap_transfer::{TransferMode, transfer_capabilities, encode_transfer_mode, decode_transfer_mode};
-use crate::objects::{Capability, CapType, CapRights, TCB, Endpoint};
+use crate::objects::{Capability, CapType, CapRights, TCB, Endpoint, ThreadState};
 
 /// Send a message to an endpoint (blocking)
 ///
@@ -96,12 +96,13 @@ pub unsafe fn send(
         write_message_to_buffer(sender, &msg)?;
 
         // Block sender on endpoint
+        (*sender).set_state(ThreadState::BlockedOnSend { endpoint: endpoint as usize });
         (*endpoint).queue_send(sender);
 
-        // TODO: Yield to scheduler (Chapter 6)
-        // For now, this would cause the sender to block until
-        // a receiver arrives and the scheduler resumes it
+        // Yield to scheduler - block until receiver arrives
+        crate::scheduler::block_current();
 
+        // When we resume here, message has been transferred
         Ok(())
     }
 }
@@ -163,12 +164,13 @@ pub unsafe fn recv(
         Ok(msg)
     } else {
         // No sender - block on receive queue
+        (*receiver).set_state(ThreadState::BlockedOnReceive { endpoint: endpoint as usize });
         (*endpoint).queue_receive(receiver);
 
-        // TODO: Yield to scheduler (Chapter 6)
-        // When scheduler resumes this thread, message will be in IPC buffer
+        // Yield to scheduler - block until sender arrives
+        crate::scheduler::block_current();
 
-        // After being unblocked, read message from buffer
+        // When we resume here, message has been transferred to our IPC buffer
         read_message_from_buffer(receiver)
     }
 }

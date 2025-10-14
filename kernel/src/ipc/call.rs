@@ -120,34 +120,23 @@ pub unsafe fn call(
             // Store caller in receiver's context so reply() can find the caller
             (*receiver).store_reply_target(caller);
 
-            // Unblock receiver (it's now ready to process the message)
-            (*receiver).unblock();
-
-            // TODO (Chapter 6): Yield to scheduler
-            // For now, caller remains blocked until reply() is called
-
-            // The reply will come later via reply() call
-            // For now, return a placeholder - in real impl, this would
-            // yield and return only when reply() unblocks us
-
-            // Placeholder: In testing, we'll manually call reply()
-            // In production with scheduler, this would yield and resume
-            // when reply() is called
-
-            return Ok(Message::empty());
+            // Wake receiver so it can process the message
+            crate::scheduler::unblock(receiver);
         }
     }
+    // Note: If no receiver yet, caller will be queued below
 
-    // Slow path: no receiver, queue the caller
+    // Slow path: no receiver, or receiver is now processing
+    // Queue the caller and block waiting for reply
+    caller_ref.set_state(ThreadState::BlockedOnReply);
     endpoint.queue_send(caller);
 
-    // TODO (Chapter 6): Yield to scheduler
-    // Thread should yield here and resume when:
-    // 1. A receiver arrives and processes the message
-    // 2. The receiver calls reply()
+    // Block until reply() wakes us
+    crate::scheduler::block_current();
 
-    // For now, return placeholder
-    // Real implementation would yield and return reply message on resume
+    // When we resume here, reply() has been called
+    // The reply message was transferred to our IPC buffer
+    // For now, return empty message (TODO: read from IPC buffer)
     Ok(Message::empty())
 }
 
@@ -213,8 +202,8 @@ pub unsafe fn reply(
     // Destroy reply capability (one-time use)
     destroy_reply_capability(reply_cap);
 
-    // TODO (Chapter 6): Wake the caller in scheduler
-    // The scheduler should mark the caller as ready to run
+    // Wake the caller - add to ready queue so it can run
+    crate::scheduler::unblock(caller);
 
     Ok(())
 }
