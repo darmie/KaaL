@@ -1,12 +1,21 @@
 //! Component Discovery and Loading
 //!
 //! This module handles:
-//! - Parsing component manifests
+//! - Parsing component manifests from PROJECT_ROOT/components.toml
 //! - Loading component binaries
 //! - Spawning components with proper capabilities
 //! - Component lifecycle management
+//!
+//! The components.toml manifest is located at the project root for developer convenience,
+//! and is embedded into the binary at build time via build.rs.
 
 use core::str;
+
+/// Components manifest embedded at build time from PROJECT_ROOT/components.toml
+///
+/// This allows developers to configure components at the project root without
+/// dealing with runtime/ or kernel/ directories.
+const COMPONENTS_TOML: &str = include_str!(env!("COMPONENTS_TOML_PATH"));
 
 /// Component type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,4 +246,44 @@ pub enum ComponentError {
     CapabilityError,
     /// Feature not yet implemented
     NotImplemented,
+}
+
+/// Get the embedded components manifest
+///
+/// This returns the contents of PROJECT_ROOT/components.toml that was
+/// embedded at build time. Developers configure components at the project
+/// root for easy discovery.
+///
+/// # Example
+/// ```no_run
+/// let manifest = get_components_manifest();
+/// // Parse TOML and discover components
+/// ```
+pub fn get_components_manifest() -> &'static str {
+    COMPONENTS_TOML
+}
+
+/// Print component manifest information
+///
+/// Helper for debugging - shows where manifest was loaded from
+pub unsafe fn print_manifest_info() {
+    crate::sys_print("═══════════════════════════════════════════════════════════\n");
+    crate::sys_print("  Component Manifest\n");
+    crate::sys_print("═══════════════════════════════════════════════════════════\n");
+    crate::sys_print("  Location: PROJECT_ROOT/components.toml\n");
+    crate::sys_print("  Components found: ");
+    // Count [[component]] occurrences
+    let count = COMPONENTS_TOML.matches("[[component]]").count();
+    if count == 0 {
+        crate::sys_print("0\n");
+    } else {
+        // Simple number printing (1-9)
+        let digit = b'0' + (count as u8);
+        let s = core::str::from_utf8_unchecked(&[digit]);
+        crate::sys_print(s);
+        crate::sys_print("\n");
+    }
+    crate::sys_print("  Status: Embedded at build time\n");
+    crate::sys_print("═══════════════════════════════════════════════════════════\n");
+    crate::sys_print("\n");
 }

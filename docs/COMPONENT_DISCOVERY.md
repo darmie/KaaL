@@ -2,6 +2,9 @@
 
 This document describes how KaaL discovers, loads, and spawns system components.
 
+> 📚 **For developers**: See [COMPONENTS.md](../COMPONENTS.md) for a quick start guide
+> on adding and configuring components. This document covers the internal architecture.
+
 ## Overview
 
 KaaL uses a **declarative component system** where components are:
@@ -57,7 +60,12 @@ KaaL uses a **declarative component system** where components are:
 
 ## Component Manifest Format
 
-Components are defined in `runtime/root-task/components.toml`:
+Components are defined in **`components.toml` at the PROJECT ROOT** for developer convenience.
+
+**Location**: `PROJECT_ROOT/components.toml` (NOT in `runtime/` or `kernel/`)
+
+This allows developers to easily discover and configure system components without
+navigating internal directories. The manifest is automatically embedded at build time.
 
 ```toml
 [[component]]
@@ -505,5 +513,5 @@ This enables building composable, secure, and maintainable microkernel systems.
 
 - [SYSTEM_COMPOSITION.md](./SYSTEM_COMPOSITION.md) - Overall system architecture
 - [sdk/README.md](../sdk/README.md) - SDK component patterns
-- [runtime/root-task/components.toml](../runtime/root-task/components.toml) - Component manifest
+- [components.toml](../components.toml) - Component manifest
 - [examples/system-init/](../examples/system-init/) - system_init implementation

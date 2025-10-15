@@ -1,7 +1,43 @@
 # KaaL System Component Manifest
 #
-# This file defines the components that root-task will spawn during system initialization.
-# Components are spawned in the order listed here.
+# This file lives at the PROJECT ROOT so developers can easily discover and configure
+# system components without diving into runtime/ or kernel/ directories.
+#
+# Components are automatically discovered and embedded into the system at build time.
+# The root-task reads this manifest and spawns components in the order listed here.
+#
+# ## Component Definition Format
+#
+# [[component]]
+# name = "component_name"           # Unique component identifier
+# binary = "binary-name"            # Binary name in target/ (without path)
+# type = "driver"                   # driver | service | application
+# priority = 200                    # 0-255 (higher = more important)
+# autostart = true                  # Spawn automatically at boot
+# capabilities = [                  # Required capabilities
+#     "memory_map:ADDR:SIZE",       # Physical memory mapping
+#     "interrupt:IRQ",              # Interrupt access
+#     "ipc:NAME",                   # IPC endpoint
+#     "process:create",             # Process creation
+# ]
+#
+# ## Component Types
+#
+# - driver:      Device drivers with hardware access (MMIO, IRQ, DMA)
+# - service:     System services (no hardware, provides IPC services)
+# - application: User-facing programs (minimal privileges)
+#
+# ## Boot Sequence
+#
+# 1. Kernel boots and creates root-task
+# 2. Root-task reads this manifest
+# 3. Root-task spawns system_init (first component, elevated privileges)
+# 4. system_init spawns remaining components in phases:
+#    - Phase 1: Device drivers (serial, timer, etc.)
+#    - Phase 2: System services (process_manager, vfs, etc.)
+#    - Phase 3: User applications (shell, etc.)
+#
+# Add your components below in the desired spawn order:
 
 # System Initializer - First component spawned
 # This is the "system_init" component that bootstraps the rest of the system
