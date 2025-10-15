@@ -62,3 +62,9 @@ pub const SYS_MEMORY_MAP: u64 = 0x15;
 /// Args: virtual_addr, size
 /// Returns: 0 on success, -1 on error
 pub const SYS_MEMORY_UNMAP: u64 = 0x16;
+
+/// Register current process as root-task for yield (temporary)
+/// Args: vspace_root (TTBR0 physical address)
+/// Returns: 0 on success
+/// TODO: Remove when proper scheduler integration complete
+pub const SYS_REGISTER_ROOT: u64 = 0x1FFF;

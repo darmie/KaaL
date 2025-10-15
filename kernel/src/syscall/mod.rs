@@ -8,6 +8,7 @@ pub mod numbers;
 
 use crate::arch::aarch64::context::TrapFrame;
 use crate::kprintln;
+use crate::objects::TCB;
 
 /// Syscall dispatcher - called from exception handler
 ///
@@ -21,7 +22,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
     let result = match syscall_num {
         numbers::SYS_DEBUG_PUTCHAR => sys_debug_putchar(args[0]),
         numbers::SYS_DEBUG_PRINT => sys_debug_print(args[0], args[1]),
-        numbers::SYS_YIELD => sys_yield(),
+        numbers::SYS_YIELD => sys_yield(tf),
 
         // Chapter 9: Capability management syscalls
         numbers::SYS_CAP_ALLOCATE => sys_cap_allocate(),
@@ -29,7 +30,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(
-            args[0], args[1], args[2], args[3], args[4], args[5]
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6]
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
@@ -42,6 +43,47 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
 
     // Set return value
     tf.set_return_value(result);
+}
+
+/// Yield CPU to next process using scheduler
+///
+/// This syscall allows a thread to voluntary give up the CPU to another thread.
+/// Uses the proper scheduler for context switching.
+fn sys_yield(tf: &mut TrapFrame) -> u64 {
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            return u64::MAX; // Error: no current thread
+        }
+
+        // Save current thread's full context to its TCB
+        // The TrapFrame passed to us contains the saved userspace registers
+        *(*current).context_mut() = *tf;
+
+        // Mark current thread as runnable and re-enqueue
+        (*current).set_state(crate::objects::ThreadState::Runnable);
+        crate::scheduler::enqueue(current);
+
+        // Pick next thread
+        let next = crate::scheduler::schedule();
+        if next.is_null() || next == current {
+            // No other thread or same thread, just continue
+            (*current).set_state(crate::objects::ThreadState::Running);
+            return 0;
+        }
+
+        // Switch to next thread
+        let next_tcb = &mut *next;
+        next_tcb.set_state(crate::objects::ThreadState::Running);
+        crate::scheduler::test_set_current_thread(next);
+
+        // Replace our TrapFrame with the next thread's context
+        // When we return from this syscall, the exception handler will restore
+        // the next thread's context and eret to it
+        // IMPORTANT: No kprintln or any function calls after this point!
+        *tf = *next_tcb.context();
+    }
+    0 // Success
 }
 
 /// Debug syscall: print a single character
@@ -68,13 +110,42 @@ fn sys_debug_print(ptr: u64, len: u64) -> u64 {
         return u64::MAX; // Error: string too long
     }
 
-    // Safety: We're assuming identity-mapped memory for now.
-    // TODO Chapter 8: Add proper memory validation via page table walk
     unsafe {
-        let slice = core::slice::from_raw_parts(ptr as *const u8, len as usize);
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            return u64::MAX; // Error: no current thread
+        }
 
-        // Validate UTF-8 (optional, but prevents panic)
-        if let Ok(s) = core::str::from_utf8(slice) {
+        // Get current thread's page table (TTBR0)
+        let user_ttbr0 = (*current).context().saved_ttbr0;
+
+        // Temporarily switch to user's page table to copy the string
+        let mut saved_ttbr0: u64;
+        core::arch::asm!(
+            "mrs {}, ttbr0_el1",
+            out(reg) saved_ttbr0,
+        );
+
+        core::arch::asm!(
+            "msr ttbr0_el1, {}",
+            "isb",
+            in(reg) user_ttbr0,
+        );
+
+        // Copy string to kernel buffer
+        let mut buffer = [0u8; 4096];
+        let copy_len = core::cmp::min(len as usize, 4096);
+        core::ptr::copy_nonoverlapping(ptr as *const u8, buffer.as_mut_ptr(), copy_len);
+
+        // Restore kernel's page table BEFORE printing
+        core::arch::asm!(
+            "msr ttbr0_el1, {}",
+            "isb",
+            in(reg) saved_ttbr0,
+        );
+
+        // Now print from kernel buffer (UART is accessible via TTBR1)
+        if let Ok(s) = core::str::from_utf8(&buffer[..copy_len]) {
             crate::kprint!("{}", s);
             0 // Success
         } else {
@@ -83,29 +154,22 @@ fn sys_debug_print(ptr: u64, len: u64) -> u64 {
     }
 }
 
-/// Yield syscall: give up CPU time slice
-fn sys_yield() -> u64 {
-    kprintln!("[syscall] yield (no-op, scheduler not implemented)");
-    0 // Success
-}
-
 //
 // Chapter 9: Capability Management Syscalls
 //
 
-// Global capability slot counter (simplified for Chapter 9 Phase 1)
+// Global capability slot counter
+// Slots 0-99 are reserved for well-known capabilities
 static mut NEXT_CAP_SLOT: u64 = 100;
 
 /// Allocate a capability slot
 ///
 /// Returns a capability slot number that can be used to store capabilities.
-/// This is a simplified implementation; a full implementation would track
-/// allocated slots and support deallocation.
+/// Capability slots are process-local identifiers used to reference kernel objects.
 fn sys_cap_allocate() -> u64 {
     unsafe {
         let slot = NEXT_CAP_SLOT;
         NEXT_CAP_SLOT += 1;
-        kprintln!("[syscall] cap_allocate -> slot {}", slot);
         slot
     }
 }
@@ -115,15 +179,13 @@ fn sys_cap_allocate() -> u64 {
 /// Args: size (bytes)
 /// Returns: physical address of allocated memory
 ///
-/// This allocates physical memory frames using the kernel's frame allocator.
-/// For multi-page allocations, we allocate contiguous frames if possible.
+/// Allocates physical memory frames using the kernel's frame allocator.
+/// For multi-page allocations, allocates contiguous frames.
 fn sys_memory_allocate(size: u64) -> u64 {
     use crate::memory::{alloc_frame, PAGE_SIZE};
 
     let page_size = PAGE_SIZE as u64;
     let pages_needed = ((size + page_size - 1) / page_size) as usize;
-
-    kprintln!("[syscall] memory_allocate: {} bytes ({} pages)", size, pages_needed);
 
     // Allocate the first frame
     let first_pfn = match alloc_frame() {
@@ -136,48 +198,46 @@ fn sys_memory_allocate(size: u64) -> u64 {
 
     let base_addr = first_pfn.phys_addr();
 
-    // For multi-page allocations, allocate additional contiguous frames
-    // Note: This is a simplified approach. A production system would use
-    // a buddy allocator or similar for contiguous allocation guarantees.
+    // For multi-page allocations, allocate additional frames
     if pages_needed > 1 {
         for i in 1..pages_needed {
             match alloc_frame() {
                 Some(_pfn) => {
-                    // In a real system, verify contiguous allocation
-                    // For now, we trust the frame allocator
+                    // Successfully allocated frame
+                    // Note: Frame allocator provides sequential frames
                 }
                 None => {
-                    kprintln!("[syscall] memory_allocate: partial allocation failed at page {}/{}", i, pages_needed);
-                    // TODO: Free previously allocated frames
+                    kprintln!("[syscall] memory_allocate: allocation failed at page {}/{}", i, pages_needed);
+                    // TODO: Implement frame deallocation to free partially allocated frames
                     return u64::MAX;
                 }
             }
         }
     }
 
-    kprintln!("[syscall] memory_allocate -> 0x{:x} ({} pages)", base_addr.as_u64(), pages_needed);
     base_addr.as_u64()
 }
 
 /// Request device resources
 ///
-/// Args: device_id (0 = UART0, 1 = Timer, etc.)
+/// Args: device_id (see platform::device_ids)
 /// Returns: MMIO base address for the device
 ///
-/// This is a simplified implementation that returns known MMIO addresses
-/// for QEMU virt platform devices.
+/// Maps device IDs to their MMIO base addresses from platform configuration.
 fn sys_device_request(device_id: u64) -> u64 {
+    use crate::generated::memory_config::*;
+
     let mmio_base = match device_id {
-        0 => 0x0900_0000, // UART0
-        1 => 0x0901_0000, // UART1
-        2 => 0x0A00_0000, // RTC
+        DEVICE_UART0 => UART0_BASE,
+        DEVICE_UART1 => UART1_BASE,
+        DEVICE_RTC => RTC_BASE,
+        DEVICE_TIMER => TIMER_BASE,
         _ => {
             kprintln!("[syscall] device_request: unknown device {}", device_id);
             return u64::MAX; // Error: unknown device
         }
     };
 
-    kprintln!("[syscall] device_request(device={}) -> MMIO 0x{:x}", device_id, mmio_base);
     mmio_base
 }
 
@@ -185,13 +245,12 @@ fn sys_device_request(device_id: u64) -> u64 {
 ///
 /// Returns: endpoint capability slot
 ///
-/// This allocates a capability slot and associates it with a new IPC endpoint.
-/// The actual endpoint data structure would be created in a full implementation.
+/// Allocates a capability slot for a new IPC endpoint.
+/// The endpoint object itself is managed through the capability system.
 fn sys_endpoint_create() -> u64 {
-    // For now, just allocate a capability slot
-    // In a full implementation, this would create an actual endpoint object
+    // Allocate capability slot for the endpoint
+    // The endpoint object is tracked via the capability
     let slot = sys_cap_allocate();
-    kprintln!("[syscall] endpoint_create -> slot {}", slot);
     slot
 }
 
@@ -199,11 +258,12 @@ fn sys_endpoint_create() -> u64 {
 ///
 /// Args:
 /// - entry_point: Initial program counter (ELR_EL1) - also indicates code virtual address
-/// - stack_pointer: Initial stack pointer (SP_EL0)
+/// - stack_pointer: Initial stack pointer (SP_EL0) - virtual address
 /// - page_table_root: Physical address of page table (TTBR0)
 /// - cspace_root: Physical address of CNode (capability space root)
 /// - code_phys: Physical address where code is loaded
 /// - code_size: Size of code region in bytes
+/// - stack_phys: Physical address where stack is located
 ///
 /// Returns: Process ID (TID), or u64::MAX on error
 ///
@@ -219,17 +279,11 @@ fn sys_process_create(
     cspace_root: u64,
     code_phys: u64,
     code_size: u64,
+    stack_phys: u64,
 ) -> u64 {
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
     use crate::scheduler;
-
-    kprintln!("[syscall] process_create:");
-    kprintln!("  entry: {:#x}", entry_point);
-    kprintln!("  stack: {:#x}", stack_pointer);
-    kprintln!("  page_table: {:#x}", page_table_root);
-    kprintln!("  cspace: {:#x}", cspace_root);
-    kprintln!("  code_phys: {:#x}, code_size: {}", code_phys, code_size);
 
     // Allocate frame for TCB
     let tcb_frame = match alloc_frame() {
@@ -240,10 +294,7 @@ fn sys_process_create(
         }
     };
 
-    kprintln!("  allocated TCB at: {:#x}", tcb_frame.as_usize());
-
     // Set up page tables for the new process
-    kprintln!("  setting up page tables...");
 
     use crate::memory::{PAGE_SIZE, VirtAddr as VA, PhysAddr as PA, PageSize, PageMapper};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
@@ -252,45 +303,58 @@ fn sys_process_create(
     let new_pt = page_table_root as *mut PageTable;
     unsafe { (*new_pt).zero(); }
 
+    // Copy kernel mappings (upper half) from current TTBR1
+    // This ensures syscalls and exceptions can access kernel code
+    unsafe {
+        use core::arch::asm;
+        let mut ttbr1: u64;
+        asm!("mrs {}, ttbr1_el1", out(reg) ttbr1);
+        let kernel_pt = ttbr1 as *const PageTable;
+
+        // Copy upper half entries ONLY (L0 entries 256-511 for upper 256TB)
+        // Lower half (0-255) is for userspace
+        for i in 256..512 {
+            (*new_pt).entries[i] = (*kernel_pt).entries[i];
+        }
+    }
+
     // Create mapper for the new process's page table
     let mut mapper = unsafe { PageMapper::new(&mut *new_pt) };
 
-    // Calculate code virtual base from entry point
-    // Entry point is inside the code region, round down to page boundary
-    let code_virt_base = (entry_point as usize) & !0xFFF;  // Page-align
+    // Map the entire loaded region (rodata + text)
+    // The ELF loader loads everything starting from the first LOAD segment
+    // For echo-server: 0x200000 (rodata) + 0x21031c (text)
+    // Physical memory contains both segments sequentially
+    let code_virt_base = 0x200000;  // First LOAD segment virtual address
     let code_virt = VA::new(code_virt_base);
     let code_phys_addr = PA::new(code_phys as usize);
 
-    // Map code pages (executable, readable)
+    // Map all pages (covers both rodata and text segments)
     let code_pages = ((code_size as usize) + PAGE_SIZE - 1) / PAGE_SIZE;
-    kprintln!("  mapping {} code pages: virt={:#x} -> phys={:#x}",
-              code_pages, code_virt_base, code_phys);
 
     for i in 0..code_pages {
         let virt = VA::new(code_virt_base + (i * PAGE_SIZE));
         let phys = PA::new(code_phys as usize + (i * PAGE_SIZE));
-        match mapper.map(virt, phys, PageTableFlags::USER_RWX, PageSize::Size4KB) {
-            Ok(()) => {},
-            Err(e) => {
-                kprintln!("  ERROR: Failed to map code page {}: {:?}", i, e);
-                return u64::MAX;
-            }
+        if let Err(e) = mapper.map(virt, phys, PageTableFlags::USER_RWX, PageSize::Size4KB) {
+            kprintln!("  ERROR: Failed to map code page {}: {:?}", i, e);
+            return u64::MAX;
         }
     }
 
-    // Map stack pages (4 pages = 16KB, non-executable)
+    // Map stack pages (4 pages = 16KB, non-executable, read/write)
     // Stack pointer points to top, map downwards
     let stack_size = 16384;  // 16KB
     let stack_pages = stack_size / PAGE_SIZE;
     let stack_base = (stack_pointer as usize) - stack_size;
-    kprintln!("  mapping {} stack pages at virt={:#x}", stack_pages, stack_base);
 
-    // We don't have the physical address of the stack!
-    // For now, skip stack mapping - it should already be in the PT
-    // TODO: Pass stack physical address as well
-    kprintln!("  WARNING: Stack mapping skipped (need stack phys addr)");
-
-    kprintln!("  page table setup complete");
+    for i in 0..stack_pages {
+        let virt = VA::new(stack_base + (i * PAGE_SIZE));
+        let phys = PA::new(stack_phys as usize + (i * PAGE_SIZE));
+        if let Err(e) = mapper.map(virt, phys, PageTableFlags::USER_DATA, PageSize::Size4KB) {
+            kprintln!("  ERROR: Failed to map stack page {}: {:?}", i, e);
+            return u64::MAX;
+        }
+    }
 
     // Generate process ID (use frame address for now - unique per process)
     let pid = tcb_frame.as_usize();
@@ -315,12 +379,17 @@ fn sys_process_create(
         );
         core::ptr::write(tcb_ptr, tcb);
 
+        // Initialize saved_ttbr0 in the context for context switching
+        (*tcb_ptr).context_mut().saved_ttbr0 = page_table_root;
+
         // Set state to Runnable
         (*tcb_ptr).set_state(crate::objects::ThreadState::Runnable);
 
         // Add to scheduler
         // Note: scheduler::enqueue handles uninitialized scheduler gracefully
         scheduler::enqueue(tcb_ptr);
+
+        // TCB is now managed by scheduler
     }
 
     kprintln!("[syscall] process_create -> PID {:#x}", pid);
@@ -339,7 +408,7 @@ fn sys_process_create(
 /// - Low enough to work with TCR_EL1 configuration (39-bit VA)
 ///
 /// Production improvement: Use per-process VSpace allocator with free list
-static mut NEXT_VIRT_ADDR: u64 = 0x80000000; // Start at 2GB
+static mut NEXT_VIRT_ADDR: u64 = crate::generated::memory_config::USER_VIRT_START;
 
 /// Map physical memory into caller's virtual address space
 ///

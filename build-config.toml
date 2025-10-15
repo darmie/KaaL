@@ -34,7 +34,10 @@ ram_base = "0x40000000" # RAM starts at 1GB
 ram_size = "0x8000000"  # 128MB total RAM
 
 # Device addresses
-uart_base = "0x09000000" # PL011 UART
+uart0_base = "0x09000000" # PL011 UART0
+uart1_base = "0x09010000" # PL011 UART1
+rtc_base = "0x0A000000"   # ARM PL031 RTC
+timer_base = "0x0A003000" # ARM Generic Timer
 
 # Boot memory layout offsets (relative to ram_base)
 dtb_offset = "0x0"            # DTB at ram_base + 0x0 = 0x40000000
@@ -47,6 +50,7 @@ stack_top_offset = "0x8000000" # Stack top at ram_base + ram_size = 0x48000000
 
 # Virtual memory layout (ARM64)
 kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
+user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
 # Page sizes (ARM64 standard)
@@ -89,6 +93,7 @@ stack_top_offset = "0x800000" # Stack top at 8MB
 
 # Virtual memory layout (ARM64)
 kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
+user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
 # Page sizes (ARM64 standard)
@@ -126,6 +131,7 @@ stack_top_offset = "0x1000000" # Stack top at 16MB
 
 # Virtual memory layout (ARM64)
 kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
+user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
 # Page sizes (ARM64 standard)

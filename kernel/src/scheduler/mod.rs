@@ -142,11 +142,13 @@ pub unsafe fn test_set_current_thread(tcb: *mut TCB) {
 /// boot code to create processes before scheduler init.
 pub unsafe fn enqueue(tcb: *mut TCB) {
     if tcb.is_null() {
+        crate::kprintln!("[sched] enqueue: null TCB, skipping");
         return;
     }
 
     // Check if scheduler is initialized
     if SCHEDULER.is_none() {
+        crate::kprintln!("[sched] enqueue: scheduler not initialized, skipping TCB {}", (*tcb).tid());
         return; // Silently skip if not initialized
     }
 
@@ -234,9 +236,6 @@ pub unsafe fn yield_current() {
     next_tcb.set_state(crate::objects::ThreadState::Running);
     set_current_thread(next);
 
-    crate::kprintln!("[sched] Yielding from TCB {} to TCB {}",
-                     current_tcb.tid(), next_tcb.tid());
-
     // Perform context switch (assembly)
     // This saves current thread's registers and restores next thread's registers
     crate::arch::aarch64::context_switch::switch_context(current, next);
@@ -276,9 +275,6 @@ pub unsafe fn block_current() {
     let next_tcb = &mut *next;
     next_tcb.set_state(crate::objects::ThreadState::Running);
     set_current_thread(next);
-
-    crate::kprintln!("[sched] Blocking TCB {}, switching to TCB {}",
-                     (*current).tid(), next_tcb.tid());
 
     // Perform context switch (assembly)
     crate::arch::aarch64::context_switch::switch_context(current, next);
@@ -323,9 +319,6 @@ pub unsafe fn unblock(tcb: *mut TCB) {
         // Lower priority number = higher priority
         // If unblocked thread has higher priority, preempt current
         if unblocked_priority < current_priority {
-            crate::kprintln!("[sched] Preempting: unblocked TCB {} (pri {}) > current TCB {} (pri {})",
-                           tcb_ref.tid(), unblocked_priority,
-                           (*current).tid(), current_priority);
             yield_current();
         }
     }
@@ -380,9 +373,6 @@ pub unsafe fn set_priority(tcb: *mut TCB, priority: u8) {
         // Lower priority number = higher priority
         // If modified thread now has higher priority than current, preempt
         if priority < current_priority && tcb_ref.state() == crate::objects::ThreadState::Runnable {
-            crate::kprintln!("[sched] Preempting: TCB {} priority changed to {} (higher than current TCB {} pri {})",
-                           tcb_ref.tid(), priority,
-                           (*current).tid(), current_priority);
             yield_current();
         }
     }

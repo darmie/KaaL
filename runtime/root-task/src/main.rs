@@ -26,6 +26,7 @@ const SYS_ENDPOINT_CREATE: usize = 0x13;
 const SYS_PROCESS_CREATE: usize = 0x14;
 const SYS_MEMORY_MAP: usize = 0x15;
 const SYS_MEMORY_UNMAP: usize = 0x16;
+const SYS_YIELD: usize = 0x01;
 
 /// Make a syscall to print a message
 ///
@@ -131,6 +132,7 @@ unsafe fn sys_process_create(
     cspace_root: usize,
     code_phys: usize,
     code_size: usize,
+    stack_phys: usize,
 ) -> usize {
     let result: usize;
     core::arch::asm!(
@@ -141,6 +143,7 @@ unsafe fn sys_process_create(
         "mov x3, {cspace}",
         "mov x4, {code_phys}",
         "mov x5, {code_size}",
+        "mov x6, {stack_phys}",
         "svc #0",
         "mov {result}, x0",
         syscall_num = in(reg) SYS_PROCESS_CREATE,
@@ -150,6 +153,7 @@ unsafe fn sys_process_create(
         cspace = in(reg) cspace_root,
         code_phys = in(reg) code_phys,
         code_size = in(reg) code_size,
+        stack_phys = in(reg) stack_phys,
         result = out(reg) result,
         out("x8") _,
         out("x0") _,
@@ -158,6 +162,7 @@ unsafe fn sys_process_create(
         out("x3") _,
         out("x4") _,
         out("x5") _,
+        out("x6") _,
     );
     result
 }
@@ -183,6 +188,17 @@ unsafe fn sys_memory_map(phys_addr: usize, size: usize, permissions: usize) -> u
         out("x2") _,
     );
     result
+}
+
+/// Yield CPU to next process
+unsafe fn sys_yield() {
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "svc #0",
+        syscall_num = in(reg) SYS_YIELD,
+        out("x8") _,
+        out("x0") _,
+    );
 }
 
 /// Unmap virtual memory from our address space
@@ -477,16 +493,21 @@ pub extern "C" fn _start() -> ! {
         // This is a simplification - real implementation needs proper page tables
 
         // Stack grows down from top
-        let stack_top = stack_mem + stack_size;
+        // Use fixed virtual address for stack (top of userspace memory)
+        const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
+        let stack_top = STACK_VIRT_TOP;
 
         // Create the process
+        // Note: We pass stack_mem (physical address) as the 7th parameter
+        // so the kernel can map it at the virtual address we specified
         let pid = sys_process_create(
             elf_info.entry_point,
-            stack_top,
+            stack_top,       // Virtual address where stack will be
             pt_root,
             cspace_root,
-            process_mem,  // Physical address of loaded code
-            process_size,  // Size of code region
+            process_mem,     // Physical address of loaded code
+            process_size,    // Size of code region
+            stack_mem,       // Physical address of stack
         );
 
         if pid == usize::MAX {
@@ -500,6 +521,12 @@ pub extern "C" fn _start() -> ! {
             sys_print("  Chapter 9 Phase 2: Process Spawning Complete ✓\n");
             sys_print("═══════════════════════════════════════════════════════════\n");
             sys_print("\n");
+
+            // Chapter 9 Phase 3: Test context switching!
+            sys_print("[root_task] Yielding to echo-server...\n");
+            sys_yield();
+            sys_print("[root_task] Back from echo-server!\n");
+            sys_print("[root_task] Multi-process working! ✓\n");
         }
     }
 

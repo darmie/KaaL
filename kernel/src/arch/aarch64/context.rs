@@ -95,10 +95,10 @@ impl TrapFrame {
         self.x8
     }
 
-    /// Get syscall arguments (x0-x5)
+    /// Get syscall arguments (x0-x6)
     #[inline]
-    pub fn syscall_args(&self) -> [u64; 6] {
-        [self.x0, self.x1, self.x2, self.x3, self.x4, self.x5]
+    pub fn syscall_args(&self) -> [u64; 7] {
+        [self.x0, self.x1, self.x2, self.x3, self.x4, self.x5, self.x6]
     }
 
     /// Set syscall return value (x0)

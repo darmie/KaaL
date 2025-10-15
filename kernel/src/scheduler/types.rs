@@ -113,10 +113,18 @@ impl Scheduler {
     /// Returns the highest-priority runnable thread, or the idle thread
     /// if no threads are ready.
     pub unsafe fn schedule(&mut self) -> *mut TCB {
+        crate::kprintln!("[sched] schedule: looking for next thread");
+        crate::kprintln!("[sched] priority_bitmap: [{:#018x}, {:#018x}, {:#018x}, {:#018x}]",
+                         self.priority_bitmap[0], self.priority_bitmap[1],
+                         self.priority_bitmap[2], self.priority_bitmap[3]);
+
         // Find highest priority with runnable threads
         if let Some(priority) = self.find_highest_priority() {
+            crate::kprintln!("[sched] schedule: found priority {} with ready threads", priority);
             // Dequeue from that priority level
             if let Some(tcb) = self.ready_queues[priority as usize].dequeue_head() {
+                crate::kprintln!("[sched] schedule: dequeued TCB {} at {:#x}",
+                               (*tcb).tid(), tcb as usize);
                 // Update bitmap if queue now empty
                 if self.ready_queues[priority as usize].is_empty() {
                     self.clear_priority_bit(priority);
@@ -125,6 +133,7 @@ impl Scheduler {
             }
         }
 
+        crate::kprintln!("[sched] schedule: no ready threads, returning idle TCB 0");
         // No runnable threads, return idle
         self.idle
     }
@@ -136,9 +145,16 @@ impl Scheduler {
         // Check each u64 in the bitmap (highest priority first)
         for (chunk_idx, &chunk) in self.priority_bitmap.iter().enumerate() {
             if chunk != 0 {
-                // Found non-empty chunk, find highest bit
-                let bit_in_chunk = chunk.leading_zeros();
-                let priority = (chunk_idx * 64) + (63 - bit_in_chunk as usize);
+                // Found non-empty chunk, find highest bit (lowest priority number)
+                let leading_zeros = chunk.leading_zeros() as usize;
+                // We stored priority P at bit_idx = 63 - (P % 64)
+                // So bit 63 (MSB) = priority 0, bit 0 (LSB) = priority 63
+                // leading_zeros tells us how many zeros before first 1
+                // For bit 63 (MSB): leading_zeros = 0 → priority_in_chunk = 0
+                // For bit 62: leading_zeros = 1 → priority_in_chunk = 1
+                // So priority_in_chunk = leading_zeros
+                let priority_in_chunk = leading_zeros;
+                let priority = (chunk_idx * 64) + priority_in_chunk;
                 return Some(priority as u8);
             }
         }

@@ -2,7 +2,7 @@
 
 **Purpose**: Track technical debt, blockers, and future improvements across all chapters.
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2025-10-15
 
 ---
 
@@ -404,28 +404,62 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ## Chapter 7: Root Task & Boot Protocol
 
-**Status**: 📋 Planned
+**Status**: ✅ COMPLETE - 100% (Multi-Process Support Working, 2025-10-15)
 
-### Prerequisites
-- ✅ Chapters 1-6 complete
-- ⬜ ELF loader for initial task
-- ⬜ Boot info structure
-- ⬜ Initial capability space
+### Completed ✅
+- [x] ELF loader for user-space processes (2025-10-14)
+- [x] Multi-process context switching (2025-10-15)
+- [x] Process creation and spawning (sys_process_create)
+- [x] Echo-server successfully executes and yields
+- [x] Root task integration with scheduler
+- [x] User/kernel page table isolation (TTBR0/TTBR1)
+- [x] Userspace memory access from kernel (TTBR0 switching)
+- [x] **Build System**: Generated platform config from build-config.toml (2025-10-15)
+- [x] **Debug Cleanup**: Removed ~30 verbose debug statements (2025-10-15)
 
-### Objectives
-1. Implement ELF loader for root task
-2. Create boot info structure (memory regions, device tree, initial caps)
-3. Load and start root task (first user-space component)
-4. Establish initial capability delegation
-5. Basic root task that prints "Hello from user-space!"
+### Implementation Summary
+- **Root Task**: Created in [kernel/src/boot/root_task.rs](../../kernel/src/boot/root_task.rs)
+- **Process Creation**: sys_process_create in [kernel/src/syscall/mod.rs](../../kernel/src/syscall/mod.rs)
+- **Context Switching**: Multi-process TrapFrame-based switching
+- **TCB Management**: Root task and spawned processes tracked by scheduler
+- **SPSR Configuration**: Critical fix - 0x3c0 (EL0t) for userspace execution
+- **Platform Config**: Auto-generated from build-config.toml in [kernel/src/generated/memory_config.rs](../../kernel/src/generated/memory_config.rs)
 
-**Note**: This chapter focuses on **microkernel-side boot protocol only**. The root task itself will be a minimal stub. Full Runtime Services (Capability Broker, Memory Manager) are part of the **KaaL Framework**, developed separately after microkernel is complete.
+### Critical Bugs Fixed (2025-10-15 Session)
+1. **SPSR Mode Bits**: Was 0x3c5 (EL1h), fixed to 0x3c0 (EL0t) - [kernel/src/objects/tcb.rs:152](../../kernel/src/objects/tcb.rs:152)
+2. **Userspace Memory Access**: sys_debug_print TTBR0 switching - [kernel/src/syscall/mod.rs:112-160](../../kernel/src/syscall/mod.rs:112-160)
+3. **Root Task TCB**: Missing TCB created in boot - [kernel/src/boot/root_task.rs:148-180](../../kernel/src/boot/root_task.rs:148-180)
+4. **Scheduler Priority**: Bitmap calculation fixed - [kernel/src/scheduler/types.rs:144-161](../../kernel/src/scheduler/types.rs:144-161)
+5. **TrapFrame Offset**: saved_ttbr0 at offset 36, not 34 - [kernel/src/arch/aarch64/context_switch.rs:168](../../kernel/src/arch/aarch64/context_switch.rs:168)
 
-### Known Blockers
-**None** - All prerequisites from Chapters 1-6 are complete!
+### Known Limitations
+- **Boot Info Structure**: Deferred to Chapter 9 Phase 1 (Capability Broker will provide)
+- **Initial Capability Space**: Basic implementation, full delegation in Chapter 9
+- **Process Management**: Simple spawn, no full lifecycle management yet
+- **Hardcoded Echo-Server**: Currently embedded in root-task binary (will be replaced in Chapter 9)
 
 ### Future Improvements
-*To be documented during implementation*
+
+#### High Priority (Chapter 9 Phase 1)
+- [ ] **Enhanced Boot Info** - Full boot info structure with untyped memory regions
+- [ ] **Capability Delegation** - Proper initial CSpace setup for root task
+- [ ] **Process Lifecycle** - Process destruction, exit handling
+- [ ] **Dynamic Component Loading** - Replace hardcoded echo-server with Capability Broker spawning
+
+#### Medium Priority
+- [ ] **ELF Loader Robustness** - Better error handling, validation
+- [ ] **Memory Layout Validation** - Check for overlaps, alignment issues
+
+#### Low Priority
+- [ ] **Multi-binary Support** - Load multiple user programs at boot
+- [ ] **Boot Parameter Passing** - Command-line args to root task
+
+### Next Steps
+**Recommendation**: Proceed to **Chapter 9 Phase 1** - Runtime Services Foundation
+- Implement Capability Broker and Memory Manager (2 weeks)
+- Test full IPC with real components (deferred from Chapter 5)
+- Replace hardcoded echo-server with proper component spawning
+- Then return to Chapter 8 for verification and hardening
 
 ---
 
@@ -492,6 +526,18 @@ This provides a natural development flow where IPC implementation informs the fi
 ## Cross-Cutting Concerns
 
 ### Build System
+- [x] **Platform Configuration Generation** - ✅ COMPLETE (2025-10-15)
+  - build.sh now generates kernel/src/generated/memory_config.rs from build-config.toml
+  - Device addresses, memory layout, device IDs all auto-generated
+  - Zero hardcoded values in kernel code
+  - File: [build.sh:107-202](../../build.sh:107-202)
+
+- [ ] **Nushell Build System** - Planned for post-Chapter 9
+  - Current: bash build.sh works well for iterative development
+  - Needed: Robust cross-platform Nushell scripts
+  - Timeline: After capability broker and real component spawning
+  - Impact: Better Windows/macOS support, more maintainable
+
 - [ ] **Platform Detection**: Auto-detect target platform
   - Current: Manual `--platform` flag
   - Needed: Detect from hardware or environment

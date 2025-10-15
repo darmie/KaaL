@@ -15,6 +15,7 @@ use core::panic::PanicInfo;
 
 /// Syscall number for debug print
 const SYS_DEBUG_PRINT: usize = 0x1001;
+const SYS_YIELD: usize = 0x01;
 
 /// Make a syscall to print a message
 unsafe fn sys_print(msg: &str) {
@@ -52,10 +53,19 @@ pub extern "C" fn _start() -> ! {
         sys_print("[echo-server] Own capability space (CSpace)\n");
         sys_print("[echo-server] Full isolation from root-task\n");
         sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  ✓ Multi-Process Microkernel System Active!\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
+
+        // Yield back to root-task to demonstrate context switching
+        sys_print("[echo-server] Yielding back to root-task...\n");
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "svc #0",
+            syscall_num = in(reg) SYS_YIELD,
+            out("x8") _,
+            out("x0") _,
+        );
+
+        // If we return here, it means we were scheduled again
+        sys_print("[echo-server] Scheduled again!\n");
     }
 
     // Idle loop - yield CPU to other processes

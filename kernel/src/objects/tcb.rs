@@ -137,13 +137,19 @@ impl TCB {
         context.elr_el1 = entry_point;
         context.sp_el0 = stack_pointer;
 
+        // Initialize frame pointer and link register to stack pointer
+        // (userspace will set them properly, but they need non-zero values)
+        context.x29 = stack_pointer;  // Frame pointer
+        context.x30 = entry_point;    // Link register (return address)
+
         // Set SPSR for EL0 execution:
-        // - D=1 (Debug exceptions masked)
-        // - A=1 (SError masked)
-        // - I=1 (IRQ masked)
-        // - F=1 (FIQ masked)
-        // - EL=0 (Exception Level 0)
-        context.spsr_el1 = 0x3c5; // All interrupts masked, EL0
+        // - M[4:0] = 0b00000 (EL0t - EL0 using SP_EL0)
+        // - F (bit 6) = 1 (FIQ masked)
+        // - I (bit 7) = 1 (IRQ masked)
+        // - A (bit 8) = 1 (SError masked)
+        // - D (bit 9) = 1 (Debug masked)
+        // Result: 0x3c0 = 0b0011_1100_0000
+        context.spsr_el1 = 0x3c0; // All interrupts masked, EL0t
 
         Self {
             context,

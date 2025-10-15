@@ -275,6 +275,35 @@ pub fn kernel_entry() -> ! {
     crate::kprintln!("Kernel initialization complete!");
     crate::kprintln!("");
 
+    // Initialize scheduler before creating root task
+    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    crate::kprintln!("  Scheduler Initialization");
+    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    crate::kprintln!("");
+
+    // Create idle thread TCB
+    let idle_tcb_frame = crate::memory::alloc_frame()
+        .expect("Failed to allocate idle thread TCB");
+    let idle_tcb_ptr = idle_tcb_frame.phys_addr().as_usize() as *mut crate::objects::TCB;
+    unsafe {
+        use crate::memory::VirtAddr;
+        // Create idle thread (just spins in WFI loop)
+        let idle_tcb = crate::objects::TCB::new(
+            0, // Idle thread ID
+            core::ptr::null_mut(), // No CSpace
+            0, // No page table (uses kernel's)
+            VirtAddr::new(0), // No IPC buffer
+            0, // No entry point (will never execute user code)
+            0, // No stack
+        );
+        core::ptr::write(idle_tcb_ptr, idle_tcb);
+
+        // Initialize scheduler with idle thread
+        crate::scheduler::init(idle_tcb_ptr);
+        crate::kprintln!("[scheduler] Initialized with idle thread at {:#x}", idle_tcb_ptr as usize);
+    }
+    crate::kprintln!("");
+
     // Chapter 7: Create and start root task
     crate::kprintln!("═══════════════════════════════════════════════════════════");
     crate::kprintln!("  Chapter 7: Root Task & Boot Protocol");

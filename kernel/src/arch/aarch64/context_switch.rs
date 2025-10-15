@@ -150,19 +150,20 @@ switch_context_asm:
     // Restore x30 (link register / return address)
     ldr x30, [x1, #(30 * 8)]
 
-    // Restore stack pointer
-    ldr x0, [x1, #(31 * 8)]  // sp_el0 field
-    mov sp, x0
+    // Switch to next thread's page table (TTBR0_EL1)
+    // TrapFrame layout: x0-x30 (31 regs), sp_el0, elr_el1, spsr_el1, esr_el1, far_el1, saved_ttbr0
+    ldr x10, [x1, #(36 * 8)]  // saved_ttbr0 field (offset 36)
+    msr ttbr0_el1, x10
+    tlbi vmalle1is           // Invalidate all TLB entries
+    dsb ish
+    isb
 
-    // Restore SPSR (processor state)
-    ldr x0, [x1, #(33 * 8)]  // spsr_el1 field
-    msr spsr_el1, x0
-
-    // Finally restore x0 and x1
+    // Restore x0 and x1 from next thread
     ldp x0, x1, [x1, #(0 * 8)]
 
-    // Return to next thread
-    // Since we restored x30 (LR), this ret will jump to next thread's resume point
+    // Return normally - do NOT use eret here!
+    // The caller (scheduler or syscall handler) will handle the actual
+    // transition to userspace via the exception return path
     ret
 
     .size switch_context_asm, .-switch_context_asm

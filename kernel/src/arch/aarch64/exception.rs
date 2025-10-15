@@ -336,6 +336,14 @@ extern "C" fn exception_curr_el_spx_serror() {
     panic!("Unhandled exception: Current EL SPx SError");
 }
 
+/// Debug function called right before eret to check TrapFrame
+#[no_mangle]
+extern "C" fn debug_before_eret(frame: &TrapFrame) {
+    kprintln!("[exception] About to eret:");
+    kprintln!("  ELR={:#x}, SP={:#x}, SPSR={:#x}, TTBR0={:#x}",
+              frame.elr_el1, frame.sp_el0, frame.spsr_el1, frame.saved_ttbr0);
+}
+
 /// Handler for synchronous exceptions from lower EL (EL0 userspace)
 /// Called from assembly stub with TrapFrame* in x0
 #[no_mangle]
