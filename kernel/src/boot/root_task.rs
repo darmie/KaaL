@@ -175,6 +175,14 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     // Map enough pages to cover the entire binary
     let code_size = ((binary_size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)) + PAGE_SIZE * 4;
 
+    crate::kprintln!("  ELF mapping:");
+    crate::kprintln!("    entry_addr:        {:#x}", entry_addr);
+    crate::kprintln!("    virt_start:        {:#x}", virt_start);
+    crate::kprintln!("    phys_file_start:   {:#x}", phys_file_start);
+    crate::kprintln!("    code_file_offset:  {:#x}", code_file_offset);
+    crate::kprintln!("    phys_start:        {:#x}", phys_start);
+    crate::kprintln!("    code_size:         {:#x} ({} KB)", code_size, code_size / 1024);
+
     // Map virtual address → physical address (skip ELF headers)
     let mut current_virt = virt_start;
     let mut current_phys = phys_start;

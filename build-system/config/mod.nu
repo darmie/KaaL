@@ -13,8 +13,7 @@ export def "config load-components" [] {
 
 # Get platform configuration
 export def "config get-platform" [config: record, platform: string] {
-    let platform_key = $"platform.($platform)"
-    $config | get $platform_key
+    $config | get platform | get $platform
 }
 
 # Calculate hex address from base + offset
@@ -22,7 +21,7 @@ export def "config calc-addr" [base: string, offset: string] {
     let base_int = ($base | into int)
     let offset_int = ($offset | into int)
     let result = $base_int + $offset_int
-    $"0x($result | into string --radix 16)"
+    $"0x(printf '%x' $result)"
 }
 
 # Validate platform exists

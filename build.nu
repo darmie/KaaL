@@ -53,7 +53,7 @@ def main [
     let platform_cfg = (config get-platform $config $platform)
 
     # Print header
-    print header $"KaaL Build System (Modular Nushell)"
+    print header "KaaL Build System (Modular Nushell)"
     print $"Platform: ($platform_cfg.name)"
     print $"Target:   ($platform_cfg.arch)"
     print ""
@@ -99,7 +99,7 @@ def main [
     print ""
 
     # Print QEMU command
-    if ($platform_cfg | get --ignore-errors qemu_machine) != null {
+    if ($platform_cfg | get -o qemu_machine) != null {
         print $"Run in QEMU:"
         print $"  qemu-system-aarch64 -machine ($platform_cfg.qemu_machine) -cpu ($platform_cfg.qemu_cpu) -m ($platform_cfg.qemu_memory) -nographic -kernel ($bootimage)"
         print ""
@@ -109,6 +109,8 @@ def main [
     let autostart_components = (components autostart)
     print $"📦 Autostart Components: ($autostart_components | length)"
     for component in $autostart_components {
-        print $"  • ($component.name) (($component.type), priority: ($component.priority))"
+        let comp_type = ($component | get type)
+        let comp_priority = ($component | get priority)
+        print $"  • ($component.name) \(($comp_type), priority: ($comp_priority)\)"
     }
 }

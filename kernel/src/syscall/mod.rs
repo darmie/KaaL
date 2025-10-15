@@ -695,23 +695,9 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
         );
     }
 
-    // Debug: Walk the page tables to verify the mapping
-    kprintln!("[syscall] memory_map: verifying mapping...");
-    mapper.debug_walk(VirtAddr::new(virt_addr as usize));
-
-    // Flush TLB only for the mapped virtual address range (not all entries!)
-    // This preserves root-task's code/stack TLB entries
-    unsafe {
-        for i in 0..num_pages {
-            let addr = ((virt_addr as usize) + (i * PAGE_SIZE)) >> 12; // VA >> 12 for TLBI
-            core::arch::asm!(
-                "tlbi vaae1is, {0}",  // Invalidate by VA, all ASID, EL1
-                "dsb ish",            // Ensure completion
-                in(reg) addr
-            );
-        }
-        core::arch::asm!("isb");  // Final instruction sync
-    }
+    // Note: TLB will be naturally flushed on context switches
+    // For new mappings, the TLB won't have stale entries since these addresses weren't mapped before
+    // So we don't need explicit TLB invalidation here
 
     kprintln!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
     virt_addr

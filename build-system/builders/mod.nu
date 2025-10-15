@@ -78,7 +78,7 @@ export def "build elfloader" [
     let rustflags = $"-C link-arg=-T($env.PWD)/runtime/elfloader/linker.ld"
     with-env { RUSTFLAGS: $rustflags } {
         let target_json = $"($env.PWD)/runtime/elfloader/($platform_cfg.elfloader_target_json)"
-        cargo build-safe --target $target_json --release --build-std [core alloc] | ignore
+        cargo build-safe --target $target_json --release --build-std [core alloc]
     }
 
     let bootimage = "runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader"

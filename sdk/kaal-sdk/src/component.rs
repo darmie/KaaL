@@ -146,6 +146,62 @@ macro_rules! component_metadata {
     };
 }
 
+/// Complete component declaration macro
+///
+/// This macro generates everything needed for a component:
+/// - Component metadata
+/// - _start entry point
+/// - Panic handler
+#[macro_export]
+macro_rules! component {
+    (
+        name: $name:expr,
+        type: $type:ident,
+        version: $version:expr,
+        $(capabilities: [$($cap:expr),*],)?
+        impl: $component_type:ty
+    ) => {
+        // Generate metadata
+        #[no_mangle]
+        #[link_section = ".component_metadata"]
+        pub static COMPONENT_METADATA: $crate::component::ComponentMetadata =
+            $crate::component::ComponentMetadata::new(
+                $name,
+                $crate::component::ComponentType::$type,
+                $version,
+            )$(
+                .with_caps(&[$($cap),*])
+            )?;
+
+        // Generate _start entry point
+        #[no_mangle]
+        pub extern "C" fn _start() -> ! {
+            <$component_type as $crate::component::Component>::start()
+        }
+
+        // Generate panic handler
+        #[panic_handler]
+        fn panic(info: &core::panic::PanicInfo) -> ! {
+            $crate::syscall::print("[");
+            $crate::syscall::print($name);
+            $crate::syscall::print("] PANIC");
+
+            if let Some(location) = info.location() {
+                $crate::syscall::print(" at ");
+                $crate::syscall::print(location.file());
+            }
+
+            $crate::syscall::print("\n");
+
+            loop {
+                unsafe {
+                    core::arch::asm!("wfi");
+                }
+            }
+        }
+    };
+}
+
 /// Device driver base structure
 ///
 /// Provides common functionality for device drivers.

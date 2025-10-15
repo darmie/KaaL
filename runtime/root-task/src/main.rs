@@ -51,6 +51,9 @@ unsafe fn sys_print(msg: &str) {
     // - x0 = arg1 (message pointer)
     // - x1 = arg2 (message length)
     // - svc #0 = trigger supervisor call
+    //
+    // Important: Mark all caller-saved registers (x0-x18) as clobbered
+    // to prevent compiler from keeping values in registers across syscalls
     core::arch::asm!(
         "mov x8, {syscall_num}",
         "mov x0, {msg_ptr}",
@@ -59,9 +62,25 @@ unsafe fn sys_print(msg: &str) {
         syscall_num = in(reg) SYS_DEBUG_PRINT,
         msg_ptr = in(reg) msg_ptr,
         msg_len = in(reg) msg_len,
-        out("x0") _,
-        out("x1") _,
-        out("x8") _,
+        lateout("x0") _,
+        lateout("x1") _,
+        lateout("x2") _,
+        lateout("x3") _,
+        lateout("x4") _,
+        lateout("x5") _,
+        lateout("x6") _,
+        lateout("x7") _,
+        lateout("x8") _,
+        lateout("x9") _,
+        lateout("x10") _,
+        lateout("x11") _,
+        lateout("x12") _,
+        lateout("x13") _,
+        lateout("x14") _,
+        lateout("x15") _,
+        lateout("x16") _,
+        lateout("x17") _,
+        lateout("x18") _,
     );
 }
 
@@ -91,8 +110,25 @@ unsafe fn sys_memory_allocate(size: usize) -> usize {
         syscall_num = in(reg) SYS_MEMORY_ALLOCATE,
         size = in(reg) size,
         result = out(reg) result,
-        out("x8") _,
-        out("x0") _,
+        lateout("x0") _,
+        lateout("x1") _,
+        lateout("x2") _,
+        lateout("x3") _,
+        lateout("x4") _,
+        lateout("x5") _,
+        lateout("x6") _,
+        lateout("x7") _,
+        lateout("x8") _,
+        lateout("x9") _,
+        lateout("x10") _,
+        lateout("x11") _,
+        lateout("x12") _,
+        lateout("x13") _,
+        lateout("x14") _,
+        lateout("x15") _,
+        lateout("x16") _,
+        lateout("x17") _,
+        lateout("x18") _,
     );
     result
 }
@@ -187,10 +223,25 @@ unsafe fn sys_memory_map(phys_addr: usize, size: usize, permissions: usize) -> u
         size = in(reg) size,
         perms = in(reg) permissions,
         result = out(reg) result,
-        out("x8") _,
-        out("x0") _,
-        out("x1") _,
-        out("x2") _,
+        lateout("x0") _,
+        lateout("x1") _,
+        lateout("x2") _,
+        lateout("x3") _,
+        lateout("x4") _,
+        lateout("x5") _,
+        lateout("x6") _,
+        lateout("x7") _,
+        lateout("x8") _,
+        lateout("x9") _,
+        lateout("x10") _,
+        lateout("x11") _,
+        lateout("x12") _,
+        lateout("x13") _,
+        lateout("x14") _,
+        lateout("x15") _,
+        lateout("x16") _,
+        lateout("x17") _,
+        lateout("x18") _,
     );
     result
 }

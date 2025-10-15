@@ -1,0 +1,17 @@
+[package]
+name = "system-init"
+version = "0.1.0"
+edition = "2021"
+
+# Opt out of parent workspace
+[workspace]
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Enable link-time optimization
+codegen-units = 1    # Better optimization
+panic = "abort"      # Reduce binary size
+strip = true         # Strip symbols

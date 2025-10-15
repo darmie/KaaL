@@ -58,7 +58,7 @@ export def "cargo build-safe" [
     }
 
     if $release {
-        $args = ($args | append --release)
+        $args = ($args | append "--release")
     }
 
     if ($features | str length) > 0 {
@@ -66,8 +66,21 @@ export def "cargo build-safe" [
     }
 
     if ($build_std | length) > 0 {
-        $args = ($args | append -Z $"build-std=($build_std | str join ',')")
+        $args = ($args | append ["-Z" $"build-std=($build_std | str join ',')"])
     }
 
-    cargo ...$args | complete
+    let result = (cargo ...$args | complete)
+
+    # Check if build succeeded
+    if $result.exit_code != 0 {
+        print $result.stderr
+        error make {
+            msg: "Cargo build failed"
+            label: {
+                text: $"Exit code: ($result.exit_code)"
+            }
+        }
+    }
+
+    $result
 }

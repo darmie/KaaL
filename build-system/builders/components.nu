@@ -8,13 +8,16 @@ export def "components discover" [] {
     let components_data = (config load-components)
     let component_list = ($components_data | get component)
 
-    print $"🔍 Discovered ($component_list | length) component(s) from components.toml:"
+    let comp_count = ($component_list | length)
+    print $"🔍 Discovered ($comp_count) components from components.toml:"
 
     for component in $component_list {
         let autostart_mark = if $component.autostart { "✓" } else { " " }
         let caps_count = ($component.capabilities | length)
         print $"  [($autostart_mark)] ($component.name)"
-        print $"      Type: ($component.type), Priority: ($component.priority), Caps: ($caps_count)"
+        let comp_type = ($component | get type)
+        let comp_priority = ($component | get priority)
+        print $"      Type: ($comp_type), Priority: ($comp_priority), Caps: ($caps_count)"
     }
 
     print ""
