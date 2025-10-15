@@ -268,7 +268,7 @@ KERNEL_ELF="$KERNEL_SOURCE_DIR/target/aarch64-unknown-none/release/kaal-kernel"
 echo "✓ Kernel: $(ls -lh $KERNEL_ELF | awk '{print $5}')"
 
 # =============================================================================
-# Step 2: Build root task
+# Step 2: Build root task (includes capability broker library)
 # =============================================================================
 
 echo ""

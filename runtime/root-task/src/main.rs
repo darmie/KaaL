@@ -16,6 +16,7 @@
 use core::panic::PanicInfo;
 
 mod elf;
+mod broker_integration;
 
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;
@@ -302,54 +303,9 @@ pub extern "C" fn _start() -> ! {
         sys_print("\n");
     }
 
-    // Chapter 9: Test Runtime Services Syscalls
+    // Chapter 9: Test Capability Broker
     unsafe {
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 1: Testing Capability Syscalls\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-
-        // Test 1: Allocate capability slot
-        sys_print("[root_task] Test 1: Allocating capability slot...\n");
-        let cap_slot = sys_cap_allocate();
-        sys_print("  → Allocated cap slot: ");
-        print_number(cap_slot);
-        sys_print("\n");
-
-        // Test 2: Allocate memory
-        sys_print("[root_task] Test 2: Allocating 4096 bytes of memory...\n");
-        let mem_addr = sys_memory_allocate(4096);
-        if mem_addr != usize::MAX {
-            sys_print("  → Allocated memory at: 0x");
-            print_hex(mem_addr);
-            sys_print("\n");
-        } else {
-            sys_print("  → Error: Out of memory\n");
-        }
-
-        // Test 3: Request device (UART0)
-        sys_print("[root_task] Test 3: Requesting UART0 device...\n");
-        let uart_mmio = sys_device_request(0);
-        if uart_mmio != usize::MAX {
-            sys_print("  → UART0 MMIO base: 0x");
-            print_hex(uart_mmio);
-            sys_print("\n");
-        } else {
-            sys_print("  → Error: Device not found\n");
-        }
-
-        // Test 4: Create IPC endpoint
-        sys_print("[root_task] Test 4: Creating IPC endpoint...\n");
-        let endpoint_slot = sys_endpoint_create();
-        sys_print("  → Created endpoint slot: ");
-        print_number(endpoint_slot);
-        sys_print("\n");
-
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 1: Syscalls Working ✓\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
+        broker_integration::test_capability_broker();
     }
 
     // Chapter 9 Phase 2: Spawn echo-server process

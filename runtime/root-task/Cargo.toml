@@ -13,7 +13,7 @@ name = "root-task"
 path = "src/main.rs"
 
 [dependencies]
-# No dependencies for minimal root task binary
+capability_broker = { package = "kaal-capability-broker", path = "../capability-broker" }
 
 [build-dependencies]
 toml = "0.8"
