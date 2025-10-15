@@ -1,0 +1,18 @@
+[package]
+name = "sdk-hello-world"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sdk-hello-world"
+path = "src/main.rs"
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary
+strip = true          # Strip debug symbols

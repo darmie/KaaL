@@ -1,0 +1,23 @@
+[package]
+name = "kaal-sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Contributors"]
+description = "KaaL Microkernel SDK - Clean API for syscalls, IPC, and capability management"
+license = "MIT"
+
+[lib]
+name = "kaal_sdk"
+path = "src/lib.rs"
+
+[dependencies]
+kaal-ipc = { path = "../../runtime/ipc" }
+
+[features]
+default = []
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary

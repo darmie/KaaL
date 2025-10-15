@@ -14,12 +14,16 @@ exclude = [
     "runtime/ipc",
     "kernel",
 
+    # SDK (aarch64-unknown-none target)
+    "sdk/kaal-sdk",
+
     # Examples (different targets)
     "examples/bootable-demo",
     "examples/kernel-test",
     "examples/echo-server",
     "examples/ipc-sender",
     "examples/ipc-receiver",
+    "examples/sdk-hello-world",
 
     # Archived seL4 integration (reference only)
     "archive/sel4-integration",
