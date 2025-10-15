@@ -12,6 +12,7 @@ use crate::memory::VirtAddr;
 pub mod dtb;
 pub mod bootinfo;
 pub mod root_task;
+pub mod boot_info;     // Userspace boot info (for runtime services)
 
 /// Boot parameters passed from elfloader
 #[repr(C)]
