@@ -254,9 +254,34 @@ fn sys_device_request(device_id: u64) -> u64 {
 /// Allocates a capability slot for a new IPC endpoint.
 /// The endpoint object itself is managed through the capability system.
 fn sys_endpoint_create() -> u64 {
+    use crate::objects::Endpoint;
+    use crate::memory::alloc_frame;
+    use core::ptr;
+
+    // Allocate a physical frame for the Endpoint object
+    let endpoint_frame = match unsafe { alloc_frame() } {
+        Some(pfn) => pfn,
+        None => {
+            kprintln!("[syscall] endpoint_create: out of memory");
+            return u64::MAX;
+        }
+    };
+
+    let endpoint_phys = endpoint_frame.phys_addr();
+    kprintln!("[syscall] endpoint_create: allocated frame at phys 0x{:x}", endpoint_phys.as_u64());
+
+    // Create the Endpoint object
+    let endpoint_ptr = endpoint_phys.as_u64() as *mut Endpoint;
+    unsafe {
+        ptr::write(endpoint_ptr, Endpoint::new());
+        kprintln!("[syscall] endpoint_create: created Endpoint at 0x{:x}", endpoint_ptr as u64);
+    }
+
     // Allocate capability slot for the endpoint
-    // The endpoint object is tracked via the capability
+    // TODO: Create proper Capability with CapType::Endpoint and store endpoint_ptr
     let slot = sys_cap_allocate();
+
+    kprintln!("[syscall] endpoint_create -> cap_slot={}", slot);
     slot
 }
 

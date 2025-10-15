@@ -35,7 +35,7 @@ impl Endpoint {
                 "mov x2, {msg_len}",
                 "svc #0",
                 "mov {result}, x0",
-                syscall_num = in(reg) 0x20u64, // SYS_IPC_SEND
+                syscall_num = in(reg) 0x02u64, // SYS_SEND
                 cap_slot = in(reg) self.cap_slot,
                 msg_ptr = in(reg) message.as_ptr() as usize,
                 msg_len = in(reg) message.len(),
@@ -74,7 +74,7 @@ impl Endpoint {
                 "mov x2, {buf_len}",
                 "svc #0",
                 "mov {result}, x0",
-                syscall_num = in(reg) 0x21u64, // SYS_IPC_RECV
+                syscall_num = in(reg) 0x03u64, // SYS_RECV
                 cap_slot = in(reg) self.cap_slot,
                 buf_ptr = in(reg) buffer.as_mut_ptr() as usize,
                 buf_len = in(reg) buffer.len(),
@@ -116,7 +116,7 @@ impl Endpoint {
                 "mov x4, {rep_len}",
                 "svc #0",
                 "mov {result}, x0",
-                syscall_num = in(reg) 0x22u64, // SYS_IPC_CALL
+                syscall_num = in(reg) 0x04u64, // SYS_CALL
                 cap_slot = in(reg) self.cap_slot,
                 req_ptr = in(reg) request.as_ptr() as usize,
                 req_len = in(reg) request.len(),
