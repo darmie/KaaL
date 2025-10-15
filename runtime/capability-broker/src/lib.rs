@@ -83,6 +83,32 @@ pub enum BrokerError {
 /// Result type for Capability Broker operations
 pub type Result<T> = core::result::Result<T, BrokerError>;
 
+/// Capability allocation record
+#[derive(Debug, Clone, Copy)]
+struct CapabilityRecord {
+    /// Capability slot number
+    slot: usize,
+    /// Type of capability
+    cap_type: CapabilityType,
+    /// Is this capability currently allocated?
+    allocated: bool,
+}
+
+/// Type of capability
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CapabilityType {
+    /// Memory capability
+    Memory,
+    /// Device capability
+    Device,
+    /// IPC endpoint capability
+    Endpoint,
+    /// Untyped/free slot
+    Untyped,
+}
+
+const MAX_CAPABILITY_RECORDS: usize = 256;
+
 /// The Capability Broker
 ///
 /// This is the main entry point for managing kernel capabilities in userspace.
@@ -92,6 +118,10 @@ pub struct CapabilityBroker {
     next_cap_slot: usize,
     /// Maximum capability slot
     max_cap_slot: usize,
+    /// Capability allocation records
+    cap_records: [Option<CapabilityRecord>; MAX_CAPABILITY_RECORDS],
+    /// Number of allocated capabilities
+    num_allocated_caps: usize,
     /// Device manager
     device_manager: device_manager::DeviceManager,
     /// Memory manager
@@ -119,10 +149,8 @@ impl CapabilityBroker {
     /// ```
     pub fn init() -> Result<Self> {
         // Read boot info from kernel-mapped address
-        let boot_info = unsafe {
-            boot_info::BootInfo::read()
-                .ok_or(BrokerError::SyscallFailed(0))?
-        };
+        let boot_info =
+            unsafe { boot_info::BootInfo::read().ok_or(BrokerError::SyscallFailed(0))? };
 
         // Start capability slots after initial caps
         let next_cap_slot = if boot_info.num_initial_caps > 0 {
@@ -135,6 +163,8 @@ impl CapabilityBroker {
         Ok(Self {
             next_cap_slot,
             max_cap_slot,
+            cap_records: [None; MAX_CAPABILITY_RECORDS],
+            num_allocated_caps: 0,
             device_manager: device_manager::DeviceManager::new_from_boot_info(boot_info),
             memory_manager: memory_manager::MemoryManager::new_from_boot_info(boot_info),
             endpoint_manager: endpoint_manager::EndpointManager::new(),
@@ -144,14 +174,61 @@ impl CapabilityBroker {
     /// Allocate a new capability slot
     ///
     /// Returns the next available capability slot number, or an error if no slots are available.
-    fn allocate_cap_slot(&mut self) -> Result<usize> {
+    fn allocate_cap_slot(&mut self, cap_type: CapabilityType) -> Result<usize> {
         if self.next_cap_slot >= self.max_cap_slot {
             return Err(BrokerError::OutOfCapabilitySlots);
         }
 
         let slot = self.next_cap_slot;
         self.next_cap_slot += 1;
+
+        // Record the capability allocation
+        if self.num_allocated_caps < MAX_CAPABILITY_RECORDS {
+            self.cap_records[self.num_allocated_caps] = Some(CapabilityRecord {
+                slot,
+                cap_type,
+                allocated: true,
+            });
+            self.num_allocated_caps += 1;
+        }
+
         Ok(slot)
+    }
+
+    /// Get statistics about capability usage
+    ///
+    /// Returns (allocated_count, total_capacity)
+    pub fn capability_stats(&self) -> (usize, usize) {
+        let allocated = self.cap_records[..self.num_allocated_caps]
+            .iter()
+            .filter(|r| r.map(|rec| rec.allocated).unwrap_or(false))
+            .count();
+        (allocated, self.max_cap_slot)
+    }
+
+    /// Get capability usage by type
+    ///
+    /// Returns (memory_caps, device_caps, endpoint_caps, untyped_caps)
+    pub fn capability_usage_by_type(&self) -> (usize, usize, usize, usize) {
+        let mut memory = 0;
+        let mut device = 0;
+        let mut endpoint = 0;
+        let mut untyped = 0;
+
+        for record in &self.cap_records[..self.num_allocated_caps] {
+            if let Some(rec) = record {
+                if rec.allocated {
+                    match rec.cap_type {
+                        CapabilityType::Memory => memory += 1,
+                        CapabilityType::Device => device += 1,
+                        CapabilityType::Endpoint => endpoint += 1,
+                        CapabilityType::Untyped => untyped += 1,
+                    }
+                }
+            }
+        }
+
+        (memory, device, endpoint, untyped)
     }
 
     /// Request a device resource
@@ -177,7 +254,7 @@ impl CapabilityBroker {
     /// ```
     pub fn request_device(&mut self, device_id: DeviceId) -> Result<DeviceResource> {
         // Allocate IRQ capability slot if needed
-        let irq_cap = self.allocate_cap_slot().ok();
+        let irq_cap = self.allocate_cap_slot(CapabilityType::Device).ok();
         self.device_manager.request_device(device_id, irq_cap)
     }
 
@@ -202,7 +279,7 @@ impl CapabilityBroker {
     /// let mem = broker.allocate_memory(4096)?; // Allocate 4KB
     /// ```
     pub fn allocate_memory(&mut self, size: usize) -> Result<MemoryRegion> {
-        let cap_slot = self.allocate_cap_slot()?;
+        let cap_slot = self.allocate_cap_slot(CapabilityType::Memory)?;
         self.memory_manager.allocate(size, cap_slot)
     }
 
@@ -224,7 +301,7 @@ impl CapabilityBroker {
     /// // Use endpoint for send/recv operations
     /// ```
     pub fn create_endpoint(&mut self) -> Result<Endpoint> {
-        let cap_slot = self.allocate_cap_slot()?;
+        let cap_slot = self.allocate_cap_slot(CapabilityType::Endpoint)?;
         self.endpoint_manager.create_endpoint(cap_slot)
     }
 }
@@ -237,8 +314,8 @@ mod tests {
     fn test_allocate_cap_slot() {
         let mut broker = CapabilityBroker::init().unwrap();
 
-        let slot1 = broker.allocate_cap_slot().unwrap();
-        let slot2 = broker.allocate_cap_slot().unwrap();
+        let slot1 = broker.allocate_cap_slot(CapabilityType::Device).unwrap();
+        let slot2 = broker.allocate_cap_slot(CapabilityType::Memory).unwrap();
 
         assert_eq!(slot1, 100);
         assert_eq!(slot2, 101);

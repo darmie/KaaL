@@ -1,8 +1,8 @@
 # Chapter 9: Framework Integration & Runtime Services - Status
 
-**Status**: 🚧 In Progress - Phase 1 Complete
+**Status**: 🚧 In Progress - Phase 1 Complete (Boot Info Integration)
 **Started**: 2025-10-14
-**Last Updated**: 2025-10-14
+**Last Updated**: 2025-10-15
 
 ---
 
@@ -16,16 +16,18 @@ This chapter has 4 phases spanning 6-8 weeks total.
 
 ## Phase 1: Runtime Services Foundation ✅ COMPLETE
 
-**Duration**: Completed in 1 day (2025-10-14)
-**Status**: ✅ **COMPLETE**
+**Duration**: Completed in 2 days (2025-10-14 to 2025-10-15)
+**Status**: ✅ **COMPLETE WITH BOOT INFO INTEGRATION**
 
 ### Objectives
 
 1. ✅ Implement Capability Broker service
 2. ✅ Implement Memory Manager service
-3. ✅ Enhance Root Task with runtime preview
-4. ✅ Archive old seL4 integration code
-5. ✅ Clean workspace and documentation
+3. ✅ Integrate Boot Info infrastructure (kernel → userspace)
+4. ✅ Test full capability broker with real syscalls
+5. ✅ Enhance Root Task with functional broker usage
+6. ✅ Archive old seL4 integration code
+7. ✅ Clean workspace and documentation
 
 ### Deliverables
 
@@ -76,24 +78,69 @@ pub use capability_broker::memory_manager::*;
 pub use capability_broker::{BrokerError, Result};
 ```
 
+#### **Boot Info Infrastructure** (`kernel/src/boot/boot_info.rs`) - ~400 LOC
+
+**Kernel-Side:**
+
+- Created BootInfo structure with device regions, untyped memory, capabilities
+- Populated boot info during root task creation
+- Mapped boot info at fixed address (0x7FFF_F000) for userspace access
+- File: [kernel/src/boot/boot_info.rs](../../kernel/src/boot/boot_info.rs)
+
+**Userspace-Side:**
+
+- Matching BootInfo types in capability-broker
+- Safe reading from kernel-mapped address
+- File: [runtime/capability-broker/src/boot_info.rs](../../runtime/capability-broker/src/boot_info.rs)
+
+**Boot Info Contents:**
+
+- 4 device regions (UART0, UART1, RTC, Timer)
+- 1 untyped memory region (free physical RAM)
+- System configuration (RAM size, kernel base, user virt start)
+- 128MB RAM configuration for QEMU virt platform
+
 #### **Enhanced Root Task** (`runtime/root-task/`)
 
 **Updates:**
-- Added Chapter 9 preview section showing API design
-- Demonstrates planned capability broker usage
-- Shows next implementation steps
 
-**Output when running:**
+- Fully integrated with Capability Broker (not just preview!)
+- Uses broker API for all resource allocation
+- Demonstrates complete working integration
+
+**Test Output:**
 ```
 ═══════════════════════════════════════════════════════════
-  Chapter 9: Runtime Services (Preview)
+  Chapter 9 Phase 1: Testing Capability Broker API
 ═══════════════════════════════════════════════════════════
 
-[root_task] Capability Broker API Design:
-  • init() - Initialize broker
-  • request_device(DeviceId::Uart(0)) - Get UART device
-  • allocate_memory(4096) - Allocate 4KB memory
-  • create_endpoint() - Create IPC endpoint
+[root_task] Initializing Capability Broker...
+  ✓ Capability Broker initialized
+
+[root_task] Test 1: Allocating memory via broker...
+  ✓ Allocated 4096 bytes at: 0x0000000040449000
+    Cap slot: 100
+
+[root_task] Test 2: Requesting UART0 device via broker...
+  ✓ UART0 device allocated:
+    MMIO base: 0x0000000009000000
+    MMIO size: 4096 bytes
+    IRQ cap: 101
+
+[root_task] Test 3: Creating IPC endpoint via broker...
+  ✓ IPC endpoint created:
+    Cap slot: 102
+    Endpoint ID: 0
+
+[root_task] Test 4: Requesting multiple devices...
+  → Requesting RTC...
+    ✓ RTC MMIO: 0x000000000a000000
+  → Requesting Timer...
+    ✓ Timer MMIO: 0x000000000a003000
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 1: Capability Broker Tests Complete ✓
+═══════════════════════════════════════════════════════════
 ```
 
 #### **Workspace Cleanup**
@@ -129,8 +176,13 @@ members = [
 **Integration:**
 - ✅ `./build.sh --platform qemu-virt` succeeds
 - ✅ System boots in QEMU
-- ✅ Shows Chapter 7 + Chapter 9 preview messages
-- ✅ Root task demonstrates API
+- ✅ Boot info successfully passed from kernel to userspace
+- ✅ Capability Broker reads boot info and initializes
+- ✅ All 4 capability broker tests pass:
+  - Memory allocation (4KB at 0x40449000)
+  - Device allocation (UART0, RTC, Timer with correct MMIO addresses)
+  - Endpoint creation (cap_slot 102)
+  - Multi-device requests working
 
 **Borrow Checker:**
 - ✅ Fixed manager interfaces to avoid `&mut self` conflicts
@@ -139,11 +191,15 @@ members = [
 ### File Structure Created
 
 ```
+kernel/src/boot/
+├── boot_info.rs                # ~400 LOC - BootInfo structure
+
 runtime/
 ├── capability-broker/
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs              # ~200 LOC
+│       ├── boot_info.rs        # ~150 LOC - Userspace boot info types
 │       ├── device_manager.rs   # ~90 LOC
 │       ├── memory_manager.rs   # ~90 LOC
 │       └── endpoint_manager.rs # ~95 LOC
@@ -155,7 +211,8 @@ runtime/
 │
 └── root-task/
     └── src/
-        └── main.rs             # Updated with Ch9 preview
+        ├── main.rs             # Updated with broker integration
+        └── broker_integration.rs  # ~170 LOC - Broker tests
 ```
 
 ### Success Criteria
@@ -170,6 +227,10 @@ runtime/
 
 1. `fa327c5` - feat(runtime): Implement Chapter 9 Phase 1 - Runtime Services Foundation
 2. `54ca966` - feat(root-task): Add Chapter 9 runtime services preview
+3. `3b5055c` - feat(kernel): Implement kernel-side boot info generation for runtime services
+4. `f0a25da` - feat(runtime): Add boot info types to capability-broker
+5. `0f4a208` - feat(runtime): Implement Capability Broker with boot info integration
+6. `cd46e41` - feat(runtime): Complete Capability Broker integration with root-task
 
 ---
 
@@ -299,32 +360,37 @@ examples/
 
 ## Blockers
 
-**Current**: None
+**Current**: ✅ None - Phase 1 Complete!
 
-**Upcoming**:
-- Need to implement capability syscalls in kernel (Chapters 4-6 functionality)
-- Need to integrate capability broker as actual library (not just API preview)
+**Phase 1 Resolved** (2025-10-15):
+- ✅ Capability syscalls implemented (SYS_CAP_ALLOCATE, SYS_DEVICE_REQUEST, SYS_MEMORY_ALLOCATE, SYS_ENDPOINT_CREATE)
+- ✅ Boot info infrastructure complete (kernel → userspace communication)
+- ✅ Capability broker fully integrated with root-task
+- ✅ All integration tests passing
+
+**Upcoming for Phase 2**:
+- Need real IPC components (sender/receiver processes) for end-to-end testing
+- Need IPC performance measurement infrastructure
+- Need to test capability transfer across process boundaries
 
 ---
 
-## Next Immediate Steps
+## Next Immediate Steps (Phase 2)
 
-1. **Implement Capability Syscalls in Kernel**
-   - `SYS_CAP_ALLOCATE` - Allocate capability slot
-   - `SYS_DEVICE_REQUEST` - Request device resources
-   - `SYS_MEMORY_ALLOCATE` - Allocate physical memory
-   - `SYS_ENDPOINT_CREATE` - Create IPC endpoint
+1. **Create IPC Test Components**
+   - Build simple sender/receiver test processes
+   - Implement message passing scenarios
+   - Test blocking send/receive semantics
 
-2. **Integrate Capability Broker with Root Task**
-   - Add capability-broker as dependency
-   - Replace API preview with actual usage
-   - Test device/memory/endpoint allocation
+2. **Test Capability Transfer**
+   - Grant capabilities between processes
+   - Mint derived capabilities
+   - Verify capability rights enforcement
 
-3. **Write Integration Tests**
-   - Test broker initialization
-   - Test device allocation (UART)
-   - Test memory allocation
-   - Test endpoint creation
+3. **IPC Performance Benchmarking**
+   - Measure IPC latency (cycles)
+   - Compare with seL4 baseline
+   - Identify optimization opportunities
 
 ---
 

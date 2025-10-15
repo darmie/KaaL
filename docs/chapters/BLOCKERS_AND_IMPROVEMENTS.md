@@ -488,38 +488,74 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ## Chapter 9: Framework Integration & Runtime Services
 
-**Status**: 📋 Planned
+**Status**: 🚧 IN PROGRESS - Phase 1 Complete (2025-10-15)
 
 ### Prerequisites
-- ✅ Chapters 0-8 complete (microkernel done!)
-- ⬜ Component architecture design
-- ⬜ IPC binding library
+- ✅ Chapters 0-7 complete (microkernel operational!)
+- ✅ Boot info infrastructure implemented
+- ✅ Capability syscalls implemented
 
-### Objectives
+### Completed ✅
 
-#### Phase 1: Runtime Services Foundation
-1. Implement Capability Broker (~5K LOC)
-2. Implement Memory Manager (~3K LOC)
+#### Phase 1: Runtime Services Foundation ✅ COMPLETE (2025-10-15)
+1. ✅ Capability Broker (~630 LOC total)
+   - Device Manager with boot info integration
+   - Memory Manager with syscall wrappers
+   - Endpoint Manager with IPC endpoint creation
+   - File: [runtime/capability-broker/](../../runtime/capability-broker/)
 
-#### Phase 2: IPC Integration Testing
-3. Full end-to-end IPC tests (deferred from Chapter 5)
-4. IPC performance benchmarking
+2. ✅ Boot Info Infrastructure (~550 LOC total)
+   - Kernel-side BootInfo structure and population
+   - Userspace boot info types and reading
+   - Device regions (UART0, UART1, RTC, Timer)
+   - Untyped memory regions
+   - Files: [kernel/src/boot/boot_info.rs](../../kernel/src/boot/boot_info.rs), [runtime/capability-broker/src/boot_info.rs](../../runtime/capability-broker/src/boot_info.rs)
 
-#### Phase 3: DDDK & Basic Drivers
-5. Device Driver Development Kit
-6. Example drivers (UART, Timer, GPIO)
+3. ✅ Root Task Integration
+   - Broker initialization from boot info
+   - All 4 tests passing (memory, device, endpoint allocation)
+   - File: [runtime/root-task/src/broker_integration.rs](../../runtime/root-task/src/broker_integration.rs)
+
+### In Progress 🚧
+
+#### Phase 2: IPC Integration Testing (Planned)
+- [ ] Full end-to-end IPC tests (deferred from Chapter 5)
+- [ ] Multi-component send/receive
+- [ ] Capability transfer (grant/mint/derive)
+- [ ] IPC performance benchmarking
+
+### Future Work 📋
+
+#### Phase 3: KaaL SDK
+- [ ] Device Driver Development Kit
+- [ ] Example drivers (UART, Timer, GPIO)
+- [ ] SDK examples
 
 #### Phase 4: System Services
-7. Basic VFS implementation
-8. Network stack foundation
+- [ ] Basic VFS implementation
+- [ ] Network stack foundation
 
 ### Known Blockers
-**None** - All microkernel prerequisites complete after Chapter 8!
+
+**Phase 1**: ✅ None - Complete!
+
+**Phase 2**:
+- Need to create dedicated IPC test components (sender/receiver processes)
+- Need IPC performance measurement infrastructure
+- Need to test capability transfer across process boundaries
 
 ### Future Improvements
-*To be documented during implementation*
 
-**Note**: Chapter 9 transitions from **microkernel development** (Chapters 0-8) to **ecosystem building** (Framework components in user-space).
+#### High Priority (Phase 2)
+- [ ] **IPC End-to-End Testing** - Real multi-process IPC scenarios (1 week)
+- [ ] **Capability Transfer Testing** - Grant/mint/derive across processes (2-3 days)
+- [ ] **IPC Performance Measurement** - Latency benchmarking (1-2 days)
+
+#### Medium Priority (Phase 3)
+- [ ] **DDDK Implementation** - Device driver development kit (1-2 weeks)
+- [ ] **Example Drivers** - UART, Timer, GPIO drivers (1 week)
+
+**Note**: Chapter 9 transitions from **microkernel development** (Chapters 0-7) to **ecosystem building** (Framework components in user-space).
 
 ---
 

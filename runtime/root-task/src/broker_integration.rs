@@ -3,7 +3,7 @@
 //! This module provides integration between the root task and the capability broker,
 //! demonstrating how to use the broker's clean API instead of raw syscalls.
 
-use capability_broker::{CapabilityBroker, DeviceId, DeviceResource, MemoryRegion, Endpoint};
+use capability_broker::{CapabilityBroker, DeviceId};
 
 /// Print helper for integration messages
 unsafe fn sys_print(msg: &str) {
