@@ -1,0 +1,18 @@
+[package]
+name = "sdk-serial-driver"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sdk-serial-driver"
+path = "src/main.rs"
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

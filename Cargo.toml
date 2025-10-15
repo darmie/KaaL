@@ -24,6 +24,7 @@ exclude = [
     "examples/ipc-sender",
     "examples/ipc-receiver",
     "examples/sdk-hello-world",
+    "examples/sdk-serial-driver",
 
     # Archived seL4 integration (reference only)
     "archive/sel4-integration",

@@ -8,6 +8,7 @@
 //! - [`capability`]: Capability management
 //! - [`memory`]: Memory allocation and mapping
 //! - [`process`]: Process creation and management
+//! - [`component`]: Component development patterns (drivers, services, apps)
 //!
 //! # Example
 //! ```no_run
@@ -25,6 +26,7 @@ pub mod syscall;
 pub mod capability;
 pub mod memory;
 pub mod process;
+pub mod component;
 
 // Re-export IPC from kaal-ipc for convenience
 pub use kaal_ipc as ipc;
