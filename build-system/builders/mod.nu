@@ -61,6 +61,7 @@ export def "build embeddable" [kernel_elf: string, roottask_elf: string, build_d
 # Build elfloader (final bootimage)
 export def "build elfloader" [
     platform_cfg: record,
+    platform: string,
     elfloader_addr: string,
     stack_top: string,
     build_dir: string
@@ -75,11 +76,12 @@ export def "build elfloader" [
     cargo clean | ignore
     cd ../..
 
-    # Build elfloader
+    # Build elfloader with platform-specific feature
     let rustflags = $"-C link-arg=-T($env.PWD)/runtime/elfloader/linker.ld"
     with-env { RUSTFLAGS: $rustflags } {
         let target_json = $"runtime/elfloader/($platform_cfg.elfloader_target_json)"
-        cargo build-safe --manifest-path runtime/elfloader/Cargo.toml --target $target_json --release --build-std [core alloc]
+        let features = $"platform-($platform)"
+        cargo build-safe --manifest-path runtime/elfloader/Cargo.toml --target $target_json --features $features --release --build-std [core alloc]
     }
 
     let bootimage = "runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader"

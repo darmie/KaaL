@@ -94,7 +94,7 @@ def main [
     let kernel_elf = (build kernel $config $kernel_addr)
     let roottask_elf = (build roottask $platform)
     build embeddable $kernel_elf $roottask_elf $build_dir
-    let bootimage = (build elfloader $platform_cfg $elfloader_addr $stack_top $build_dir)
+    let bootimage = (build elfloader $platform_cfg $platform $elfloader_addr $stack_top $build_dir)
 
     # Print success
     print ""
