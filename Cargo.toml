@@ -17,6 +17,8 @@ exclude = [
     "examples/bootable-demo",
     "examples/kernel-test",
     "examples/echo-server",
+    "examples/ipc-sender",
+    "examples/ipc-receiver",
 
     # Archived seL4 integration (reference only)
     "archive/sel4-integration",

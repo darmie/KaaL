@@ -24,6 +24,12 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEBUG_PRINT => sys_debug_print(args[0], args[1]),
         numbers::SYS_YIELD => sys_yield(tf),
 
+        // Chapter 5: IPC syscalls
+        numbers::SYS_SEND => sys_ipc_send(tf, args[0], args[1], args[2]),
+        numbers::SYS_RECV => sys_ipc_recv(tf, args[0], args[1], args[2]),
+        numbers::SYS_CALL => sys_ipc_call(tf, args[0], args[1], args[2], args[3], args[4]),
+        numbers::SYS_REPLY => sys_ipc_reply(tf, args[0], args[1]),
+
         // Chapter 9: Capability management syscalls
         numbers::SYS_CAP_ALLOCATE => sys_cap_allocate(),
         numbers::SYS_MEMORY_ALLOCATE => sys_memory_allocate(args[0]),
@@ -533,5 +539,160 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 
     // For now, this is a no-op (simplified)
     kprintln!("[syscall] memory_unmap -> success ({} pages)", num_pages);
+    0
+}
+
+/// IPC Send: Send message to endpoint
+///
+/// Args:
+/// - endpoint_cap_slot: Capability slot for endpoint
+/// - message_ptr: Pointer to message data (in user space)
+/// - message_len: Length of message data
+///
+/// Returns:
+/// - 0 on success
+/// - u64::MAX on error
+fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, message_len: u64) -> u64 {
+    kprintln!("[syscall] IPC Send: endpoint={}, msg_ptr=0x{:x}, len={}",
+        endpoint_cap_slot, message_ptr, message_len);
+
+    // Phase 2 implementation: Validate parameters and test syscall path
+
+    // Validate message length (max 256 bytes for now)
+    if message_len > 256 {
+        kprintln!("[syscall] IPC Send -> error: message too large ({} bytes)", message_len);
+        return u64::MAX;
+    }
+
+    // Validate endpoint capability slot (basic range check)
+    if endpoint_cap_slot >= 4096 {
+        kprintln!("[syscall] IPC Send -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
+        return u64::MAX;
+    }
+
+    // Get current thread
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            kprintln!("[syscall] IPC Send -> error: no current thread");
+            return u64::MAX;
+        }
+
+        // For Phase 2, we're testing the syscall infrastructure
+        // Full implementation would:
+        // 1. Look up endpoint from capability slot
+        // 2. Create Message from user buffer
+        // 3. Call ipc::send(endpoint_cap, current, message)
+        // 4. Handle blocking if no receiver ready
+        // 5. Context switch via scheduler if blocked
+
+        kprintln!("[syscall] IPC Send -> success (validated, Phase 2)");
+    }
+
+    0
+}
+
+/// IPC Receive: Receive message from endpoint
+///
+/// Args:
+/// - endpoint_cap_slot: Capability slot for endpoint
+/// - buffer_ptr: Pointer to receive buffer (in user space)
+/// - buffer_len: Length of receive buffer
+///
+/// Returns:
+/// - Number of bytes received on success
+/// - u64::MAX on error
+fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buffer_len: u64) -> u64 {
+    kprintln!("[syscall] IPC Recv: endpoint={}, buf_ptr=0x{:x}, len={}",
+        endpoint_cap_slot, buffer_ptr, buffer_len);
+
+    // Phase 2 implementation: Validate parameters and test syscall path
+
+    // Validate buffer length
+    if buffer_len > 256 {
+        kprintln!("[syscall] IPC Recv -> error: buffer too large ({} bytes)", buffer_len);
+        return u64::MAX;
+    }
+
+    // Validate endpoint capability slot
+    if endpoint_cap_slot >= 4096 {
+        kprintln!("[syscall] IPC Recv -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
+        return u64::MAX;
+    }
+
+    // Get current thread
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            kprintln!("[syscall] IPC Recv -> error: no current thread");
+            return u64::MAX;
+        }
+
+        // For Phase 2, we're testing the syscall infrastructure
+        // Full implementation would:
+        // 1. Look up endpoint from capability slot
+        // 2. Call ipc::recv(endpoint_cap, current)
+        // 3. Copy received message to user buffer
+        // 4. Handle blocking if no sender ready
+        // 5. Context switch via scheduler if blocked
+
+        kprintln!("[syscall] IPC Recv -> success (validated, Phase 2, 0 bytes)");
+    }
+
+    0  // Return 0 bytes for Phase 2 testing
+}
+
+/// IPC Call: Send message and wait for reply (RPC)
+///
+/// Args:
+/// - endpoint_cap_slot: Capability slot for endpoint
+/// - request_ptr: Pointer to request message
+/// - request_len: Length of request
+/// - reply_ptr: Pointer to reply buffer
+/// - reply_len: Length of reply buffer
+///
+/// Returns:
+/// - Number of bytes in reply on success
+/// - u64::MAX on error
+fn sys_ipc_call(tf: &mut TrapFrame, endpoint_cap_slot: u64, request_ptr: u64, request_len: u64,
+                reply_ptr: u64, reply_len: u64) -> u64 {
+    kprintln!("[syscall] IPC Call: endpoint={}, req_ptr=0x{:x}, req_len={}, rep_ptr=0x{:x}, rep_len={}",
+        endpoint_cap_slot, request_ptr, request_len, reply_ptr, reply_len);
+
+    // TODO: Full implementation
+    // 1. Validate endpoint_cap_slot
+    // 2. Get current TCB
+    // 3. Copy request from userspace
+    // 4. Call ipc::call(endpoint, tcb, request_message)
+    // 5. Handle blocking/context switch
+    // 6. Copy reply to userspace
+
+    // For Phase 2, return 0 bytes to test the syscall path
+    kprintln!("[syscall] IPC Call -> success (stub, 0 bytes)");
+    0
+}
+
+/// IPC Reply: Reply to a call
+///
+/// Args:
+/// - reply_cap_slot: Reply capability slot
+/// - message_ptr: Pointer to reply message
+///
+/// Returns:
+/// - 0 on success
+/// - u64::MAX on error
+fn sys_ipc_reply(tf: &mut TrapFrame, reply_cap_slot: u64, message_ptr: u64) -> u64 {
+    kprintln!("[syscall] IPC Reply: reply_cap={}, msg_ptr=0x{:x}",
+        reply_cap_slot, message_ptr);
+
+    // TODO: Full implementation
+    // 1. Validate reply_cap_slot
+    // 2. Get current TCB
+    // 3. Copy reply message from userspace
+    // 4. Call ipc::reply(reply_cap, message)
+    // 5. Wake up caller
+
+    // For Phase 2, return success to test the syscall path
+    kprintln!("[syscall] IPC Reply -> success (stub)");
     0
 }
