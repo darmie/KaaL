@@ -8,7 +8,120 @@ pub mod numbers;
 
 use crate::arch::aarch64::context::TrapFrame;
 use crate::kprintln;
-use crate::objects::TCB;
+use crate::objects::{TCB, Endpoint};
+use core::ptr;
+
+/// Global capability table for endpoint lookup
+///
+/// Simple array-based capability table mapping capability slots to Endpoint pointers.
+/// In a full implementation, this would be per-process CSpace, but for Phase 2
+/// we use a global table.
+const MAX_CAPABILITIES: usize = 4096;
+static mut CAPABILITY_TABLE: [*mut Endpoint; MAX_CAPABILITIES] = [ptr::null_mut(); MAX_CAPABILITIES];
+
+/// Look up an endpoint from a capability slot
+///
+/// Returns the Endpoint pointer if valid, or null if invalid/empty slot.
+unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
+    if cap_slot >= MAX_CAPABILITIES {
+        return ptr::null_mut();
+    }
+    CAPABILITY_TABLE[cap_slot]
+}
+
+/// Register an endpoint in a capability slot
+///
+/// Stores the Endpoint pointer in the global capability table.
+unsafe fn register_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -> bool {
+    if cap_slot >= MAX_CAPABILITIES {
+        return false;
+    }
+    CAPABILITY_TABLE[cap_slot] = endpoint;
+    true
+}
+
+/// Copy data from userspace to kernel space
+///
+/// Temporarily switches to the caller's TTBR0 to access userspace memory.
+/// This is safe because we're running in EL1 with kernel permissions.
+///
+/// # Safety
+/// - user_ptr must be a valid userspace pointer
+/// - len must not exceed buffer sizes
+/// - caller_ttbr0 must be the physical address of a valid page table
+unsafe fn copy_from_user(user_ptr: u64, kernel_buf: &mut [u8], len: usize, caller_ttbr0: u64) -> bool {
+    if len == 0 || len > kernel_buf.len() {
+        return false;
+    }
+
+    // Save current TTBR0
+    let saved_ttbr0: u64;
+    core::arch::asm!(
+        "mrs {}, ttbr0_el1",
+        out(reg) saved_ttbr0,
+    );
+
+    // Switch to caller's TTBR0 to access userspace memory
+    core::arch::asm!(
+        "msr ttbr0_el1, {}",
+        "isb",
+        in(reg) caller_ttbr0,
+    );
+
+    // Copy data from userspace
+    let user_slice = core::slice::from_raw_parts(user_ptr as *const u8, len);
+    kernel_buf[..len].copy_from_slice(user_slice);
+
+    // Restore kernel's TTBR0
+    core::arch::asm!(
+        "msr ttbr0_el1, {}",
+        "isb",
+        in(reg) saved_ttbr0,
+    );
+
+    true
+}
+
+/// Copy data from kernel space to userspace
+///
+/// Temporarily switches to the caller's TTBR0 to access userspace memory.
+///
+/// # Safety
+/// - user_ptr must be a valid userspace pointer
+/// - len must not exceed buffer sizes
+/// - caller_ttbr0 must be the physical address of a valid page table
+unsafe fn copy_to_user(kernel_buf: &[u8], user_ptr: u64, len: usize, caller_ttbr0: u64) -> bool {
+    if len == 0 || len > kernel_buf.len() {
+        return false;
+    }
+
+    // Save current TTBR0
+    let saved_ttbr0: u64;
+    core::arch::asm!(
+        "mrs {}, ttbr0_el1",
+        out(reg) saved_ttbr0,
+    );
+
+    // Switch to caller's TTBR0 to access userspace memory
+    core::arch::asm!(
+        "msr ttbr0_el1, {}",
+        "isb",
+        in(reg) caller_ttbr0,
+    );
+
+    // Copy data to userspace
+    let user_slice = core::slice::from_raw_parts_mut(user_ptr as *mut u8, len);
+    user_slice.copy_from_slice(&kernel_buf[..len]);
+
+    // Restore kernel's TTBR0
+    core::arch::asm!(
+        "msr ttbr0_el1, {}",
+        "isb",
+        in(reg) saved_ttbr0,
+    );
+
+    true
+}
 
 /// Syscall dispatcher - called from exception handler
 ///
@@ -278,10 +391,17 @@ fn sys_endpoint_create() -> u64 {
     }
 
     // Allocate capability slot for the endpoint
-    // TODO: Create proper Capability with CapType::Endpoint and store endpoint_ptr
     let slot = sys_cap_allocate();
 
-    kprintln!("[syscall] endpoint_create -> cap_slot={}", slot);
+    // Register the endpoint in the capability table
+    unsafe {
+        if !register_endpoint_capability(slot as usize, endpoint_ptr) {
+            kprintln!("[syscall] endpoint_create: failed to register capability slot {}", slot);
+            return u64::MAX;
+        }
+    }
+
+    kprintln!("[syscall] endpoint_create -> cap_slot={}, registered endpoint 0x{:x}", slot, endpoint_ptr as u64);
     slot
 }
 
