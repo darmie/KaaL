@@ -170,4 +170,194 @@ pub unsafe fn test_capability_broker() {
     sys_print("  Chapter 9 Phase 1: Capability Broker Tests Complete ✓\n");
     sys_print("═══════════════════════════════════════════════════════════\n");
     sys_print("\n");
+
+    // Chapter 9 Phase 2: Test IPC syscalls
+    test_ipc_syscalls();
+}
+
+/// Test IPC syscalls to verify kernel integration
+unsafe fn test_ipc_syscalls() {
+    sys_print("═══════════════════════════════════════════════════════════\n");
+    sys_print("  Chapter 9 Phase 2: Testing IPC Syscalls\n");
+    sys_print("═══════════════════════════════════════════════════════════\n");
+    sys_print("\n");
+
+    // Syscall numbers
+    const SYS_SEND: u64 = 0x02;
+    const SYS_RECV: u64 = 0x03;
+    const SYS_CALL: u64 = 0x04;
+    const SYS_REPLY: u64 = 0x05;
+
+    // Test 1: IPC Send syscall
+    sys_print("[root_task] Test 1: IPC Send syscall\n");
+    sys_print("  → Calling sys_send(endpoint=102, msg_ptr=0x1000, len=18)...\n");
+
+    let message = b"Hello from sender!";
+    let result: u64;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {endpoint}",
+        "mov x1, {msg_ptr}",
+        "mov x2, {msg_len}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_SEND,
+        endpoint = in(reg) 102u64,
+        msg_ptr = in(reg) message.as_ptr() as u64,
+        msg_len = in(reg) message.len() as u64,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+    );
+
+    if result == 0 {
+        sys_print("  ✓ sys_send returned success (0)\n");
+    } else if result == u64::MAX {
+        sys_print("  ✗ sys_send returned error (-1)\n");
+    } else {
+        sys_print("  ? sys_send returned: ");
+        print_hex(result as usize);
+        sys_print("\n");
+    }
+
+    // Test 2: IPC Recv syscall
+    sys_print("\n[root_task] Test 2: IPC Recv syscall\n");
+    sys_print("  → Calling sys_recv(endpoint=102, buf_ptr=0x2000, len=256)...\n");
+
+    let mut buffer = [0u8; 256];
+    let bytes_received: u64;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {endpoint}",
+        "mov x1, {buf_ptr}",
+        "mov x2, {buf_len}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_RECV,
+        endpoint = in(reg) 102u64,
+        buf_ptr = in(reg) buffer.as_mut_ptr() as u64,
+        buf_len = in(reg) buffer.len() as u64,
+        result = out(reg) bytes_received,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+    );
+
+    if bytes_received == u64::MAX {
+        sys_print("  ✗ sys_recv returned error (-1)\n");
+    } else {
+        sys_print("  ✓ sys_recv returned ");
+        print_number(bytes_received as usize);
+        sys_print(" bytes\n");
+    }
+
+    // Test 3: IPC Call syscall
+    sys_print("\n[root_task] Test 3: IPC Call syscall (RPC)\n");
+    sys_print("  → Calling sys_call(endpoint=102, req_len=7, rep_len=256)...\n");
+
+    let request = b"REQUEST";
+    let mut reply = [0u8; 256];
+    let reply_len: u64;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {endpoint}",
+        "mov x1, {req_ptr}",
+        "mov x2, {req_len}",
+        "mov x3, {rep_ptr}",
+        "mov x4, {rep_len}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_CALL,
+        endpoint = in(reg) 102u64,
+        req_ptr = in(reg) request.as_ptr() as u64,
+        req_len = in(reg) request.len() as u64,
+        rep_ptr = in(reg) reply.as_mut_ptr() as u64,
+        rep_len = in(reg) reply.len() as u64,
+        result = out(reg) reply_len,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+        out("x3") _,
+        out("x4") _,
+    );
+
+    if reply_len == u64::MAX {
+        sys_print("  ✗ sys_call returned error (-1)\n");
+    } else {
+        sys_print("  ✓ sys_call returned ");
+        print_number(reply_len as usize);
+        sys_print(" bytes in reply\n");
+    }
+
+    // Test 4: IPC Reply syscall
+    sys_print("\n[root_task] Test 4: IPC Reply syscall\n");
+    sys_print("  → Calling sys_reply(reply_cap=200, msg_ptr=0x3000)...\n");
+
+    let reply_msg = b"REPLY";
+    let reply_result: u64;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {reply_cap}",
+        "mov x1, {msg_ptr}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_REPLY,
+        reply_cap = in(reg) 200u64,
+        msg_ptr = in(reg) reply_msg.as_ptr() as u64,
+        result = out(reg) reply_result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+    );
+
+    if reply_result == 0 {
+        sys_print("  ✓ sys_reply returned success (0)\n");
+    } else if reply_result == u64::MAX {
+        sys_print("  ✗ sys_reply returned error (-1)\n");
+    } else {
+        sys_print("  ? sys_reply returned: ");
+        print_hex(reply_result as usize);
+        sys_print("\n");
+    }
+
+    // Test 5: Error handling - invalid parameters
+    sys_print("\n[root_task] Test 5: Error handling (invalid params)\n");
+    sys_print("  → Calling sys_send with invalid endpoint=9999...\n");
+
+    let error_result: u64;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {endpoint}",
+        "mov x1, {msg_ptr}",
+        "mov x2, {msg_len}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) SYS_SEND,
+        endpoint = in(reg) 9999u64,  // Invalid endpoint
+        msg_ptr = in(reg) message.as_ptr() as u64,
+        msg_len = in(reg) message.len() as u64,
+        result = out(reg) error_result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+    );
+
+    if error_result == u64::MAX {
+        sys_print("  ✓ Correctly returned error (-1) for invalid endpoint\n");
+    } else {
+        sys_print("  ✗ Should have returned error but got: ");
+        print_hex(error_result as usize);
+        sys_print("\n");
+    }
+
+    sys_print("\n");
+    sys_print("═══════════════════════════════════════════════════════════\n");
+    sys_print("  Chapter 9 Phase 2: IPC Syscall Tests Complete ✓\n");
+    sys_print("═══════════════════════════════════════════════════════════\n");
+    sys_print("\n");
 }
