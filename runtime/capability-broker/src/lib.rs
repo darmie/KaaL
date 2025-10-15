@@ -118,20 +118,25 @@ impl CapabilityBroker {
     /// let mut broker = CapabilityBroker::init()?;
     /// ```
     pub fn init() -> Result<Self> {
-        // TODO: Query kernel for boot info
-        // - Available capability slots
-        // - Memory regions
-        // - Device tree
+        // Read boot info from kernel-mapped address
+        let boot_info = unsafe {
+            boot_info::BootInfo::read()
+                .ok_or(BrokerError::SyscallFailed(0))?
+        };
 
-        // For now, use hardcoded values
-        let next_cap_slot = 100; // Start after kernel-reserved caps
-        let max_cap_slot = 4096; // Arbitrary limit
+        // Start capability slots after initial caps
+        let next_cap_slot = if boot_info.num_initial_caps > 0 {
+            (boot_info.num_initial_caps as usize) + 100
+        } else {
+            100
+        };
+        let max_cap_slot = 4096;
 
         Ok(Self {
             next_cap_slot,
             max_cap_slot,
-            device_manager: device_manager::DeviceManager::new(),
-            memory_manager: memory_manager::MemoryManager::new(),
+            device_manager: device_manager::DeviceManager::new_from_boot_info(boot_info),
+            memory_manager: memory_manager::MemoryManager::new_from_boot_info(boot_info),
             endpoint_manager: endpoint_manager::EndpointManager::new(),
         })
     }

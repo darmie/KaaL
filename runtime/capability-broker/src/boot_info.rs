@@ -134,7 +134,7 @@ impl BootInfo {
     /// This should only be called after kernel has completed initialization.
     pub unsafe fn read() -> Option<&'static Self> {
         let boot_info_ptr = BOOT_INFO_VADDR as *const BootInfo;
-        let boot_info = &*boot_info_ptr;
+        let boot_info = unsafe { &*boot_info_ptr };
 
         // Validate magic and version
         if boot_info.magic != BOOT_INFO_MAGIC {

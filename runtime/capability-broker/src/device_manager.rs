@@ -2,7 +2,7 @@
 //!
 //! Manages device resource allocation (MMIO regions, IRQs, DMA buffers).
 
-use crate::{BrokerError, Result};
+use crate::{BrokerError, Result, boot_info::BootInfo};
 
 /// Device identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,15 +11,13 @@ pub enum DeviceId {
     Uart(usize),
     /// Timer device
     Timer,
-    /// GPIO controller
-    Gpio,
-    /// Custom device (vendor_id, device_id)
-    Custom(u32, u32),
+    /// RTC device
+    Rtc,
+    /// Custom device (device_type from boot info)
+    Custom(u32),
 }
 
 /// Device resource bundle
-///
-/// Contains all resources allocated for a device.
 #[derive(Debug)]
 pub struct DeviceResource {
     /// MMIO base address
@@ -33,74 +31,53 @@ pub struct DeviceResource {
 }
 
 /// Device Manager
-///
-/// Tracks allocated devices and provides device resource allocation.
 pub struct DeviceManager {
-    // TODO: Track allocated devices to prevent double-allocation
+    /// Copy of boot info for device lookups
+    boot_info: Option<&'static BootInfo>,
 }
 
 impl DeviceManager {
-    /// Create a new Device Manager
+    /// Create a new Device Manager from boot info
+    pub(crate) fn new_from_boot_info(boot_info: &'static BootInfo) -> Self {
+        Self {
+            boot_info: Some(boot_info),
+        }
+    }
+
+    /// Create a new Device Manager (legacy, for tests)
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
-        Self {}
+        Self { boot_info: None }
     }
 
     /// Request a device
-    ///
-    /// Allocates all resources needed for the specified device.
     pub(crate) fn request_device(
         &mut self,
         device_id: DeviceId,
         irq_cap: Option<usize>,
     ) -> Result<DeviceResource> {
-        // TODO: Track allocated device to prevent double-allocation
+        let boot_info = self.boot_info.ok_or(BrokerError::DeviceNotFound)?;
 
-        match device_id {
-            DeviceId::Uart(port) => {
-                // Make syscall to kernel to get device MMIO base
-                let device_num = port as u64;
-                let mmio_base = unsafe {
-                    let mut base: usize;
-                    core::arch::asm!(
-                        "mov x8, {syscall_num}",
-                        "mov x0, {device_id}",
-                        "svc #0",
-                        "mov {result}, x0",
-                        syscall_num = in(reg) 0x12u64, // SYS_DEVICE_REQUEST
-                        device_id = in(reg) device_num,
-                        result = out(reg) base,
-                        out("x8") _,
-                        out("x0") _,
-                    );
-                    base
-                };
+        // Map DeviceId to device_type from boot info
+        let device_type = match device_id {
+            DeviceId::Uart(0) => 0, // DEVICE_UART0
+            DeviceId::Uart(1) => 1, // DEVICE_UART1
+            DeviceId::Rtc => 2,     // DEVICE_RTC
+            DeviceId::Timer => 3,   // DEVICE_TIMER
+            DeviceId::Custom(dt) => dt,
+            _ => return Err(BrokerError::DeviceNotFound),
+        };
 
-                // Check for error (u64::MAX = -1)
-                if mmio_base == usize::MAX {
-                    return Err(BrokerError::DeviceNotFound);
-                }
+        // Find device region in boot info
+        let device = boot_info
+            .find_device(device_type)
+            .ok_or(BrokerError::DeviceNotFound)?;
 
-                let mmio_size = 0x1000; // 4KB
-
-                Ok(DeviceResource {
-                    mmio_base,
-                    mmio_size,
-                    irq_cap,
-                    dma_cap: None,
-                })
-            }
-            DeviceId::Timer => {
-                // TODO: Implement timer device allocation
-                Err(BrokerError::DeviceNotFound)
-            }
-            DeviceId::Gpio => {
-                // TODO: Implement GPIO device allocation
-                Err(BrokerError::DeviceNotFound)
-            }
-            DeviceId::Custom(_, _) => {
-                // TODO: Implement custom device allocation
-                Err(BrokerError::DeviceNotFound)
-            }
-        }
+        Ok(DeviceResource {
+            mmio_base: device.paddr as usize,
+            mmio_size: device.size as usize,
+            irq_cap,
+            dma_cap: None, // DMA not implemented yet
+        })
     }
 }

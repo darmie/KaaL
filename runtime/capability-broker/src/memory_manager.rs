@@ -1,54 +1,49 @@
 //! Memory Manager
 //!
-//! Manages physical and virtual memory allocation for userspace components.
+//! Manages memory allocation from untyped regions.
 
-use crate::Result;
+use crate::{BrokerError, Result, boot_info::BootInfo};
 
-/// Memory region descriptor
-#[derive(Debug, Clone, Copy)]
+/// Memory region
+#[derive(Debug)]
 pub struct MemoryRegion {
     /// Physical address
     pub phys_addr: usize,
-    /// Virtual address (if mapped)
-    pub virt_addr: Option<usize>,
     /// Size in bytes
     pub size: usize,
-    /// Capability slot for this memory
+    /// Capability slot
     pub cap_slot: usize,
 }
 
 /// Memory Manager
-///
-/// Tracks memory allocations and provides memory allocation APIs.
 pub struct MemoryManager {
-    // TODO: Track allocated memory regions
-    // TODO: Integrate with kernel's physical memory allocator
+    /// Copy of boot info for untyped regions
+    boot_info: Option<&'static BootInfo>,
+    /// Next untyped region to allocate from
+    next_untyped_idx: usize,
 }
 
 impl MemoryManager {
-    /// Create a new Memory Manager
-    pub(crate) fn new() -> Self {
-        Self {}
+    /// Create from boot info
+    pub(crate) fn new_from_boot_info(boot_info: &'static BootInfo) -> Self {
+        Self {
+            boot_info: Some(boot_info),
+            next_untyped_idx: 0,
+        }
     }
 
-    /// Allocate a memory region
-    ///
-    /// Requests physical memory from the kernel and optionally maps it.
-    ///
-    /// # Arguments
-    ///
-    /// * `size` - Size in bytes (rounded up to page size)
-    /// * `cap_slot` - Capability slot for this memory region
-    ///
-    /// # Returns
-    ///
-    /// Returns a `MemoryRegion` describing the allocated memory.
-    pub(crate) fn allocate(&mut self, size: usize, cap_slot: usize) -> Result<MemoryRegion> {
-        // Round up to page size (4KB)
-        let page_size = 4096;
-        let aligned_size = (size + page_size - 1) & !(page_size - 1);
+    /// Create new (legacy, for tests)
+    #[allow(dead_code)]
+    pub(crate) fn new() -> Self {
+        Self {
+            boot_info: None,
+            next_untyped_idx: 0,
+        }
+    }
 
-        // Make syscall to kernel to allocate physical memory
+    /// Allocate memory
+    pub(crate) fn allocate(&mut self, size: usize, cap_slot: usize) -> Result<MemoryRegion> {
+        // Make syscall to kernel
         let phys_addr = unsafe {
             let mut addr: usize;
             core::arch::asm!(
@@ -57,7 +52,7 @@ impl MemoryManager {
                 "svc #0",
                 "mov {result}, x0",
                 syscall_num = in(reg) 0x11u64, // SYS_MEMORY_ALLOCATE
-                size = in(reg) aligned_size as u64,
+                size = in(reg) size,
                 result = out(reg) addr,
                 out("x8") _,
                 out("x0") _,
@@ -65,37 +60,14 @@ impl MemoryManager {
             addr
         };
 
-        // Check for error (u64::MAX = -1)
         if phys_addr == usize::MAX {
-            return Err(crate::BrokerError::OutOfMemory);
+            return Err(BrokerError::OutOfMemory);
         }
-
-        // TODO: Optionally map to virtual address space
-        // TODO: Track allocation
 
         Ok(MemoryRegion {
             phys_addr,
-            virt_addr: None, // Not mapped yet
-            size: aligned_size,
+            size,
             cap_slot,
         })
-    }
-
-    /// Free a memory region
-    ///
-    /// Returns the memory to the kernel.
-    pub fn free(&mut self, _region: MemoryRegion) -> Result<()> {
-        // TODO: Make syscall to kernel to free memory
-        // TODO: Update tracking
-        Ok(())
-    }
-
-    /// Map a memory region to virtual address space
-    ///
-    /// Maps the given physical memory region to a virtual address.
-    pub fn map(&mut self, _region: &mut MemoryRegion, _virt_addr: usize) -> Result<()> {
-        // TODO: Make syscall to kernel to map memory
-        // TODO: Update region with virtual address
-        Ok(())
     }
 }
