@@ -136,12 +136,15 @@ export def "codegen elfloader-linker" [
     stack_top: string,
     build_dir: string
 ] {
+    # Use absolute path for INPUT like build.sh does
+    let abs_build_dir = ($env.PWD | path join $build_dir)
+
     let script = $"OUTPUT_FORMAT\("elf64-littleaarch64"\)
 OUTPUT_ARCH\(aarch64\)
 ENTRY\(_start\)
 
-INPUT\(($build_dir)/kernel.o\)
-INPUT\(($build_dir)/roottask.o\)
+INPUT\(($abs_build_dir)/kernel.o\)
+INPUT\(($abs_build_dir)/roottask.o\)
 
 SECTIONS
 {
