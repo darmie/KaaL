@@ -205,10 +205,9 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     ).map_err(|_| RootTaskError::MemoryMapping)?;
 
     // Map UART for syscalls (device memory)
-    let uart_base = 0x09000000;
     crate::memory::paging::identity_map_region(
         &mut mapper,
-        uart_base,
+        memory_config::UART0_BASE as usize,
         4096,
         PageTableFlags::USER_DEVICE,
     ).map_err(|_| RootTaskError::MemoryMapping)?;

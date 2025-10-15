@@ -190,12 +190,11 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DATA,
         ).expect("Failed to map stack region");
 
-        // 4. Map UART for console output (QEMU virt @ 0x9000000)
-        // TODO: Get from build-config.toml
-        crate::kprintln!("  Mapping UART device: {:#x}", 0x09000000);
+        // 4. Map UART for console output
+        crate::kprintln!("  Mapping UART device: {:#x}", crate::generated::memory_config::UART0_BASE);
         crate::memory::paging::identity_map_region(
             &mut mapper,
-            0x09000000,
+            crate::generated::memory_config::UART0_BASE as usize,
             4096,
             PageTableFlags::KERNEL_DEVICE,
         ).expect("Failed to map UART");
