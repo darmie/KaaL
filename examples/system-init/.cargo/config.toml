@@ -1,0 +1,10 @@
+[build]
+target = "aarch64-unknown-none"
+
+[target.aarch64-unknown-none]
+runner = "echo"
+rustflags = [
+    "-C", "link-arg=--image-base=0x1000",
+    "-C", "link-arg=-z",
+    "-C", "link-arg=max-page-size=0x1000",
+]

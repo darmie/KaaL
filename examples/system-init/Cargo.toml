@@ -1,0 +1,18 @@
+[package]
+name = "system-init"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+kaal-ipc = { path = "../../runtime/ipc" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "z"     # Optimize for size
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Better optimization
+strip = true        # Strip symbols

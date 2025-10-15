@@ -212,3 +212,107 @@ impl ServiceBase {
         }
     }
 }
+
+/// Component discovery support
+///
+/// Components can be discovered by root-task or system_init through:
+/// 1. Static registry (components known at compile time)
+/// 2. Component metadata section (embedded in binary)
+/// 3. Manifest file (components.toml)
+
+/// Component binary descriptor
+///
+/// Used by component loaders to spawn components with proper configuration.
+#[derive(Debug)]
+pub struct ComponentBinary {
+    /// Component name
+    pub name: &'static str,
+    /// Component type
+    pub component_type: ComponentType,
+    /// Version
+    pub version: &'static str,
+    /// Required capabilities
+    pub required_caps: &'static [&'static str],
+    /// Priority (0-255, higher = more important)
+    pub priority: u8,
+    /// Should autostart at boot
+    pub autostart: bool,
+}
+
+impl ComponentBinary {
+    /// Create a new component binary descriptor
+    pub const fn new(
+        name: &'static str,
+        component_type: ComponentType,
+        version: &'static str,
+    ) -> Self {
+        Self {
+            name,
+            component_type,
+            version,
+            required_caps: &[],
+            priority: 100,
+            autostart: false,
+        }
+    }
+
+    /// Set required capabilities
+    pub const fn with_caps(mut self, caps: &'static [&'static str]) -> Self {
+        self.required_caps = caps;
+        self
+    }
+
+    /// Set priority
+    pub const fn with_priority(mut self, priority: u8) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    /// Set autostart
+    pub const fn with_autostart(mut self, autostart: bool) -> Self {
+        self.autostart = autostart;
+        self
+    }
+}
+
+/// Macro to register a component for discovery
+///
+/// This places the component descriptor in a special section that can be
+/// read by the component loader.
+///
+/// # Example
+/// ```
+/// register_component! {
+///     name: "serial_driver",
+///     type: Driver,
+///     version: "0.1.0",
+///     priority: 200,
+///     autostart: true,
+///     capabilities: ["memory_map:0x09000000", "interrupt:33"],
+/// }
+/// ```
+#[macro_export]
+macro_rules! register_component {
+    (
+        name: $name:expr,
+        type: $type:ident,
+        version: $version:expr,
+        priority: $priority:expr,
+        autostart: $autostart:expr,
+        $(capabilities: [$($cap:expr),*],)?
+    ) => {
+        #[no_mangle]
+        #[link_section = ".component_registry"]
+        pub static COMPONENT_BINARY: $crate::component::ComponentBinary =
+            $crate::component::ComponentBinary::new(
+                $name,
+                $crate::component::ComponentType::$type,
+                $version,
+            )
+            .with_priority($priority)
+            .with_autostart($autostart)
+            $(
+                .with_caps(&[$($cap),*])
+            )?;
+    };
+}
