@@ -3,8 +3,9 @@
 //! Creates the first userspace task (root task) and transitions to EL0.
 
 use crate::arch::aarch64::page_table::PageTableFlags;
-use crate::boot::bootinfo;
+use crate::boot::{bootinfo, boot_info};
 use crate::memory::{PhysAddr, VirtAddr, PAGE_SIZE};
+use crate::generated::memory_config;
 use core::arch::naked_asm;
 
 /// Root task creation error
@@ -18,6 +19,78 @@ pub enum RootTaskError {
     PageTableAllocation,
     /// Failed to map memory
     MemoryMapping,
+    /// Failed to create userspace boot info
+    BootInfoCreation,
+}
+
+/// Populate the boot info structure for userspace runtime services
+///
+/// This function creates and populates a BootInfo structure with:
+/// - Untyped memory regions (available physical memory)
+/// - Device MMIO regions (UART, RTC, Timer, etc.)
+/// - Initial capability slots
+/// - System configuration
+unsafe fn populate_boot_info() -> Result<boot_info::BootInfo, RootTaskError> {
+    let mut info = boot_info::BootInfo::new();
+
+    // Set system configuration
+    info.ram_size = memory_config::RAM_SIZE;
+    info.kernel_virt_base = memory_config::KERNEL_BASE as u64;
+    info.user_virt_start = memory_config::USER_VIRT_START;
+    info.ipc_buffer_vaddr = 0x8000_0000; // Fixed IPC buffer location
+
+    // TODO: Set capability slots when CSpace is implemented
+    info.cspace_root_slot = 0; // Placeholder
+    info.vspace_root_slot = 0; // Placeholder
+
+    // Add device regions from platform configuration
+    info.add_device_region(boot_info::DeviceRegion {
+        paddr: memory_config::UART0_BASE,
+        size: 0x1000,
+        device_type: memory_config::DEVICE_UART0 as u32,
+        irq: 33, // QEMU virt UART0 IRQ
+    }).map_err(|_| RootTaskError::BootInfoCreation)?;
+
+    info.add_device_region(boot_info::DeviceRegion {
+        paddr: memory_config::UART1_BASE,
+        size: 0x1000,
+        device_type: memory_config::DEVICE_UART1 as u32,
+        irq: 34, // QEMU virt UART1 IRQ
+    }).map_err(|_| RootTaskError::BootInfoCreation)?;
+
+    info.add_device_region(boot_info::DeviceRegion {
+        paddr: memory_config::RTC_BASE,
+        size: 0x1000,
+        device_type: memory_config::DEVICE_RTC as u32,
+        irq: 0xFFFFFFFF, // No IRQ
+    }).map_err(|_| RootTaskError::BootInfoCreation)?;
+
+    info.add_device_region(boot_info::DeviceRegion {
+        paddr: memory_config::TIMER_BASE,
+        size: 0x1000,
+        device_type: memory_config::DEVICE_TIMER as u32,
+        irq: 27, // QEMU virt timer IRQ
+    }).map_err(|_| RootTaskError::BootInfoCreation)?;
+
+    // Add untyped memory regions
+    // TODO: Enumerate actual free memory regions from frame allocator
+    // For now, add a large untyped region representing available RAM
+    // This is a placeholder - proper implementation will query frame allocator
+
+    // Example: 64MB of RAM starting at 64MB offset (after kernel)
+    // Size bits: 26 = 64MB (2^26 = 67108864)
+    info.add_untyped_region(boot_info::UntypedRegion::new(
+        memory_config::RAM_BASE + 0x04000000, // 64MB offset
+        26, // 64MB (2^26 bytes)
+        false, // Not device memory
+    )).map_err(|_| RootTaskError::BootInfoCreation)?;
+
+    crate::kprintln!("[boot_info] Created userspace boot info:");
+    crate::kprintln!("  Devices:  {} regions", info.num_device_regions);
+    crate::kprintln!("  Untyped:  {} regions", info.num_untyped_regions);
+    crate::kprintln!("  RAM size: {} MB", info.ram_size / (1024 * 1024));
+
+    Ok(info)
 }
 
 /// Create and start the root task in EL0
@@ -144,6 +217,36 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("  Stack:           {:#x} - {:#x} (256 KB)", stack_bottom, stack_top);
     crate::kprintln!("  Code segment:    {} KB at virt {:#x}", code_size / 1024, virt_start);
     crate::kprintln!("  ✓ Root task ready for EL0 transition");
+
+    // Step 2b: Create and map boot info for userspace runtime services
+    crate::kprintln!("");
+    crate::kprintln!("[root_task] Creating boot info for runtime services...");
+
+    // Create boot info structure
+    let userspace_boot_info = populate_boot_info()?;
+
+    // Allocate physical frame for boot info
+    let boot_info_frame = crate::memory::alloc_frame()
+        .ok_or(RootTaskError::PageTableAllocation)?;
+    let boot_info_phys = boot_info_frame.phys_addr();
+
+    // Write boot info to physical frame
+    let boot_info_ptr = boot_info_phys.as_usize() as *mut boot_info::BootInfo;
+    core::ptr::write(boot_info_ptr, userspace_boot_info);
+
+    // Map boot info at fixed virtual address (0x7FFF_F000 - just below IPC buffer)
+    const BOOT_INFO_VADDR: usize = 0x7FFF_F000;
+    mapper.map(
+        VirtAddr::new(BOOT_INFO_VADDR),
+        boot_info_phys,
+        PageTableFlags::USER_DATA, // Read-only would be better, but use RW for now
+        crate::memory::PageSize::Size4KB,
+    ).map_err(|_| RootTaskError::MemoryMapping)?;
+
+    crate::kprintln!("  Boot info phys:  {:#x}", boot_info_phys.as_usize());
+    crate::kprintln!("  Boot info virt:  {:#x}", BOOT_INFO_VADDR);
+    crate::kprintln!("  Boot info size:  {} bytes", boot_info::BootInfo::size());
+    crate::kprintln!("  ✓ Boot info mapped for userspace");
 
     // Step 3: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
