@@ -26,17 +26,24 @@ kaal_sdk::component! {
 pub struct SystemInit;
 
 impl Component for SystemInit {
-    fn start() -> ! {
+    fn init() -> kaal_sdk::Result<Self> {
         unsafe {
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("  System Init Component v0.1.0\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
-            syscall::print("[system_init] Starting system initialization...\n");
+            syscall::print("[system_init] Initializing...\n");
             syscall::print("[system_init] Component spawned successfully!\n");
             syscall::print("[system_init] Running in userspace (EL0)\n");
             syscall::print("\n");
+        }
+        Ok(SystemInit)
+    }
+
+    fn run(&mut self) -> ! {
+        unsafe {
+            syscall::print("[system_init] Starting main loop\n");
             syscall::print("[system_init] TODO: Spawn other components\n");
             syscall::print("[system_init] TODO: Initialize system services\n");
             syscall::print("\n");

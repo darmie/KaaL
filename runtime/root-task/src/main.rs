@@ -17,6 +17,8 @@ use core::panic::PanicInfo;
 
 mod elf;
 mod broker_integration;
+mod component_loader;
+mod generated;
 
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;

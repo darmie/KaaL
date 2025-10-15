@@ -61,6 +61,14 @@ def main [
     # Discover and validate components
     let components = (components validate)
 
+    # Build components
+    print ""
+    build components $platform_cfg
+
+    # Generate component registry
+    print ""
+    codegen component-registry
+
     # Calculate addresses
     let elfloader_addr = (config calc-addr $platform_cfg.ram_base $platform_cfg.elfloader_offset)
     let kernel_addr = (config calc-addr $platform_cfg.ram_base $platform_cfg.kernel_offset)

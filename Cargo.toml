@@ -30,6 +30,8 @@ exclude = [
     # Archived seL4 integration (reference only)
     "archive/sel4-integration",
     "external/rust-sel4",
+
+    "components/*",
 ]
 
 resolver = "2"
@@ -41,7 +43,13 @@ authors = ["Damilare Darmie Akinlaja"]
 license = "MIT"
 repository = "https://github.com/darmie/kaal"
 description = "KaaL Framework: Native Rust ARM64 microkernel and runtime services"
-keywords = ["microkernel", "operating-system", "arm64", "embedded", "capability"]
+keywords = [
+    "microkernel",
+    "operating-system",
+    "arm64",
+    "embedded",
+    "capability",
+]
 categories = ["embedded", "no-std", "os"]
 
 [workspace.dependencies]

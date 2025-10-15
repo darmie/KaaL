@@ -57,8 +57,8 @@ pub struct ComponentDescriptor {
     pub priority: u8,
     /// Should spawn automatically at boot
     pub autostart: bool,
-    /// Required capabilities
-    pub capabilities: &'static [ComponentCapability],
+    /// Required capabilities (as strings)
+    pub capabilities: &'static [&'static str],
     /// Embedded binary data (set at compile time)
     pub binary_data: Option<&'static [u8]>,
 }
@@ -94,7 +94,7 @@ impl ComponentDescriptor {
     }
 
     /// Set capabilities
-    pub const fn with_capabilities(mut self, caps: &'static [ComponentCapability]) -> Self {
+    pub const fn with_capabilities(mut self, caps: &'static [&'static str]) -> Self {
         self.capabilities = caps;
         self
     }
@@ -194,31 +194,8 @@ impl ComponentLoader {
         // - Stack
 
         // 4. Grant capabilities
-        for cap in desc.capabilities {
-            match cap {
-                ComponentCapability::MemoryMap { phys_addr, size } => {
-                    // Grant memory mapping capability
-                    // TODO: Implement capability granting
-                }
-                ComponentCapability::Interrupt { irq } => {
-                    // Grant interrupt capability
-                    // TODO: Implement IRQ capability granting
-                }
-                ComponentCapability::IpcEndpoint { name } => {
-                    // Create/grant IPC endpoint
-                    // TODO: Implement endpoint sharing
-                }
-                ComponentCapability::ProcessCreate => {
-                    // Grant process creation rights
-                }
-                ComponentCapability::ProcessDestroy => {
-                    // Grant process destruction rights
-                }
-                ComponentCapability::MemoryAllocate => {
-                    // Grant memory allocation rights
-                }
-            }
-        }
+        // TODO: Parse and grant capabilities from strings
+        // For now, skip capability granting
 
         // 5. Load binary into address space
         // TODO: Use ELF loader to map segments
@@ -279,7 +256,8 @@ pub unsafe fn print_manifest_info() {
     } else {
         // Simple number printing (1-9)
         let digit = b'0' + (count as u8);
-        let s = core::str::from_utf8_unchecked(&[digit]);
+        let digit_byte = [digit];
+        let s = core::str::from_utf8_unchecked(&digit_byte);
         crate::sys_print(s);
         crate::sys_print("\n");
     }

@@ -73,16 +73,40 @@ export def "build elfloader" [
     # Clean elfloader
     cd runtime/elfloader
     cargo clean | ignore
+    cd ../..
 
     # Build elfloader
     let rustflags = $"-C link-arg=-T($env.PWD)/runtime/elfloader/linker.ld"
     with-env { RUSTFLAGS: $rustflags } {
-        let target_json = $"($env.PWD)/runtime/elfloader/($platform_cfg.elfloader_target_json)"
-        cargo build-safe --target $target_json --release --build-std [core alloc]
+        let target_json = $"runtime/elfloader/($platform_cfg.elfloader_target_json)"
+        cargo build-safe --manifest-path runtime/elfloader/Cargo.toml --target $target_json --release --build-std [core alloc]
     }
 
     let bootimage = "runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader"
     check exists $bootimage "Elfloader bootimage"
 
     $bootimage
+}
+
+# Build components
+export def "build components" [platform_cfg: record] {
+    print ""
+    print "Building components..."
+
+    # Get list of components from components.toml
+    let components_data = (open components.toml)
+    let components = ($components_data | get component)
+
+    # Build each component that has autostart=true
+    for comp in $components {
+        if $comp.autostart {
+            let comp_dir = $"components/($comp.binary)"
+            if ($comp_dir | path exists) {
+                print $"  → Building ($comp.name)..."
+                cargo build-safe --manifest-path $"($comp_dir)/Cargo.toml" --target aarch64-unknown-none --release
+            }
+        }
+    }
+
+    print "✓ Components built"
 }
