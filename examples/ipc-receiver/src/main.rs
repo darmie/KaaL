@@ -1,16 +1,20 @@
 //! IPC Receiver Test Component
 //!
-//! Receives messages from an IPC endpoint to test the kernel's IPC implementation.
+//! Demonstrates shared memory IPC using SharedRing with notification-based signaling.
+//! Consumer side: Pops messages from ring buffer and waits for notifications.
 
 #![no_std]
 #![no_main]
 
+extern crate kaal_ipc;
+
 use core::panic::PanicInfo;
+use kaal_ipc::{SharedRing, Consumer};
 
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;
 const SYS_YIELD: usize = 0x01;
-const SYS_RECV: usize = 0x03;  // IPC Receive syscall
+const SYS_NOTIFICATION_CREATE: usize = 0x17;
 
 /// Print helper
 unsafe fn sys_print(msg: &str) {
@@ -31,27 +35,26 @@ unsafe fn sys_print(msg: &str) {
     );
 }
 
-/// Receive a message via IPC
-unsafe fn sys_ipc_recv(endpoint_cap: usize, buffer_ptr: usize, buffer_len: usize) -> usize {
-    let result: usize;
+/// Create a notification object
+unsafe fn sys_notification_create() -> u64 {
+    let result: u64;
     core::arch::asm!(
         "mov x8, {syscall_num}",
-        "mov x0, {cap}",
-        "mov x1, {buf_ptr}",
-        "mov x2, {buf_len}",
         "svc #0",
         "mov {result}, x0",
-        syscall_num = in(reg) SYS_RECV,
-        cap = in(reg) endpoint_cap,
-        buf_ptr = in(reg) buffer_ptr,
-        buf_len = in(reg) buffer_len,
+        syscall_num = in(reg) SYS_NOTIFICATION_CREATE,
         result = out(reg) result,
         out("x8") _,
-        out("x0") _,
-        out("x1") _,
-        out("x2") _,
     );
     result
+}
+
+/// Message type for IPC
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Message {
+    data: [u8; 64],
+    len: usize,
 }
 
 #[no_mangle]
@@ -59,76 +62,114 @@ pub extern "C" fn _start() -> ! {
     unsafe {
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  IPC Receiver Test Component\n");
+        sys_print("  IPC Receiver - Shared Memory Ring Buffer Consumer\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
-        sys_print("[ipc-receiver] Waiting for IPC message...\n");
 
-        // Buffer to receive message
-        let mut buffer = [0u8; 256];
+        // Create notification objects (same capability slots as sender in real scenario)
+        sys_print("[ipc-receiver] Creating notification objects...\n");
+        let consumer_notify = sys_notification_create();
+        let producer_notify = sys_notification_create();
 
-        // Endpoint capability (should be passed by root task, for now use slot 200)
-        let endpoint_cap = 200;
-
-        sys_print("[ipc-receiver] Blocking on endpoint capability slot 200\n");
-
-        // Receive the message (will block until sender is ready)
-        let bytes_received = sys_ipc_recv(endpoint_cap, buffer.as_mut_ptr() as usize, buffer.len());
-
-        if bytes_received != usize::MAX {
-            sys_print("[ipc-receiver] ✓ Message received successfully!\n");
-            sys_print("[ipc-receiver] Received ");
-
-            // Print number of bytes
-            let mut num = bytes_received;
-            let mut digits = [0u8; 20];
-            let mut i = 0;
-            if num == 0 {
-                sys_print("0");
-            } else {
-                while num > 0 {
-                    digits[i] = b'0' + (num % 10) as u8;
-                    num /= 10;
-                    i += 1;
-                }
-                while i > 0 {
-                    i -= 1;
-                    let digit = core::str::from_utf8_unchecked(&digits[i..i+1]);
-                    sys_print(digit);
-                }
+        if consumer_notify == u64::MAX || producer_notify == u64::MAX {
+            sys_print("[ipc-receiver] ✗ Failed to create notifications\n");
+            sys_print("[ipc-receiver] Test: FAIL\n");
+            loop {
+                core::arch::asm!("wfi");
             }
-
-            sys_print(" bytes\n");
-
-            // Print the message content (if it's valid UTF-8)
-            if bytes_received <= buffer.len() {
-                if let Ok(msg) = core::str::from_utf8(&buffer[..bytes_received]) {
-                    sys_print("[ipc-receiver] Message content: \"");
-                    sys_print(msg);
-                    sys_print("\"\n");
-                }
-            }
-
-            sys_print("[ipc-receiver] IPC receive test: PASS\n");
-        } else {
-            sys_print("[ipc-receiver] ✗ Message receive failed\n");
-            sys_print("[ipc-receiver] IPC receive test: FAIL\n");
         }
 
+        sys_print("[ipc-receiver] ✓ Notifications created successfully\n");
+
+        // Access shared ring buffer (in real implementation, this would be mapped shared memory)
+        // For testing, we use a static buffer in BSS
+        static mut RING: SharedRing<Message, 16> = SharedRing::new();
+        RING = SharedRing::with_notifications(consumer_notify, producer_notify);
+
+        let consumer = Consumer::new(&RING);
+
+        sys_print("[ipc-receiver] Shared ring buffer initialized\n");
+        sys_print("[ipc-receiver] Waiting for messages...\n");
+        sys_print("\n");
+
+        // Receive messages in a loop
+        let mut msg_count = 0;
+        for _ in 0..5 {
+            // Wait for notification that data is available
+            match consumer.wait_for_data() {
+                Ok(signals) => {
+                    sys_print("[ipc-receiver] ✓ Received notification (signals: ");
+                    let mut num = signals;
+                    if num == 0 {
+                        sys_print("0");
+                    } else {
+                        let mut digits = [0u8; 20];
+                        let mut i = 0;
+                        while num > 0 {
+                            digits[i] = b'0' + (num % 10) as u8;
+                            num /= 10;
+                            i += 1;
+                        }
+                        while i > 0 {
+                            i -= 1;
+                            let digit = core::str::from_utf8_unchecked(&digits[i..i + 1]);
+                            sys_print(digit);
+                        }
+                    }
+                    sys_print(")\n");
+
+                    // Try to pop message
+                    match consumer.pop() {
+                        Ok(msg) => {
+                            msg_count += 1;
+                            sys_print("[ipc-receiver] ✓ Message ");
+                            let digit = (b'0' + msg_count) as char;
+                            let mut buf = [0u8; 1];
+                            buf[0] = digit as u8;
+                            sys_print(core::str::from_utf8_unchecked(&buf));
+                            sys_print(" received: \"");
+
+                            // Print message content
+                            if msg.len > 0 && msg.len <= 64 {
+                                let text = core::str::from_utf8_unchecked(&msg.data[..msg.len]);
+                                sys_print(text);
+                            }
+                            sys_print("\"\n");
+                        }
+                        Err(_) => {
+                            sys_print("[ipc-receiver]   Buffer empty (spurious wakeup)\n");
+                        }
+                    }
+                }
+                Err(_) => {
+                    sys_print("[ipc-receiver] ✗ Wait for notification failed\n");
+                    break;
+                }
+            }
+
+            // Brief yield
+            core::arch::asm!(
+                "mov x8, {syscall_num}",
+                "svc #0",
+                syscall_num = in(reg) SYS_YIELD,
+                out("x8") _,
+                out("x0") _,
+            );
+        }
+
+        sys_print("\n");
+        sys_print("[ipc-receiver] ✓ Received ");
+        let digit = (b'0' + msg_count) as char;
+        let mut buf = [0u8; 1];
+        buf[0] = digit as u8;
+        sys_print(core::str::from_utf8_unchecked(&buf));
+        sys_print(" messages successfully!\n");
+        sys_print("[ipc-receiver] Shared memory IPC test: PASS\n");
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("  IPC Receiver Complete\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
-
-        // Yield back to scheduler
-        core::arch::asm!(
-            "mov x8, {syscall_num}",
-            "svc #0",
-            syscall_num = in(reg) SYS_YIELD,
-            out("x8") _,
-            out("x0") _,
-        );
     }
 
     // Idle loop

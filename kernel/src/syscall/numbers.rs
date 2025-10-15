@@ -63,6 +63,28 @@ pub const SYS_MEMORY_MAP: u64 = 0x15;
 /// Returns: 0 on success, -1 on error
 pub const SYS_MEMORY_UNMAP: u64 = 0x16;
 
+// Notification Syscalls (Chapter 9 Phase 2)
+// Lightweight signaling for shared memory IPC
+
+/// Create a notification object
+/// Returns: notification capability slot, or -1 on error
+pub const SYS_NOTIFICATION_CREATE: u64 = 0x17;
+
+/// Signal a notification (non-blocking)
+/// Args: notification_cap_slot, badge (signal bits)
+/// Returns: 0 on success, -1 on error
+pub const SYS_SIGNAL: u64 = 0x18;
+
+/// Wait for notification (blocking)
+/// Args: notification_cap_slot
+/// Returns: signal bits (non-zero), or -1 on error
+pub const SYS_WAIT: u64 = 0x19;
+
+/// Poll notification (non-blocking)
+/// Args: notification_cap_slot
+/// Returns: signal bits (0 if no signals), or -1 on error
+pub const SYS_POLL: u64 = 0x1A;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

@@ -26,6 +26,7 @@
 pub mod capability;
 pub mod cnode;
 pub mod endpoint;
+pub mod notification;
 pub mod tcb;
 pub mod untyped;
 pub mod invoke;
@@ -38,6 +39,7 @@ mod tests;
 pub use capability::{Capability, CapType, CapRights, CapError};
 pub use cnode::CNode;
 pub use endpoint::Endpoint;
+pub use notification::Notification;
 pub use tcb::{TCB, ThreadState};
 pub use untyped::{UntypedMemory, ObjectType};
 pub use invoke::{invoke_capability, InvocationArgs, InvocationError, InvocationResult};

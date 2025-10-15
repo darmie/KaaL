@@ -247,7 +247,20 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("  Boot info size:  {} bytes", boot_info::BootInfo::size());
     crate::kprintln!("  ✓ Boot info mapped for userspace");
 
-    // Step 3: Create TCB for root task
+    // Step 3: Create CNode for root task capability space
+    crate::kprintln!("  Creating CNode for capability space...");
+    let cnode_frame = crate::memory::alloc_frame()
+        .ok_or(RootTaskError::PageTableAllocation)?;
+    let cnode_phys = cnode_frame.phys_addr();
+    let cnode_ptr = cnode_phys.as_usize() as *mut crate::objects::CNode;
+
+    // Create CNode with 256 slots (2^8 = 256 capabilities)
+    let cnode = crate::objects::CNode::new(8, cnode_phys)
+        .map_err(|_| RootTaskError::PageTableAllocation)?;
+    core::ptr::write(cnode_ptr, cnode);
+    crate::kprintln!("  CNode:           {:#x} (256 slots)", cnode_ptr as usize);
+
+    // Step 4: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
     let root_tcb_frame = crate::memory::alloc_frame()
         .ok_or(RootTaskError::PageTableAllocation)?;
@@ -258,7 +271,7 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("  Initializing TCB...");
     let root_tcb = crate::objects::TCB::new(
         1,                                     // TID = 1 for root-task
-        core::ptr::null_mut(),                 // No CSpace yet (will be set up later)
+        cnode_ptr,                             // CSpace root (CNode)
         user_page_table_phys.as_usize(),       // VSpace root (page table)
         VirtAddr::new(0x8000_0000),            // IPC buffer (not used yet)
         entry_addr as u64,                     // Entry point
@@ -281,7 +294,7 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
 
     crate::kprintln!("  Root TCB:        {:#x} ✓", root_tcb_ptr as usize);
 
-    // Step 4: Transition to EL0
+    // Step 5: Transition to EL0
     crate::kprintln!("");
     crate::kprintln!("[root_task] Transitioning to EL0...");
     crate::kprintln!("");

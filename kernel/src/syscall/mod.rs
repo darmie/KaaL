@@ -8,36 +8,86 @@ pub mod numbers;
 
 use crate::arch::aarch64::context::TrapFrame;
 use crate::kprintln;
-use crate::objects::{TCB, Endpoint};
+use crate::objects::{TCB, Endpoint, Notification};
 use core::ptr;
 
-/// Global capability table for endpoint lookup
+/// Look up an endpoint capability from the current thread's CSpace
 ///
-/// Simple array-based capability table mapping capability slots to Endpoint pointers.
-/// In a full implementation, this would be per-process CSpace, but for Phase 2
-/// we use a global table.
-const MAX_CAPABILITIES: usize = 4096;
-static mut CAPABILITY_TABLE: [*mut Endpoint; MAX_CAPABILITIES] = [ptr::null_mut(); MAX_CAPABILITIES];
-
-/// Look up an endpoint from a capability slot
-///
-/// Returns the Endpoint pointer if valid, or null if invalid/empty slot.
+/// Returns pointer to Endpoint object, or null if:
+/// - cap_slot is invalid
+/// - capability not found in CSpace
+/// - capability is not an Endpoint type
 unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
-    if cap_slot >= MAX_CAPABILITIES {
+    use crate::objects::{CNode, CapType};
+
+    // Get current thread's CSpace root
+    let current_tcb = crate::scheduler::current_thread();
+    if current_tcb.is_null() {
+        kprintln!("[syscall] lookup_endpoint: no current thread");
         return ptr::null_mut();
     }
-    CAPABILITY_TABLE[cap_slot]
+
+    let cspace_root = (*current_tcb).cspace_root();
+    if cspace_root.is_null() {
+        kprintln!("[syscall] lookup_endpoint: thread has no CSpace root");
+        return ptr::null_mut();
+    }
+
+    // Look up capability in CSpace
+    let cnode = &*cspace_root;
+    let cap = match cnode.lookup(cap_slot) {
+        Some(c) => c,
+        None => {
+            kprintln!("[syscall] lookup_endpoint: cap_slot {} not found in CSpace", cap_slot);
+            return ptr::null_mut();
+        }
+    };
+
+    // Verify it's an Endpoint capability
+    if cap.cap_type() != CapType::Endpoint {
+        kprintln!("[syscall] lookup_endpoint: cap_slot {} is not an Endpoint (type={:?})",
+                 cap_slot, cap.cap_type());
+        return ptr::null_mut();
+    }
+
+    // Return pointer to Endpoint object
+    cap.object_ptr() as *mut Endpoint
 }
 
-/// Register an endpoint in a capability slot
+/// Insert an endpoint capability into the current thread's CSpace
 ///
-/// Stores the Endpoint pointer in the global capability table.
-unsafe fn register_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -> bool {
-    if cap_slot >= MAX_CAPABILITIES {
+/// Returns true on success, false on error
+unsafe fn insert_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -> bool {
+    use crate::objects::{CNode, Capability, CapType};
+
+    // Get current thread's CSpace root
+    let current_tcb = crate::scheduler::current_thread();
+    if current_tcb.is_null() {
+        kprintln!("[syscall] insert_endpoint: no current thread");
         return false;
     }
-    CAPABILITY_TABLE[cap_slot] = endpoint;
-    true
+
+    let cspace_root = (*current_tcb).cspace_root();
+    if cspace_root.is_null() {
+        kprintln!("[syscall] insert_endpoint: thread has no CSpace root");
+        return false;
+    }
+
+    // Create Endpoint capability
+    let cap = Capability::new(CapType::Endpoint, endpoint as usize);
+
+    // Insert into CSpace
+    let cnode = &mut *cspace_root;
+    match cnode.insert(cap_slot, cap) {
+        Ok(()) => {
+            kprintln!("[syscall] insert_endpoint: cap_slot {} -> endpoint {:p}", cap_slot, endpoint);
+            true
+        }
+        Err(e) => {
+            kprintln!("[syscall] insert_endpoint: failed to insert at cap_slot {}: {:?}", cap_slot, e);
+            false
+        }
+    }
 }
 
 /// Copy data from userspace to kernel space
@@ -153,6 +203,12 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
+
+        // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
+        numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
+        numbers::SYS_SIGNAL => sys_signal(args[0], args[1]),
+        numbers::SYS_WAIT => sys_wait(args[0]),
+        numbers::SYS_POLL => sys_poll(args[0]),
 
         _ => {
             kprintln!("[syscall] Unknown syscall number: {}", syscall_num);
@@ -393,15 +449,15 @@ fn sys_endpoint_create() -> u64 {
     // Allocate capability slot for the endpoint
     let slot = sys_cap_allocate();
 
-    // Register the endpoint in the capability table
+    // Insert endpoint capability into current thread's CSpace
     unsafe {
-        if !register_endpoint_capability(slot as usize, endpoint_ptr) {
-            kprintln!("[syscall] endpoint_create: failed to register capability slot {}", slot);
+        if !insert_endpoint_capability(slot as usize, endpoint_ptr) {
+            kprintln!("[syscall] endpoint_create: failed to insert capability into CSpace");
             return u64::MAX;
         }
     }
 
-    kprintln!("[syscall] endpoint_create -> cap_slot={}, registered endpoint 0x{:x}", slot, endpoint_ptr as u64);
+    kprintln!("[syscall] endpoint_create -> cap_slot={}, endpoint capability inserted into CSpace", slot);
     slot
 }
 
@@ -701,40 +757,96 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
     kprintln!("[syscall] IPC Send: endpoint={}, msg_ptr=0x{:x}, len={}",
         endpoint_cap_slot, message_ptr, message_len);
 
-    // Phase 2 implementation: Validate parameters and test syscall path
-
-    // Validate message length (max 256 bytes for now)
+    // Validate message length (max 256 bytes)
     if message_len > 256 {
         kprintln!("[syscall] IPC Send -> error: message too large ({} bytes)", message_len);
         return u64::MAX;
     }
 
-    // Validate endpoint capability slot (basic range check)
+    // Validate endpoint capability slot
     if endpoint_cap_slot >= 4096 {
         kprintln!("[syscall] IPC Send -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
         return u64::MAX;
     }
 
-    // Get current thread
     unsafe {
+        // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
             kprintln!("[syscall] IPC Send -> error: no current thread");
             return u64::MAX;
         }
 
-        // For Phase 2, we're testing the syscall infrastructure
-        // Full implementation would:
-        // 1. Look up endpoint from capability slot
-        // 2. Create Message from user buffer
-        // 3. Call ipc::send(endpoint_cap, current, message)
-        // 4. Handle blocking if no receiver ready
-        // 5. Context switch via scheduler if blocked
+        // Look up endpoint from capability slot
+        let endpoint_ptr = lookup_endpoint_capability(endpoint_cap_slot as usize);
+        if endpoint_ptr.is_null() {
+            kprintln!("[syscall] IPC Send -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
+            return u64::MAX;
+        }
 
-        kprintln!("[syscall] IPC Send -> success (validated, Phase 2)");
+        let endpoint = &mut *endpoint_ptr;
+
+        // Copy message from userspace to kernel buffer
+        let mut kernel_msg_buffer = [0u8; 256];
+        if !copy_from_user(message_ptr, &mut kernel_msg_buffer, message_len as usize, tf.saved_ttbr0) {
+            kprintln!("[syscall] IPC Send -> error: failed to copy message from userspace");
+            return u64::MAX;
+        }
+
+        kprintln!("[syscall] IPC Send: copied {} bytes from userspace", message_len);
+
+        // Check if there's a receiver waiting
+        if let Some(receiver_tcb) = endpoint.dequeue_receiver() {
+            kprintln!("[syscall] IPC Send: found waiting receiver, transferring message");
+
+            // Copy message to receiver's IPC buffer
+            let receiver = &mut *receiver_tcb;
+            let receiver_context = receiver.context();
+            let receiver_ttbr0 = receiver_context.saved_ttbr0;
+            let receiver_ipc_buffer = receiver.ipc_buffer().as_u64();
+
+            if !copy_to_user(&kernel_msg_buffer[..message_len as usize], receiver_ipc_buffer, message_len as usize, receiver_ttbr0) {
+                kprintln!("[syscall] IPC Send -> error: failed to copy message to receiver");
+                return u64::MAX;
+            }
+
+            // Store message length in receiver's x0 (return value)
+            let receiver_ctx_mut = receiver.context_mut();
+            receiver_ctx_mut.x0 = message_len;
+
+            // Wake up receiver
+            receiver.set_state(crate::objects::ThreadState::Runnable);
+            crate::scheduler::enqueue(receiver_tcb);
+
+            kprintln!("[syscall] IPC Send -> success, message delivered to receiver");
+            return 0;
+        }
+
+        // No receiver waiting - block sender on endpoint's send queue
+        kprintln!("[syscall] IPC Send: no receiver waiting, blocking sender");
+
+        // Store message in sender's IPC buffer for later transfer
+        let sender = &mut *current;
+        let sender_ipc_buffer = sender.ipc_buffer().as_u64();
+        if !copy_to_user(&kernel_msg_buffer[..message_len as usize], sender_ipc_buffer, message_len as usize, tf.saved_ttbr0) {
+            kprintln!("[syscall] IPC Send -> error: failed to store message in sender's IPC buffer");
+            return u64::MAX;
+        }
+
+        // Store message length in sender's context for later retrieval
+        let sender_ctx_mut = sender.context_mut();
+        sender_ctx_mut.x2 = message_len;
+
+        // Block sender on endpoint
+        endpoint.queue_send(current);
+
+        // Context switch to next runnable thread
+        crate::scheduler::yield_current();
+
+        // When we return here, message has been delivered
+        kprintln!("[syscall] IPC Send -> success after blocking");
+        0
     }
-
-    0
 }
 
 /// IPC Receive: Receive message from endpoint
@@ -751,8 +863,6 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
     kprintln!("[syscall] IPC Recv: endpoint={}, buf_ptr=0x{:x}, len={}",
         endpoint_cap_slot, buffer_ptr, buffer_len);
 
-    // Phase 2 implementation: Validate parameters and test syscall path
-
     // Validate buffer length
     if buffer_len > 256 {
         kprintln!("[syscall] IPC Recv -> error: buffer too large ({} bytes)", buffer_len);
@@ -765,26 +875,86 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
         return u64::MAX;
     }
 
-    // Get current thread
     unsafe {
+        // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
             kprintln!("[syscall] IPC Recv -> error: no current thread");
             return u64::MAX;
         }
 
-        // For Phase 2, we're testing the syscall infrastructure
-        // Full implementation would:
-        // 1. Look up endpoint from capability slot
-        // 2. Call ipc::recv(endpoint_cap, current)
-        // 3. Copy received message to user buffer
-        // 4. Handle blocking if no sender ready
-        // 5. Context switch via scheduler if blocked
+        // Look up endpoint from capability slot
+        let endpoint_ptr = lookup_endpoint_capability(endpoint_cap_slot as usize);
+        if endpoint_ptr.is_null() {
+            kprintln!("[syscall] IPC Recv -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
+            return u64::MAX;
+        }
 
-        kprintln!("[syscall] IPC Recv -> success (validated, Phase 2, 0 bytes)");
+        let endpoint = &mut *endpoint_ptr;
+
+        // Check if there's a sender waiting
+        if let Some(sender_tcb) = endpoint.dequeue_sender() {
+            kprintln!("[syscall] IPC Recv: found waiting sender, transferring message");
+
+            let sender = &mut *sender_tcb;
+
+            // Retrieve message length from sender's context (stored during send)
+            let sender_context = sender.context();
+            let message_len = sender_context.x2 as usize;
+
+            if message_len > buffer_len as usize {
+                kprintln!("[syscall] IPC Recv -> error: sender message ({} bytes) larger than buffer ({} bytes)",
+                         message_len, buffer_len);
+                return u64::MAX;
+            }
+
+            // Copy message from sender's IPC buffer to kernel buffer
+            let mut kernel_msg_buffer = [0u8; 256];
+            let sender_ttbr0 = sender_context.saved_ttbr0;
+            let sender_ipc_buffer = sender.ipc_buffer().as_u64();
+
+            if !copy_from_user(sender_ipc_buffer, &mut kernel_msg_buffer, message_len, sender_ttbr0) {
+                kprintln!("[syscall] IPC Recv -> error: failed to copy message from sender's IPC buffer");
+                return u64::MAX;
+            }
+
+            // Copy message to receiver's buffer
+            if !copy_to_user(&kernel_msg_buffer[..message_len], buffer_ptr, message_len, tf.saved_ttbr0) {
+                kprintln!("[syscall] IPC Recv -> error: failed to copy message to receiver's buffer");
+                return u64::MAX;
+            }
+
+            // Wake up sender
+            sender.set_state(crate::objects::ThreadState::Runnable);
+            crate::scheduler::enqueue(sender_tcb);
+
+            kprintln!("[syscall] IPC Recv -> success, received {} bytes from sender", message_len);
+            return message_len as u64;
+        }
+
+        // No sender waiting - block receiver on endpoint's recv queue
+        kprintln!("[syscall] IPC Recv: no sender waiting, blocking receiver");
+
+        let receiver = &mut *current;
+
+        // Store buffer info in receiver's context for later use
+        let receiver_ctx_mut = receiver.context_mut();
+        receiver_ctx_mut.x1 = buffer_ptr;
+        receiver_ctx_mut.x2 = buffer_len;
+
+        // Block receiver on endpoint
+        endpoint.queue_receive(current);
+
+        // Context switch to next runnable thread
+        crate::scheduler::yield_current();
+
+        // When we return here, message has been received
+        // The message length is stored in x0 by the sender
+        let final_context = (*current).context();
+        let bytes_received = final_context.x0;
+        kprintln!("[syscall] IPC Recv -> success after blocking, received {} bytes", bytes_received);
+        bytes_received
     }
-
-    0  // Return 0 bytes for Phase 2 testing
 }
 
 /// IPC Call: Send message and wait for reply (RPC)
@@ -840,4 +1010,211 @@ fn sys_ipc_reply(tf: &mut TrapFrame, reply_cap_slot: u64, message_ptr: u64) -> u
     // For Phase 2, return success to test the syscall path
     kprintln!("[syscall] IPC Reply -> success (stub)");
     0
+}
+
+// ============================================================================
+// Chapter 9 Phase 2: Notification Syscalls (Shared Memory IPC)
+// ============================================================================
+
+/// Create a notification object
+///
+/// Returns: notification capability slot, or u64::MAX on error
+fn sys_notification_create() -> u64 {
+    use crate::objects::Notification;
+    use crate::memory::alloc_frame;
+    use core::ptr;
+
+    // Allocate a physical frame for the Notification object
+    let notification_frame = match alloc_frame() {
+        Some(pfn) => pfn,
+        None => {
+            kprintln!("[syscall] notification_create: out of memory");
+            return u64::MAX;
+        }
+    };
+
+    let notification_phys = notification_frame.phys_addr();
+    kprintln!("[syscall] notification_create: allocated frame at phys 0x{:x}", notification_phys.as_u64());
+
+    // Create the Notification object
+    let notification_ptr = notification_phys.as_u64() as *mut Notification;
+    unsafe {
+        ptr::write(notification_ptr, Notification::new());
+        kprintln!("[syscall] notification_create: created Notification at 0x{:x}", notification_ptr as u64);
+    }
+
+    // Allocate capability slot for the notification
+    let slot = sys_cap_allocate();
+
+    // Insert notification capability into current thread's CSpace
+    unsafe {
+        if !insert_notification_capability(slot as usize, notification_ptr) {
+            kprintln!("[syscall] notification_create: failed to insert capability into CSpace");
+            return u64::MAX;
+        }
+    }
+
+    kprintln!("[syscall] notification_create -> cap_slot={}, notification capability inserted into CSpace", slot);
+    slot
+}
+
+/// Insert a notification capability into the current thread's CSpace
+unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Notification) -> bool {
+    use crate::objects::{CNode, Capability, CapType};
+
+    // Get current thread's CSpace root
+    let current_tcb = crate::scheduler::current_thread();
+    if current_tcb.is_null() {
+        kprintln!("[syscall] insert_notification: no current thread");
+        return false;
+    }
+
+    let cspace_root = (*current_tcb).cspace_root();
+    if cspace_root.is_null() {
+        kprintln!("[syscall] insert_notification: thread has no CSpace root");
+        return false;
+    }
+
+    // Create Notification capability
+    let cap = Capability::new(CapType::Notification, notification as usize);
+
+    // Insert into CSpace
+    let cnode = &mut *cspace_root;
+    match cnode.insert(cap_slot, cap) {
+        Ok(()) => {
+            kprintln!("[syscall] insert_notification: cap_slot {} -> notification {:p}", cap_slot, notification);
+            true
+        }
+        Err(e) => {
+            kprintln!("[syscall] insert_notification: failed to insert at cap_slot {}: {:?}", cap_slot, e);
+            false
+        }
+    }
+}
+
+/// Look up a notification capability from the current thread's CSpace
+unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
+    use crate::objects::{CNode, CapType, Notification};
+
+    // Get current thread's CSpace root
+    let current_tcb = crate::scheduler::current_thread();
+    if current_tcb.is_null() {
+        kprintln!("[syscall] lookup_notification: no current thread");
+        return ptr::null_mut();
+    }
+
+    let cspace_root = (*current_tcb).cspace_root();
+    if cspace_root.is_null() {
+        kprintln!("[syscall] lookup_notification: thread has no CSpace root");
+        return ptr::null_mut();
+    }
+
+    // Look up capability in CSpace
+    let cnode = &*cspace_root;
+    let cap = match cnode.lookup(cap_slot) {
+        Some(c) => c,
+        None => {
+            kprintln!("[syscall] lookup_notification: cap_slot {} not found in CSpace", cap_slot);
+            return ptr::null_mut();
+        }
+    };
+
+    // Verify it's a Notification capability
+    if cap.cap_type() != CapType::Notification {
+        kprintln!("[syscall] lookup_notification: cap_slot {} is not a Notification (type={:?})",
+                 cap_slot, cap.cap_type());
+        return ptr::null_mut();
+    }
+
+    // Return pointer to Notification object
+    cap.object_ptr() as *mut Notification
+}
+
+/// Signal a notification (non-blocking)
+///
+/// Args:
+/// - notification_cap_slot: Capability slot for notification
+/// - badge: Signal bits to set (OR'd with existing signals)
+///
+/// Returns: 0 on success, u64::MAX on error
+fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
+    kprintln!("[syscall] Signal: notification={}, badge=0x{:x}", notification_cap_slot, badge);
+
+    unsafe {
+        // Look up notification from capability slot
+        let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
+        if notification_ptr.is_null() {
+            kprintln!("[syscall] Signal -> error: notification not found for cap_slot {}", notification_cap_slot);
+            return u64::MAX;
+        }
+
+        let notification = &mut *notification_ptr;
+
+        // Signal the notification
+        notification.signal(badge);
+
+        kprintln!("[syscall] Signal -> success, signaled with badge 0x{:x}", badge);
+        0
+    }
+}
+
+/// Wait for notification (blocking)
+///
+/// Args:
+/// - notification_cap_slot: Capability slot for notification
+///
+/// Returns: signal bits (non-zero), or u64::MAX on error
+fn sys_wait(notification_cap_slot: u64) -> u64 {
+    kprintln!("[syscall] Wait: notification={}", notification_cap_slot);
+
+    unsafe {
+        // Get current thread
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            kprintln!("[syscall] Wait -> error: no current thread");
+            return u64::MAX;
+        }
+
+        // Look up notification from capability slot
+        let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
+        if notification_ptr.is_null() {
+            kprintln!("[syscall] Wait -> error: notification not found for cap_slot {}", notification_cap_slot);
+            return u64::MAX;
+        }
+
+        let notification = &mut *notification_ptr;
+
+        // Wait for notification (blocks if no signals pending)
+        let signals = notification.wait(current);
+
+        kprintln!("[syscall] Wait -> received signals 0x{:x}", signals);
+        signals
+    }
+}
+
+/// Poll notification (non-blocking)
+///
+/// Args:
+/// - notification_cap_slot: Capability slot for notification
+///
+/// Returns: signal bits (0 if no signals), or u64::MAX on error
+fn sys_poll(notification_cap_slot: u64) -> u64 {
+    kprintln!("[syscall] Poll: notification={}", notification_cap_slot);
+
+    unsafe {
+        // Look up notification from capability slot
+        let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
+        if notification_ptr.is_null() {
+            kprintln!("[syscall] Poll -> error: notification not found for cap_slot {}", notification_cap_slot);
+            return u64::MAX;
+        }
+
+        let notification = &*notification_ptr;
+
+        // Poll for signals (non-blocking)
+        let signals = notification.poll();
+
+        kprintln!("[syscall] Poll -> signals 0x{:x}", signals);
+        signals
+    }
 }

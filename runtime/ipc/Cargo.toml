@@ -1,0 +1,23 @@
+[package]
+name = "kaal-ipc"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Contributors"]
+description = "Shared memory IPC library with lock-free ring buffers and notification-based signaling"
+license = "MIT"
+
+[lib]
+name = "kaal_ipc"
+path = "src/lib.rs"
+
+[dependencies]
+# No dependencies - pure userspace library
+
+[features]
+default = []
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary

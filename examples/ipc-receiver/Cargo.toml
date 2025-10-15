@@ -8,6 +8,7 @@ name = "ipc-receiver"
 path = "src/main.rs"
 
 [dependencies]
+kaal-ipc = { path = "../../runtime/ipc" }
 
 [profile.release]
 opt-level = "z"       # Optimize for size
