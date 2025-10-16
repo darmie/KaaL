@@ -321,7 +321,10 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     // Step 5: Transition to EL0
     crate::kprintln!("");
     crate::kprintln!("[root_task] Transitioning to EL0...");
-    crate::kprintln!("");
+    crate::kprintln!("  Entry:    {:#x}", entry_addr);
+    crate::kprintln!("  Stack:    {:#x}", stack_top);
+    crate::kprintln!("  TTBR0:    {:#x}", user_page_table_phys.as_usize());
+    crate::kprintln!("  About to call transition_to_el0...");
 
     transition_to_el0(entry_addr, stack_top, user_page_table_phys.as_usize());
 
