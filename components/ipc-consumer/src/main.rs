@@ -1,12 +1,12 @@
 //! IPC Consumer Component
 //!
-//! Demonstrates inter-component IPC using SharedRing from kaal-ipc.
-//! Consumes u32 values produced by ipc-producer.
+//! Demonstrates inter-component message passing using the semantic Channel API.
+//! Receives u32 messages from the producer component.
 //!
-//! # Arguments (passed via entry point - Phase 5 TODO)
-//! - shared_mem_virt: Virtual address of shared memory containing SharedRing
-//! - consumer_notify_cap: Capability slot for consumer notification
-//! - producer_notify_cap: Capability slot for producer notification
+//! # Arguments (Phase 5 - to be implemented)
+//! - shared_mem_virt: Virtual address of shared memory for channel
+//! - receiver_notify_cap: Notification capability for receiver (this component)
+//! - sender_notify_cap: Notification capability for sender
 
 #![no_std]
 #![no_main]
@@ -14,7 +14,7 @@
 use kaal_sdk::{
     component::{Component, ServiceBase},
     syscall,
-    ipc::SharedRing,
+    message::{Channel, ChannelConfig},
 };
 
 // Declare this as a service component
@@ -38,6 +38,7 @@ impl Component for IpcConsumer {
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
             syscall::print("[consumer] Initializing...\n");
+            syscall::print("[consumer] Using semantic message-passing API\n");
         }
 
         Ok(IpcConsumer)
@@ -45,48 +46,46 @@ impl Component for IpcConsumer {
 
     fn run(&mut self) -> ! {
         unsafe {
-            syscall::print("[consumer] Starting consumption loop\n");
+            syscall::print("[consumer] Starting message reception\n");
             syscall::print("[consumer] NOTE: Waiting for Phase 5 implementation:\n");
             syscall::print("  - shared memory mapping\n");
-            syscall::print("  - capability passing\n");
+            syscall::print("  - capability passing via spawn\n");
             syscall::print("  - entry point arguments\n");
             syscall::print("\n");
 
             // Phase 5 implementation will look like:
             //
-            // // Get arguments from entry point (passed by root-task)
-            // let shared_mem_virt = /* from args */;
-            // let consumer_cap = 102;  // Capability slot
-            // let producer_cap = 103;  // Capability slot
+            // // Get configuration from entry point arguments
+            // let config = ChannelConfig {
+            //     shared_memory: shared_mem_virt,  // From spawn args
+            //     receiver_notify: 102,             // Notification cap slot
+            //     sender_notify: 103,               // Notification cap slot
+            // };
             //
-            // // Access SharedRing in mapped memory
-            // let ring = &*(shared_mem_virt as *const SharedRing<u32, 256>);
+            // // Create receiver endpoint
+            // let channel = Channel::<u32>::receiver(config);
             //
-            // // Consume items
-            // let mut count = 0;
-            // loop {
-            //     // Wait for data
-            //     let _ = ring.wait_consumer();
+            // syscall::print("[consumer] Receiving 10 messages...\n");
             //
-            //     // Pop all available items
-            //     while let Ok(item) = ring.pop() {
-            //         syscall::print("[consumer] Consumed: ");
-            //         // print number
-            //         syscall::print("\n");
-            //         count += 1;
-            //
-            //         if count >= 10 {
-            //             syscall::print("[consumer] All items consumed!\n");
+            // // Receive messages - blocking automatically handles empty channel
+            // for i in 0..10 {
+            //     match channel.receive() {
+            //         Ok(message) => {
+            //             syscall::print("[consumer] Received message: ");
+            //             // TODO: Add print_number to syscall
+            //             syscall::print("\n");
+            //         }
+            //         Err(_) => {
+            //             syscall::print("[consumer] Error receiving message\n");
             //             break;
             //         }
             //     }
-            //
-            //     if count >= 10 {
-            //         break;
-            //     }
             // }
+            //
+            // syscall::print("[consumer] All messages received!\n");
+            // syscall::print("[consumer] Channel automatically signaled sender\n");
 
-            syscall::print("[consumer] Entering idle loop (yielding)\n");
+            syscall::print("[consumer] Entering yield loop\n");
             syscall::print("\n");
         }
 

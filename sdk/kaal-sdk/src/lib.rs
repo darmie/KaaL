@@ -27,6 +27,7 @@ pub mod capability;
 pub mod memory;
 pub mod process;
 pub mod component;
+pub mod message;
 
 // Re-export IPC from kaal-ipc for convenience
 pub use kaal_ipc as ipc;
