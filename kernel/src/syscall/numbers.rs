@@ -94,6 +94,15 @@ pub const SYS_POLL: u64 = 0x1A;
 /// Requires appropriate capabilities to the target process.
 pub const SYS_MEMORY_MAP_INTO: u64 = 0x1B;
 
+/// Insert capability into target process's CSpace (Phase 5)
+/// Args: target_tcb_cap, cap_slot, cap_type, object_ptr
+/// Returns: 0 on success, -1 on error
+///
+/// This allows one process (e.g., root-task) to grant capabilities to another
+/// process by inserting them into the target's CSpace. Required for orchestrating
+/// IPC by passing notification and TCB capabilities to spawned components.
+pub const SYS_CAP_INSERT_INTO: u64 = 0x1C;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

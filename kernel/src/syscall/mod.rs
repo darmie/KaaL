@@ -204,6 +204,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
         numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3]),
+        numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
 
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
@@ -879,6 +880,104 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
 
         kprintln!("[syscall] memory_map_into -> virt={:#x} ({} pages mapped in target)", virt_addr, num_pages);
         virt_addr
+    }
+}
+
+/// Insert capability into target process's CSpace (Phase 5)
+///
+/// Args:
+/// - target_tcb_cap: Capability slot for target process's TCB
+/// - target_slot: Slot number in target's CSpace to insert into
+/// - cap_type: Type of capability (Notification=3, Tcb=4, etc.)
+/// - object_ptr: Physical address of the capability object
+///
+/// Returns: 0 on success, u64::MAX on error
+///
+/// This allows one process (e.g., root-task) to grant capabilities to another
+/// process by inserting them into the target's CSpace. The caller must have a
+/// TCB capability for the target process. This is used to pass notification
+/// capabilities and other resources to spawned components.
+fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
+    use crate::objects::{CNode, Capability, CapType};
+
+    kprintln!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
+              target_tcb_cap, target_slot, cap_type, object_ptr);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            kprintln!("[syscall] cap_insert_into: no current thread");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            kprintln!("[syscall] cap_insert_into: thread has no CSpace root");
+            return u64::MAX;
+        }
+
+        // Look up target TCB capability from caller's CSpace
+        let cnode = &*cspace_root;
+        let tcb_cap = match cnode.lookup(target_tcb_cap as usize) {
+            Some(c) => c,
+            None => {
+                kprintln!("[syscall] cap_insert_into: TCB cap_slot {} not found", target_tcb_cap);
+                return u64::MAX;
+            }
+        };
+
+        // Verify it's a TCB capability
+        if tcb_cap.cap_type() != CapType::Tcb {
+            kprintln!("[syscall] cap_insert_into: cap_slot {} is not a TCB (type={:?})",
+                     target_tcb_cap, tcb_cap.cap_type());
+            return u64::MAX;
+        }
+
+        // Get target TCB and its CSpace
+        let target_tcb_ptr = tcb_cap.object_ptr() as *mut TCB;
+        if target_tcb_ptr.is_null() {
+            kprintln!("[syscall] cap_insert_into: null target TCB pointer");
+            return u64::MAX;
+        }
+
+        let target_cspace = (*target_tcb_ptr).cspace_root();
+        if target_cspace.is_null() {
+            kprintln!("[syscall] cap_insert_into: target has no CSpace");
+            return u64::MAX;
+        }
+
+        // Convert cap_type from u64 to CapType enum
+        let cap_type_enum = match cap_type {
+            0 => CapType::Null,
+            1 => CapType::UntypedMemory,
+            2 => CapType::Endpoint,
+            3 => CapType::Notification,
+            4 => CapType::Tcb,
+            5 => CapType::CNode,
+            6 => CapType::VSpace,
+            _ => {
+                kprintln!("[syscall] cap_insert_into: invalid cap_type {}", cap_type);
+                return u64::MAX;
+            }
+        };
+
+        // Create the capability
+        let cap = Capability::new(cap_type_enum, object_ptr as usize);
+
+        // Insert into target's CSpace
+        let target_cnode = &mut *target_cspace;
+        match target_cnode.insert(target_slot as usize, cap) {
+            Ok(()) => {
+                kprintln!("[syscall] cap_insert_into: inserted {:?} cap at slot {} in target CSpace",
+                         cap_type_enum, target_slot);
+                0
+            }
+            Err(e) => {
+                kprintln!("[syscall] cap_insert_into: failed to insert: {:?}", e);
+                u64::MAX
+            }
+        }
     }
 }
 
