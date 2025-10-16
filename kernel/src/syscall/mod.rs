@@ -184,7 +184,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
     // Dispatch based on syscall number
     let result = match syscall_num {
         numbers::SYS_DEBUG_PUTCHAR => sys_debug_putchar(args[0]),
-        numbers::SYS_DEBUG_PRINT => sys_debug_print(args[0], args[1]),
+        numbers::SYS_DEBUG_PRINT => sys_debug_print(tf, args[0], args[1]),
         numbers::SYS_YIELD => sys_yield(tf),
 
         // Chapter 5: IPC syscalls
@@ -199,7 +199,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(
-            args[0], args[1], args[2], args[3], args[4], args[5], args[6]
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
@@ -273,38 +273,32 @@ fn sys_debug_putchar(ch: u64) -> u64 {
 
 /// Debug syscall: print a string
 ///
-/// This is a simple implementation that reads from the user's address space.
-/// In a production kernel, this would need proper memory validation and
-/// page table walking to ensure the address is valid and mapped.
-///
-/// For Chapter 7, we assume the root task has identity-mapped memory,
-/// so we can directly access the pointer.
-fn sys_debug_print(ptr: u64, len: u64) -> u64 {
-    // Validate pointer looks reasonable (should be in user space 0x40100000-0x40105000)
-    if ptr < 0x40100000 || ptr > 0x40110000 {
-        return u64::MAX; // Error: invalid pointer
-    }
-
+/// Uses copy_from_user to safely access userspace memory by temporarily
+/// switching to the calling process's TTBR0 page table.
+fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
     // Validate length (prevent abuse)
     if len > 4096 {
         return u64::MAX; // Error: string too long
     }
 
-    unsafe {
-        // With our unified page table design, user memory is already accessible
-        // (the user page table contains both kernel and user mappings)
-        // No need to switch TTBR0 - just copy directly from user memory
-        let mut buffer = [0u8; 4096];
-        let copy_len = core::cmp::min(len as usize, 4096);
-        core::ptr::copy_nonoverlapping(ptr as *const u8, buffer.as_mut_ptr(), copy_len);
+    // Allocate kernel buffer
+    let mut buffer = [0u8; 4096];
+    let copy_len = core::cmp::min(len as usize, 4096);
 
-        // Print from kernel buffer
-        if let Ok(s) = core::str::from_utf8(&buffer[..copy_len]) {
-            crate::kprint!("{}", s);
-            0 // Success
-        } else {
-            u64::MAX // Error: invalid UTF-8
-        }
+    // Get caller's TTBR0 from TrapFrame
+    let caller_ttbr0 = tf.saved_ttbr0;
+
+    // Copy from userspace using TTBR0 switching
+    if !unsafe { copy_from_user(ptr, &mut buffer, copy_len, caller_ttbr0) } {
+        return u64::MAX; // Error: failed to copy from user
+    }
+
+    // Print from kernel buffer
+    if let Ok(s) = core::str::from_utf8(&buffer[..copy_len]) {
+        crate::kprint!("{}", s);
+        0 // Success
+    } else {
+        u64::MAX // Error: invalid UTF-8
     }
 }
 
@@ -443,11 +437,12 @@ fn sys_endpoint_create() -> u64 {
 /// Create a new process with full isolation
 ///
 /// Args:
-/// - entry_point: Initial program counter (ELR_EL1) - also indicates code virtual address
+/// - entry_point: Initial program counter (ELR_EL1)
 /// - stack_pointer: Initial stack pointer (SP_EL0) - virtual address
 /// - page_table_root: Physical address of page table (TTBR0)
 /// - cspace_root: Physical address of CNode (capability space root)
 /// - code_phys: Physical address where code is loaded
+/// - code_vaddr: Virtual address where code should be mapped (from ELF min_vaddr)
 /// - code_size: Size of code region in bytes
 /// - stack_phys: Physical address where stack is located
 ///
@@ -464,6 +459,7 @@ fn sys_process_create(
     page_table_root: u64,
     cspace_root: u64,
     code_phys: u64,
+    code_vaddr: u64,
     code_size: u64,
     stack_phys: u64,
 ) -> u64 {
@@ -480,7 +476,7 @@ fn sys_process_create(
         }
     };
 
-    // Set up page tables for the new process
+    // Set up page tables for the new process with unified kernel+user mappings
 
     use crate::memory::{PAGE_SIZE, VirtAddr as VA, PhysAddr as PA, PageSize, PageMapper};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
@@ -489,34 +485,69 @@ fn sys_process_create(
     let new_pt = page_table_root as *mut PageTable;
     unsafe { (*new_pt).zero(); }
 
-    // Copy kernel mappings (upper half) from current TTBR1
-    // This ensures syscalls and exceptions can access kernel code
-    unsafe {
-        use core::arch::asm;
-        let mut ttbr1: u64;
-        asm!("mrs {}, ttbr1_el1", out(reg) ttbr1);
-        let kernel_pt = ttbr1 as *const PageTable;
-
-        // Copy upper half entries ONLY (L0 entries 256-511 for upper 256TB)
-        // Lower half (0-255) is for userspace
-        for i in 256..512 {
-            (*new_pt).entries[i] = (*kernel_pt).entries[i];
-        }
-    }
-
     // Create mapper for the new process's page table
     let mut mapper = unsafe { PageMapper::new(&mut *new_pt) };
 
-    // Map the entire loaded region (rodata + text)
-    // The ELF loader loads everything starting from the first LOAD segment
-    // For echo-server: 0x200000 (rodata) + 0x21031c (text)
-    // Physical memory contains both segments sequentially
-    let code_virt_base = 0x200000;  // First LOAD segment virtual address
-    let code_virt = VA::new(code_virt_base);
-    let code_phys_addr = PA::new(code_phys as usize);
+    // Map kernel regions with EL1-only permissions (same as root task)
+    // This allows exception handlers to run while preventing user code from accessing kernel memory
+    extern "C" {
+        static _kernel_start: u8;
+        static _kernel_end: u8;
+    }
+    let kernel_start = unsafe { &_kernel_start as *const u8 as usize };
+    let kernel_end = unsafe { &_kernel_end as *const u8 as usize };
 
-    // Map all pages (covers both rodata and text segments)
+    // Map kernel code/data
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        kernel_start,
+        kernel_end - kernel_start,
+        PageTableFlags::KERNEL_RWX,
+    ) {
+        kprintln!("[syscall] process_create: failed to map kernel code: {:?}", e);
+        return u64::MAX;
+    }
+
+    // Map kernel data region (where kernel data structures live)
+    use crate::boot::bootinfo::get_boot_info;
+    let boot_info = get_boot_info().expect("[FATAL] Boot info not available");
+    let memory_end = boot_info.dtb_addr.as_usize() + 0x8000000; // RAM end (128MB)
+
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        kernel_end,
+        memory_end - kernel_end,
+        PageTableFlags::KERNEL_DATA,
+    ) {
+        kprintln!("[syscall] process_create: failed to map kernel data: {:?}", e);
+        return u64::MAX;
+    }
+
+    // Map UART device for syscall output
+    use crate::generated::memory_config;
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::UART0_BASE as usize,
+        4096,
+        PageTableFlags::KERNEL_DEVICE,
+    ) {
+        kprintln!("[syscall] process_create: failed to map UART: {:?}", e);
+        return u64::MAX;
+    }
+
+    // Map the code region at the virtual address expected by the ELF
+    // The caller has:
+    // - Loaded the ELF binary at code_phys (physical address)
+    // - Parsed the ELF to find min_vaddr (code_vaddr)
+    // - We map: code_vaddr -> code_phys
+    kprintln!("[syscall] process_create: entry={:#x}, code_phys={:#x}, code_vaddr={:#x}, code_size={:#x}",
+        entry_point, code_phys, code_vaddr, code_size);
+
+    let code_virt_base = code_vaddr as usize;
     let code_pages = ((code_size as usize) + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    kprintln!("[syscall] process_create: mapping {} code pages at virt={:#x} -> phys={:#x}",
+        code_pages, code_virt_base, code_phys);
 
     for i in 0..code_pages {
         let virt = VA::new(code_virt_base + (i * PAGE_SIZE));
@@ -526,6 +557,8 @@ fn sys_process_create(
             return u64::MAX;
         }
     }
+
+    kprintln!("[syscall] process_create: code mapped successfully");
 
     // Map stack pages (4 pages = 16KB, non-executable, read/write)
     // Stack pointer points to top, map downwards
@@ -542,11 +575,35 @@ fn sys_process_create(
         }
     }
 
+    // Flush TLB and ensure page table updates are visible
+    unsafe {
+        core::arch::asm!(
+            "dsb ishst",           // Ensure all page table writes complete
+            "tlbi vmalle1is",      // Invalidate all TLB entries for EL1
+            "dsb ish",             // Ensure TLB invalidation completes
+            "isb",                 // Synchronize context
+        );
+    }
+
+    kprintln!("[syscall] process_create: page tables set up and TLB flushed");
+
     // Generate process ID (use frame address for now - unique per process)
     let pid = tcb_frame.as_usize();
 
-    // Get CNode pointer
+    // Initialize CNode at the allocated physical address
+    let cnode_phys = PA::new(cspace_root as usize);
     let cspace_ptr = cspace_root as *mut CNode;
+
+    // Create CNode with 256 slots (2^8 = 256 capabilities)
+    unsafe {
+        let cnode = CNode::new(8, cnode_phys)
+            .expect("[FATAL] Failed to create CNode for new process");
+
+        // Write initialized CNode to allocated memory
+        core::ptr::write(cspace_ptr, cnode);
+    }
+
+    kprintln!("[syscall] process_create: CNode initialized with 256 slots at {:#x}", cspace_root);
 
     // Allocate IPC buffer (for now, placeholder address)
     // TODO: Should allocate actual IPC buffer frame

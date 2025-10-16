@@ -53,10 +53,10 @@ impl Component for SystemInit {
             syscall::print("\n");
         }
 
-        // Idle loop
+        // Main loop - yield to allow other tasks to run
         loop {
             unsafe {
-                core::arch::asm!("wfi");
+                syscall::yield_now();
             }
         }
     }

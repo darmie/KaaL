@@ -243,9 +243,12 @@ global_asm!(
     "    ldr x1, [sp, #248]",
     "    ldr x2, [sp, #256]",
     "    ldr x3, [sp, #264]",
+    "    ldr x4, [sp, #288]",          // Load saved TTBR0
     "    msr sp_el0, x1",
     "    msr elr_el1, x2",
     "    msr spsr_el1, x3",
+    "    msr ttbr0_el1, x4",           // Restore user page table
+    "    isb",                         // Synchronize context for page table switch
     "    add sp, sp, #296",            // Adjusted for new stack frame size
     "    eret",
 );

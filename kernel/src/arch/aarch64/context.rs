@@ -60,15 +60,15 @@ pub struct TrapFrame {
     pub x26: u64,
     pub x27: u64,
     pub x28: u64,
-    pub x29: u64,  // Frame pointer
-    pub x30: u64,  // Link register
+    pub x29: u64, // Frame pointer
+    pub x30: u64, // Link register
 
     // Special registers for exception handling
-    pub sp_el0: u64,    // User stack pointer
-    pub elr_el1: u64,   // Exception link register (return address)
-    pub spsr_el1: u64,  // Saved processor status register
-    pub esr_el1: u64,   // Exception syndrome register
-    pub far_el1: u64,   // Fault address register
+    pub sp_el0: u64,      // User stack pointer
+    pub elr_el1: u64,     // Exception link register (return address)
+    pub spsr_el1: u64,    // Saved processor status register
+    pub esr_el1: u64,     // Exception syndrome register
+    pub far_el1: u64,     // Fault address register
     pub saved_ttbr0: u64, // Saved user page table (TTBR0_EL1)
 }
 
@@ -76,10 +76,37 @@ impl TrapFrame {
     /// Create a new trap frame with all registers zeroed
     pub const fn new() -> Self {
         Self {
-            x0: 0, x1: 0, x2: 0, x3: 0, x4: 0, x5: 0, x6: 0, x7: 0,
-            x8: 0, x9: 0, x10: 0, x11: 0, x12: 0, x13: 0, x14: 0, x15: 0,
-            x16: 0, x17: 0, x18: 0, x19: 0, x20: 0, x21: 0, x22: 0, x23: 0,
-            x24: 0, x25: 0, x26: 0, x27: 0, x28: 0, x29: 0, x30: 0,
+            x0: 0,
+            x1: 0,
+            x2: 0,
+            x3: 0,
+            x4: 0,
+            x5: 0,
+            x6: 0,
+            x7: 0,
+            x8: 0,
+            x9: 0,
+            x10: 0,
+            x11: 0,
+            x12: 0,
+            x13: 0,
+            x14: 0,
+            x15: 0,
+            x16: 0,
+            x17: 0,
+            x18: 0,
+            x19: 0,
+            x20: 0,
+            x21: 0,
+            x22: 0,
+            x23: 0,
+            x24: 0,
+            x25: 0,
+            x26: 0,
+            x27: 0,
+            x28: 0,
+            x29: 0,
+            x30: 0,
             sp_el0: 0,
             elr_el1: 0,
             spsr_el1: 0,
@@ -95,10 +122,12 @@ impl TrapFrame {
         self.x8
     }
 
-    /// Get syscall arguments (x0-x6)
+    /// Get syscall arguments (x0-x7)
     #[inline]
-    pub fn syscall_args(&self) -> [u64; 7] {
-        [self.x0, self.x1, self.x2, self.x3, self.x4, self.x5, self.x6]
+    pub fn syscall_args(&self) -> [u64; 8] {
+        [
+            self.x0, self.x1, self.x2, self.x3, self.x4, self.x5, self.x6, self.x7,
+        ]
     }
 
     /// Set syscall return value (x0)

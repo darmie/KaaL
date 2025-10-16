@@ -170,6 +170,7 @@ unsafe fn sys_process_create(
     page_table_root: usize,
     cspace_root: usize,
     code_phys: usize,
+    code_vaddr: usize,
     code_size: usize,
     stack_phys: usize,
 ) -> usize {
@@ -181,8 +182,9 @@ unsafe fn sys_process_create(
         "mov x2, {pt}",
         "mov x3, {cspace}",
         "mov x4, {code_phys}",
-        "mov x5, {code_size}",
-        "mov x6, {stack_phys}",
+        "mov x5, {code_vaddr}",
+        "mov x6, {code_size}",
+        "mov x7, {stack_phys}",
         "svc #0",
         "mov {result}, x0",
         syscall_num = in(reg) SYS_PROCESS_CREATE,
@@ -191,6 +193,7 @@ unsafe fn sys_process_create(
         pt = in(reg) page_table_root,
         cspace = in(reg) cspace_root,
         code_phys = in(reg) code_phys,
+        code_vaddr = in(reg) code_vaddr,
         code_size = in(reg) code_size,
         stack_phys = in(reg) stack_phys,
         result = out(reg) result,
@@ -202,6 +205,7 @@ unsafe fn sys_process_create(
         out("x4") _,
         out("x5") _,
         out("x6") _,
+        out("x7") _,
     );
     result
 }
@@ -614,185 +618,63 @@ pub extern "C" fn _start() -> ! {
         test_shared_memory_ipc();
     }
 
-    // Chapter 9 Phase 2: Spawn echo-server process
+    // Chapter 9 Phase 4: Component Loading & Spawning
     unsafe {
+        sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 2: Spawning Echo Server Process\n");
+        sys_print("  Chapter 9 Phase 4: Component Loading & Spawning\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
 
-        // Embed echo-server binary (built by cargo)
-        static ECHO_SERVER_ELF: &[u8] = include_bytes!(
-            "../../../examples/echo-server/target/aarch64-unknown-none/release/echo-server"
-        );
+        // Use the generated component registry
+        sys_print("[root_task] Component Registry:\n");
+        sys_print("  → Total components: ");
+        print_number(generated::component_registry::COMPONENT_COUNT);
+        sys_print("\n");
+        sys_print("  → Autostart components: ");
+        let autostart_count = generated::component_registry::get_autostart_components().count();
+        print_number(autostart_count);
+        sys_print("\n");
+        sys_print("\n");
 
-        sys_print("[root_task] Parsing echo-server ELF binary...\n");
-        sys_print("  → Binary size: ");
-        print_number(ECHO_SERVER_ELF.len());
-        sys_print(" bytes\n");
+        // Create component loader with registry
+        use component_loader::{ComponentRegistry, ComponentLoader};
+        static REGISTRY: ComponentRegistry = ComponentRegistry::new(generated::component_registry::COMPONENT_REGISTRY);
+        let loader = ComponentLoader::new(&REGISTRY);
 
-        // Parse ELF to get load info
-        let elf_info = match elf::parse_elf(ECHO_SERVER_ELF) {
-            Ok(info) => info,
-            Err(e) => {
-                sys_print("  → Error parsing ELF: ");
-                sys_print(e);
+        // Spawn system_init (first component)
+        sys_print("[root_task] Spawning system_init component...\n");
+        match loader.spawn("system_init") {
+            Ok(pid) => {
+                sys_print("  ✓ system_init spawned successfully (PID: ");
+                print_number(pid);
+                sys_print(")\n");
                 sys_print("\n");
-                loop { core::arch::asm!("wfi"); }
+                sys_print("═══════════════════════════════════════════════════════════\n");
+                sys_print("  Component Spawning: COMPLETE ✓\n");
+                sys_print("═══════════════════════════════════════════════════════════\n");
+                sys_print("\n");
+
+                // Yield to system_init to let it run
+                sys_print("[root_task] Yielding to system_init...\n");
+                sys_yield();
+                sys_print("[root_task] Back from system_init!\n");
             }
-        };
-
-        sys_print("  → Entry point: 0x");
-        print_hex(elf_info.entry_point);
-        sys_print("\n");
-        sys_print("  → Load segments: ");
-        print_number(elf_info.num_segments);
-        sys_print("\n");
-        sys_print("  → Memory size: ");
-        print_number(elf_info.memory_size());
-        sys_print(" bytes\n");
-
-        sys_print("\n[root_task] Allocating memory for process...\n");
-
-        // Allocate memory for process image (round up to 4KB pages)
-        let process_size = (elf_info.memory_size() + 4095) & !4095;
-        let process_mem = sys_memory_allocate(process_size);
-        if process_mem == usize::MAX {
-            sys_print("  → Error: Out of memory for process image\n");
-            loop { core::arch::asm!("wfi"); }
-        }
-        sys_print("  → Process memory: 0x");
-        print_hex(process_mem);
-        sys_print("\n");
-
-        // Allocate stack (16KB)
-        let stack_size = 16384;
-        let stack_mem = sys_memory_allocate(stack_size);
-        if stack_mem == usize::MAX {
-            sys_print("  → Error: Out of memory for stack\n");
-            loop { core::arch::asm!("wfi"); }
-        }
-        sys_print("  → Stack memory: 0x");
-        print_hex(stack_mem);
-        sys_print("\n");
-
-        // Allocate page table root (4KB)
-        let pt_root = sys_memory_allocate(4096);
-        if pt_root == usize::MAX {
-            sys_print("  → Error: Out of memory for page table\n");
-            loop { core::arch::asm!("wfi"); }
-        }
-        sys_print("  → Page table: 0x");
-        print_hex(pt_root);
-        sys_print("\n");
-
-        // Allocate CNode for capability space (4KB)
-        let cspace_root = sys_memory_allocate(4096);
-        if cspace_root == usize::MAX {
-            sys_print("  → Error: Out of memory for CSpace\n");
-            loop { core::arch::asm!("wfi"); }
-        }
-        sys_print("  → CSpace root: 0x");
-        print_hex(cspace_root);
-        sys_print("\n");
-
-        sys_print("\n[root_task] Loading ELF segments...\n");
-
-        // Map the allocated physical memory into our virtual address space
-        // so we can copy the ELF segments
-        const RW_PERMS: usize = 0x3; // Read + Write
-        let virt_mem = sys_memory_map(process_mem, process_size, RW_PERMS);
-        if virt_mem == usize::MAX {
-            sys_print("  → Error: Failed to map process memory\n");
-            loop { core::arch::asm!("wfi"); }
-        }
-        sys_print("  → Mapped process memory at virt=0x");
-        print_hex(virt_mem);
-        sys_print("\n");
-
-        // Copy each LOAD segment to the mapped memory
-        let base_vaddr = elf_info.min_vaddr;
-        for i in 0..elf_info.num_segments {
-            let (vaddr, filesz, memsz, offset) = elf_info.segments[i];
-
-            sys_print("  → Segment ");
-            print_number(i);
-            sys_print(": vaddr=0x");
-            print_hex(vaddr);
-            sys_print(", filesz=");
-            print_number(filesz);
-            sys_print(", memsz=");
-            print_number(memsz);
-            sys_print("\n");
-
-            // Calculate destination in mapped memory
-            let segment_offset = vaddr - base_vaddr;
-            let dest_ptr = (virt_mem + segment_offset) as *mut u8;
-            let src_ptr = ECHO_SERVER_ELF.as_ptr().add(offset);
-
-            // Copy file data
-            if filesz > 0 {
-                core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, filesz);
+            Err(_) => {
+                sys_print("  ✗ Failed to spawn system_init\n");
             }
-
-            // Zero BSS (memsz > filesz means there's BSS to zero)
-            if memsz > filesz {
-                let bss_ptr = dest_ptr.add(filesz);
-                let bss_size = memsz - filesz;
-                core::ptr::write_bytes(bss_ptr, 0, bss_size);
-            }
-        }
-        sys_print("  ✓ All segments loaded\n");
-
-        // Unmap the memory (we're done writing to it)
-        sys_memory_unmap(virt_mem, process_size);
-        sys_print("  ✓ Memory unmapped\n");
-
-        sys_print("\n[root_task] Creating process...\n");
-
-        // TODO: Create and populate page table
-        // For now, we'll use identity mapping (physical = virtual)
-        // This is a simplification - real implementation needs proper page tables
-
-        // Stack grows down from top
-        // Use fixed virtual address for stack (top of userspace memory)
-        const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
-        let stack_top = STACK_VIRT_TOP;
-
-        // Create the process
-        // Note: We pass stack_mem (physical address) as the 7th parameter
-        // so the kernel can map it at the virtual address we specified
-        let pid = sys_process_create(
-            elf_info.entry_point,
-            stack_top,       // Virtual address where stack will be
-            pt_root,
-            cspace_root,
-            process_mem,     // Physical address of loaded code
-            process_size,    // Size of code region
-            stack_mem,       // Physical address of stack
-        );
-
-        if pid == usize::MAX {
-            sys_print("  → Error: Failed to create process\n");
-        } else {
-            sys_print("  → Created process with PID: ");
-            print_number(pid);
-            sys_print("\n");
-            sys_print("\n");
-            sys_print("═══════════════════════════════════════════════════════════\n");
-            sys_print("  Chapter 9 Phase 2: Process Spawning Complete ✓\n");
-            sys_print("═══════════════════════════════════════════════════════════\n");
-            sys_print("\n");
-
-            // Chapter 9 Phase 3: Test context switching!
-            sys_print("[root_task] Yielding to echo-server...\n");
-            sys_yield();
-            sys_print("[root_task] Back from echo-server!\n");
-            sys_print("[root_task] Multi-process working! ✓\n");
         }
     }
 
-    // Chapter 9 Phase 3: End-to-End IPC Testing
+    // Component spawning complete - now yield to spawned components
+    unsafe {
+        sys_print("[root_task] Yielding to system_init...\n");
+        sys_yield();
+        sys_print("[root_task] Back from system_init!\n");
+        sys_print("[root_task] Component switching working! ✓\n");
+    }
+
+    // TODO: Chapter 9 Phase 3: End-to-End IPC Testing
     unsafe {
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");

@@ -185,26 +185,90 @@ impl ComponentLoader {
         // 1. Get binary data
         let binary_data = desc.binary_data.ok_or(ComponentError::NoBinary)?;
 
-        // 2. Parse ELF (using existing root-task ELF parser)
-        // TODO: Integrate with elf::parse_elf_header()
+        // 2. Parse ELF
+        let elf_info = crate::elf::parse_elf(binary_data)
+            .map_err(|_| ComponentError::InvalidElf)?;
 
-        // 3. Allocate process resources
-        // - TCB (thread control block)
-        // - Address space
-        // - Stack
+        // 3. Allocate memory for process image (round up to 4KB pages)
+        let process_size = (elf_info.memory_size() + 4095) & !4095;
+        let process_mem = crate::sys_memory_allocate(process_size);
+        if process_mem == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
 
-        // 4. Grant capabilities
-        // TODO: Parse and grant capabilities from strings
-        // For now, skip capability granting
+        // 4. Allocate stack (16KB)
+        let stack_size = 16384;
+        let stack_mem = crate::sys_memory_allocate(stack_size);
+        if stack_mem == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
 
-        // 5. Load binary into address space
-        // TODO: Use ELF loader to map segments
+        // 5. Allocate page table root (4KB)
+        let pt_root = crate::sys_memory_allocate(4096);
+        if pt_root == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
 
-        // 6. Start component
-        // TODO: Resume TCB
+        // 6. Allocate CNode for capability space (4KB)
+        let cspace_root = crate::sys_memory_allocate(4096);
+        if cspace_root == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
 
-        // For now, return error indicating not yet implemented
-        Err(ComponentError::NotImplemented)
+        // 7. Map the allocated physical memory so we can copy the ELF segments
+        const RW_PERMS: usize = 0x3; // Read + Write
+        let virt_mem = crate::sys_memory_map(process_mem, process_size, RW_PERMS);
+        if virt_mem == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
+
+        // 8. Copy each LOAD segment to the mapped memory
+        let base_vaddr = elf_info.min_vaddr;
+        for i in 0..elf_info.num_segments {
+            let (vaddr, filesz, memsz, offset) = elf_info.segments[i];
+
+            // Calculate destination in mapped memory
+            let segment_offset = vaddr - base_vaddr;
+            let dest_ptr = (virt_mem + segment_offset) as *mut u8;
+            let src_ptr = binary_data.as_ptr().add(offset);
+
+            // Copy file data
+            if filesz > 0 {
+                core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, filesz);
+            }
+
+            // Zero BSS (memsz > filesz means there's BSS to zero)
+            if memsz > filesz {
+                let bss_ptr = dest_ptr.add(filesz);
+                let bss_size = memsz - filesz;
+                core::ptr::write_bytes(bss_ptr, 0, bss_size);
+            }
+        }
+
+        // 9. Unmap the memory (we're done writing to it)
+        crate::sys_memory_unmap(virt_mem, process_size);
+
+        // 10. Create the process
+        // Stack grows down from top of userspace memory
+        const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
+        let stack_top = STACK_VIRT_TOP;
+
+        let pid = crate::sys_process_create(
+            elf_info.entry_point,
+            stack_top,
+            pt_root,
+            cspace_root,
+            process_mem,
+            elf_info.min_vaddr,  // Virtual address where code should be mapped
+            process_size,
+            stack_mem,
+        );
+
+        if pid == usize::MAX {
+            return Err(ComponentError::OutOfMemory);
+        }
+
+        Ok(pid)
     }
 }
 
