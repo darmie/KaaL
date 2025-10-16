@@ -579,27 +579,164 @@ sdk/kaal-sdk/src/
 
 ---
 
-## Phase 4: Example Drivers & Applications 📋 PLANNED
+## Phase 4: Component Spawning & IPC Testing ✅ COMPLETE
+
+**Duration**: 1 day (actual)
+**Status**: ✅ **COMPLETE** (2025-10-16)
+**Deliverables**: Component loading infrastructure + IPC capability management
+
+### Objectives
+
+1. ✅ Implement component loading infrastructure
+2. ✅ Fix CNode initialization for spawned processes
+3. ✅ Fix userspace memory access from kernel
+4. ✅ Implement cooperative multitasking
+5. ⬜ Test inter-component IPC with shared memory
+6. ⬜ Test capability transfer between components
+
+### Deliverables
+
+#### **Component Loading Infrastructure** - ~300 LOC
+
+**Build System Integration:**
+- `components.toml` defines system components
+- Build system generates component registry
+- Component binaries auto-embedded in kernel image
+- File: [build-system/components/mod.nu](../../build-system/components/mod.nu)
+
+**ComponentLoader** (`runtime/root-task/src/component_loader.rs`) - ~180 LOC
+- Generic ELF loading and spawning
+- Integrates with generated component registry
+- Allocates resources (memory, stack, page table, CSpace)
+- Maps segments at correct virtual addresses
+- File: [runtime/root-task/src/component_loader.rs](../../runtime/root-task/src/component_loader.rs)
+
+**system-init Component** (`components/system-init/`) - ~60 LOC
+- First component spawned by root-task
+- Uses kaal-sdk Component trait
+- Demonstrates cooperative multitasking
+- File: [components/system-init/src/main.rs](../../components/system-init/src/main.rs)
+
+#### **Critical Bug Fixes**
+
+**1. CNode Initialization** ([kernel/src/syscall/mod.rs:604-610](../../kernel/src/syscall/mod.rs#L604-L610))
+- **Issue**: sys_process_create cast physical address to CNode* without initialization
+- **Fix**: Properly call `CNode::new(8, cnode_phys)` to create 256-slot CNode
+- **Impact**: Spawned processes now have valid CSpace
+
+**2. Userspace Memory Access** ([kernel/src/syscall/mod.rs:278-303](../../kernel/src/syscall/mod.rs#L278-L303))
+- **Issue**: sys_debug_print had hardcoded address validation (0x40100000-0x40110000)
+- **Fix**: Use `copy_from_user()` which switches TTBR0 to access calling process's memory
+- **Impact**: Print syscall works for any component regardless of virtual address
+
+**3. Cooperative Multitasking** ([components/system-init/src/main.rs:57-61](../../components/system-init/src/main.rs#L57-L61))
+- **Issue**: system-init used `wfi` preventing other tasks from running
+- **Fix**: Changed to `syscall::yield_now()` for proper cooperative scheduling
+- **Impact**: Proper task switching between root-task and system-init
+
+### Testing Results
+
+**Component Spawning:** ✅ COMPLETE
+```
+[root_task] Spawning system_init component...
+[syscall] process_create: CNode initialized with 256 slots at 0x4046b000
+[syscall] process_create -> PID 0x4046e000
+  ✓ system_init spawned successfully (PID: 1078386688)
+
+═══════════════════════════════════════════════════════════
+  System Init Component v0.1.0
+═══════════════════════════════════════════════════════════
+
+[system_init] Initializing...
+[system_init] Component spawned successfully!
+[system_init] Running in userspace (EL0)
+```
+
+**Cooperative Multitasking:** ✅ WORKING
+```
+[root_task] Yielding to system_init...
+[sched] schedule: dequeued TCB 1078386688 at 0x4046e000  # system-init
+[sched] schedule: dequeued TCB 1 at 0x4044e000          # back to root-task
+[root_task] Back from system_init!
+[root_task] Component switching working! ✓
+```
+
+### Success Criteria
+
+- [x] Component loading pipeline working ✅
+- [x] system-init spawns and executes ✅
+- [x] CSpace properly initialized ✅
+- [x] syscall::print() works from spawned components ✅
+- [x] Cooperative multitasking works ✅
+- [ ] Inter-component IPC tested (NEXT STEP)
+- [ ] Capability transfer between components (NEXT STEP)
+
+### Commits
+
+1. `4f992c9` - fix(runtime): Fix component spawning with CNode initialization and userspace memory access
+
+---
+
+## Phase 5: Inter-Component IPC Testing 🚧 IN PROGRESS
+
+**Duration**: TBD
+**Status**: 🚧 **IN PROGRESS** (2025-10-16)
+
+### Objectives
+
+1. ⬜ Spawn multiple components simultaneously
+2. ⬜ Test shared memory allocation between components
+3. ⬜ Test notification-based signaling between components
+4. ⬜ Implement capability transfer (grant/mint/derive)
+5. ⬜ Full IPC with SharedRing between components
+
+### Deliverables (Planned)
+
+**Test Scenario:**
+1. Spawn IPC sender component
+2. Spawn IPC receiver component
+3. Allocate shared memory accessible to both
+4. Create notification objects for signaling
+5. Transfer notification capabilities to both components
+6. Initialize SharedRing in shared memory
+7. Test producer/consumer communication
+
+**Expected Components:**
+- `components/ipc-sender/` - Producer component
+- `components/ipc-receiver/` - Consumer component
+- Updated root-task to orchestrate multi-component IPC
+
+### Success Criteria
+
+- [ ] Two components spawn simultaneously
+- [ ] Shared memory visible to both components
+- [ ] Notifications work across component boundaries
+- [ ] Capability transfer working (grant/mint/derive)
+- [ ] SharedRing IPC functional between components
+- [ ] Performance benchmarking complete
+
+---
+
+## Phase 6: Example Drivers & Applications 📋 PLANNED
 
 **Duration**: 1-2 weeks
-**Status**: 📋 Planned
+**Status**: 📋 Planned (Deferred)
 
 ### Objectives
 
 1. Example drivers (UART, Timer, GPIO)
-2. Example services (Shell, Echo, File server)
+2. Example services (Shell, File server)
 
 ### Deliverables
 
 ```
-examples/
+components/
 ├── drivers/
-│   ├── uart/
-│   ├── timer/
-│   └── gpio/
+│   ├── serial_driver/
+│   ├── timer_driver/
+│   └── gpio_driver/
 └── services/
     ├── simple-shell/
-    ├── echo-server/
     └── file-server/
 ```
 
@@ -619,8 +756,10 @@ examples/
 | Phase 1: Runtime Services | ✅ Complete | 100% |
 | Phase 2: Shared Memory IPC | ✅ Complete | 100% |
 | Phase 3: KaaL SDK | ✅ Complete | 100% |
-| Phase 4: Example Drivers & Apps | 📋 Planned | 0% |
-| **Overall** | **🚧 In Progress** | **75%** |
+| Phase 4: Component Spawning & IPC | ✅ Complete | 100% |
+| Phase 5: Inter-Component IPC Testing | 🚧 In Progress | 0% |
+| Phase 6: Example Drivers & Apps | 📋 Planned | 0% |
+| **Overall** | **🚧 In Progress** | **80%** |
 
 ---
 
