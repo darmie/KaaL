@@ -152,84 +152,60 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     let entry_addr = boot_info.root_task_entry;
     let virt_start = entry_addr & !(PAGE_SIZE - 1); // Align down to page boundary
 
-    // Parse ELF header and map all LOAD segments
+    // Parse the ELF header to find the file offset of the first LOAD segment
+    // ELF64 header is 64 bytes, followed by program headers
     let elf_base = phys_file_start as *const u8;
     let e_phoff = unsafe { *(elf_base.add(32) as *const u64) }; // Program header offset
     let e_phnum = unsafe { *(elf_base.add(56) as *const u16) }; // Number of program headers
 
-    crate::kprintln!("  ELF has {} program headers", e_phnum);
-
-    // Map each LOAD segment
+    // Find the first LOAD segment (PT_LOAD = 1)
     let phdr_size = 56; // Size of ELF64 program header
-    let mut total_pages = 0;
-
+    let mut code_file_offset = 0;
     for i in 0..e_phnum {
         let phdr_addr = (elf_base as usize + e_phoff as usize + (i as usize * phdr_size)) as *const u32;
         let p_type = unsafe { *phdr_addr };
-
-        // Only process LOAD segments (PT_LOAD = 1)
-        if p_type != 1 {
-            continue;
+        if p_type == 1 { // PT_LOAD
+            code_file_offset = unsafe { *((phdr_addr as usize + 8) as *const u64) };
+            break;
         }
-
-        // Read program header fields
-        let p_offset = unsafe { *((phdr_addr as usize + 8) as *const u64) } as usize;   // File offset
-        let p_vaddr = unsafe { *((phdr_addr as usize + 16) as *const u64) } as usize;   // Virtual address
-        let p_filesz = unsafe { *((phdr_addr as usize + 32) as *const u64) } as usize;  // Size in file
-        let p_memsz = unsafe { *((phdr_addr as usize + 40) as *const u64) } as usize;   // Size in memory
-        let p_flags = unsafe { *((phdr_addr as usize + 4) as *const u32) };             // Flags
-
-        crate::kprintln!("  LOAD segment {}:", i);
-        crate::kprintln!("    vaddr:  {:#x}", p_vaddr);
-        crate::kprintln!("    offset: {:#x}", p_offset);
-        crate::kprintln!("    filesz: {:#x} ({} KB)", p_filesz, p_filesz / 1024);
-        crate::kprintln!("    memsz:  {:#x} ({} KB)", p_memsz, p_memsz / 1024);
-        crate::kprintln!("    flags:  {:#x} ({}{}{})", p_flags,
-            if p_flags & 0x4 != 0 { "R" } else { "" },
-            if p_flags & 0x2 != 0 { "W" } else { "" },
-            if p_flags & 0x1 != 0 { "X" } else { "" });
-
-        // Determine page flags based on segment flags
-        let flags = if p_flags & 0x1 != 0 {
-            PageTableFlags::USER_RWX  // Executable
-        } else {
-            PageTableFlags::USER_DATA  // Data/rodata
-        };
-
-        // Map pages for this segment
-        // Virtual range: p_vaddr to p_vaddr + p_memsz (aligned to pages)
-        let virt_start = p_vaddr & !(PAGE_SIZE - 1);  // Align down
-        let virt_end = (p_vaddr + p_memsz + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);  // Align up
-
-        // Physical range: phys_file_start + p_offset
-        let phys_start = phys_file_start + p_offset;
-
-        let mut current_virt = virt_start;
-        let mut current_phys = phys_start & !(PAGE_SIZE - 1);  // Align down
-        let mut seg_pages = 0;
-
-        while current_virt < virt_end {
-            if let Err(e) = mapper.map(
-                VirtAddr::new(current_virt),
-                PhysAddr::new(current_phys),
-                flags,
-                crate::memory::PageSize::Size4KB,
-            ) {
-                crate::kprintln!("[ERROR] Failed to map segment {} page at virt={:#x} phys={:#x}: {:?}",
-                    i, current_virt, current_phys, e);
-                return Err(RootTaskError::MemoryMapping);
-            }
-
-            current_virt += PAGE_SIZE;
-            current_phys += PAGE_SIZE;
-            seg_pages += 1;
-        }
-
-        crate::kprintln!("    → Mapped {} pages", seg_pages);
-        total_pages += seg_pages;
     }
 
-    crate::kprintln!("  Total: mapped {} pages across all segments", total_pages);
+    let phys_start = phys_file_start + code_file_offset as usize;
+
+    // Map enough pages to cover the entire binary
+    let code_size = ((binary_size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)) + PAGE_SIZE * 4;
+
+    crate::kprintln!("  ELF mapping:");
+    crate::kprintln!("    entry_addr:        {:#x}", entry_addr);
+    crate::kprintln!("    virt_start:        {:#x}", virt_start);
+    crate::kprintln!("    phys_file_start:   {:#x}", phys_file_start);
+    crate::kprintln!("    code_file_offset:  {:#x}", code_file_offset);
+    crate::kprintln!("    phys_start:        {:#x}", phys_start);
+    crate::kprintln!("    code_size:         {:#x} ({} KB)", code_size, code_size / 1024);
+
+    // Map virtual address → physical address (skip ELF headers)
+    let mut current_virt = virt_start;
+    let mut current_phys = phys_start;
+    let end_virt = virt_start + code_size;
+
+    let mut page_count = 0;
+    while current_virt < end_virt && current_phys < phys_end + PAGE_SIZE * 4 {
+        if let Err(e) = mapper.map(
+            VirtAddr::new(current_virt),
+            PhysAddr::new(current_phys),
+            PageTableFlags::USER_RWX,
+            crate::memory::PageSize::Size4KB,
+        ) {
+            crate::kprintln!("[ERROR] Failed to map page {} at virt={:#x} phys={:#x}: {:?}",
+                page_count, current_virt, current_phys, e);
+            return Err(RootTaskError::MemoryMapping);
+        }
+
+        current_virt += PAGE_SIZE;
+        current_phys += PAGE_SIZE;
+        page_count += 1;
+    }
+    crate::kprintln!("  Mapped {} pages successfully", page_count);
 
     // Map stack (1MB below entry point, 256KB size)
     // Ensure stack_top is page-aligned by rounding entry_addr down to page boundary, then subtracting
@@ -262,6 +238,7 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
 
     crate::kprintln!("  Entry point:     {:#x}", entry_addr);
     crate::kprintln!("  Stack:           {:#x} - {:#x} (256 KB)", stack_bottom, stack_top);
+    crate::kprintln!("  Code segment:    {} KB at virt {:#x}", code_size / 1024, virt_start);
     crate::kprintln!("  ✓ Root task ready for EL0 transition");
 
     // Step 2b: Create and map boot info for userspace runtime services
