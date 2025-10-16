@@ -102,14 +102,14 @@ unsafe fn populate_boot_info() -> Result<boot_info::BootInfo, RootTaskError> {
 ///
 /// # Safety
 /// Must be called after kernel initialization with valid boot info.
-pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
+pub unsafe fn create_and_start_root_task() -> ! {
     // Get boot info
     let boot_info = bootinfo::get_boot_info()
-        .ok_or(RootTaskError::BootInfoNotAvailable)?;
+        .expect("[FATAL] Boot info not available");
 
     // Validate boot info
     if !boot_info.is_valid() {
-        return Err(RootTaskError::InvalidBootInfo);
+        panic!("[FATAL] Invalid boot info");
     }
 
     crate::kprintln!("[root_task] Creating root task:");
@@ -120,8 +120,12 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("  Entry point:     {:#x}", boot_info.root_task_entry);
 
     // Step 1: Create user page table
+    // IMPORTANT: Since both kernel and user are at low addresses (0x40...), they both use TTBR0.
+    // We MUST include kernel mappings in the user page table (with EL1-only permissions) so that
+    // exception handlers can run when we're in EL0. The AP (access permission) bits in the page
+    // table entries control whether EL0 can access these pages - kernel pages use AP_RW_EL1.
     let user_page_table_frame = crate::memory::alloc_frame()
-        .ok_or(RootTaskError::PageTableAllocation)?;
+        .expect("[FATAL] Failed to allocate user page table");
 
     let user_page_table_phys = user_page_table_frame.phys_addr();
     let user_page_table = &mut *(user_page_table_phys.as_usize()
@@ -133,11 +137,48 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     // Create page mapper for user page table
     let mut mapper = crate::memory::PageMapper::new(user_page_table);
 
-    // Chapter 9: Page table switching implemented in exception handler!
-    // The exception handler (handle_lower_el_aarch64_sync) now switches from user's
-    // TTBR0 to kernel's TTBR1 when entering EL1 for syscall handling, then restores
-    // TTBR0 before returning to EL0. This provides proper isolation and security.
-    // No need to map kernel into user page table anymore!
+    // Map kernel regions with EL1-only permissions
+    // This allows exception handlers to run while preventing user code from accessing kernel memory
+    extern "C" {
+        static _kernel_start: u8;
+        static _kernel_end: u8;
+    }
+    let kernel_start = unsafe { &_kernel_start as *const u8 as usize };
+    let kernel_end = unsafe { &_kernel_end as *const u8 as usize };
+
+    crate::kprintln!("  Mapping kernel regions into user PT (EL1-only):");
+
+    // Map kernel code/data
+    crate::kprintln!("    Kernel: {:#x} - {:#x}", kernel_start, kernel_end);
+    crate::memory::paging::identity_map_region(
+        &mut mapper,
+        kernel_start,
+        kernel_end - kernel_start,
+        PageTableFlags::KERNEL_RWX,
+    ).expect("Failed to map kernel into user PT");
+
+    // Map kernel stack/heap region (where kernel data structures live)
+    let boot_info_ref = crate::boot::bootinfo::get_boot_info()
+        .expect("[FATAL] Boot info not available");
+    let memory_end = boot_info_ref.dtb_addr.as_usize() + 0x8000000; // RAM end (128MB)
+    crate::kprintln!("    Kernel data: {:#x} - {:#x}", kernel_end, memory_end);
+    crate::memory::paging::identity_map_region(
+        &mut mapper,
+        kernel_end,
+        memory_end - kernel_end,
+        PageTableFlags::KERNEL_DATA,
+    ).expect("Failed to map kernel data into user PT");
+
+    // Map UART device for syscall output
+    crate::kprintln!("    UART: {:#x}", memory_config::UART0_BASE);
+    crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::UART0_BASE as usize,
+        4096,
+        PageTableFlags::KERNEL_DEVICE,
+    ).expect("Failed to map UART into user PT");
+
+    crate::kprintln!("  ✓ Kernel regions mapped");
 
     // Step 2: Map root task memory (code + data + rodata)
     // IMPORTANT: The elfloader embeds the entire ELF file (including headers),
@@ -150,62 +191,85 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
 
     // Virtual address: where the linker script expects it
     let entry_addr = boot_info.root_task_entry;
-    let virt_start = entry_addr & !(PAGE_SIZE - 1); // Align down to page boundary
 
-    // Parse the ELF header to find the file offset of the first LOAD segment
-    // ELF64 header is 64 bytes, followed by program headers
+    // Parse ELF program headers to map each LOAD segment individually
     let elf_base = phys_file_start as *const u8;
     let e_phoff = unsafe { *(elf_base.add(32) as *const u64) }; // Program header offset
     let e_phnum = unsafe { *(elf_base.add(56) as *const u16) }; // Number of program headers
-
-    // Find the first LOAD segment (PT_LOAD = 1)
     let phdr_size = 56; // Size of ELF64 program header
-    let mut code_file_offset = 0;
+
+    crate::kprintln!("  ELF header: {} program headers at offset {:#x}", e_phnum, e_phoff);
+
+    // Iterate through all LOAD segments and map each one
+    let mut total_pages = 0;
     for i in 0..e_phnum {
         let phdr_addr = (elf_base as usize + e_phoff as usize + (i as usize * phdr_size)) as *const u32;
         let p_type = unsafe { *phdr_addr };
+
         if p_type == 1 { // PT_LOAD
-            code_file_offset = unsafe { *((phdr_addr as usize + 8) as *const u64) };
-            break;
+            // Read segment information
+            let p_flags = unsafe { *((phdr_addr as usize + 4) as *const u32) };
+            let p_offset = unsafe { *((phdr_addr as usize + 8) as *const u64) };
+            let p_vaddr = unsafe { *((phdr_addr as usize + 16) as *const u64) };
+            let p_filesz = unsafe { *((phdr_addr as usize + 32) as *const u64) };
+            let p_memsz = unsafe { *((phdr_addr as usize + 40) as *const u64) };
+
+            // Determine permissions from p_flags (PF_X=1, PF_W=2, PF_R=4)
+            let is_writable = (p_flags & 2) != 0;
+            let is_executable = (p_flags & 1) != 0;
+            let flags = if is_executable && !is_writable {
+                PageTableFlags::USER_RWX // Text segment (actually RX but we use RWX for simplicity)
+            } else {
+                PageTableFlags::USER_DATA // Data/rodata segment
+            };
+
+            crate::kprintln!("  LOAD segment {}:", i);
+            crate::kprintln!("    vaddr:  {:#x}", p_vaddr);
+            crate::kprintln!("    offset: {:#x}", p_offset);
+            crate::kprintln!("    filesz: {:#x} ({} bytes)", p_filesz, p_filesz);
+            crate::kprintln!("    memsz:  {:#x} ({} bytes)", p_memsz, p_memsz);
+            crate::kprintln!("    flags:  {:#x} ({}{}{})", p_flags,
+                if p_flags & 4 != 0 { "R" } else { "-" },
+                if is_writable { "W" } else { "-" },
+                if is_executable { "X" } else { "-" });
+
+            // Calculate physical address for this segment
+            let phys_addr = phys_file_start + p_offset as usize;
+
+            // Map this segment (align to page boundaries)
+            let virt_start = p_vaddr as usize & !(PAGE_SIZE - 1);
+            let virt_end = ((p_vaddr as usize + p_memsz as usize) + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
+            let seg_size = virt_end - virt_start;
+
+            let mut current_virt = virt_start;
+            let mut current_phys = phys_addr & !(PAGE_SIZE - 1);
+            let mut page_count = 0;
+
+            crate::kprintln!("    Mapping virt {:#x} → phys {:#x} (end: {:#x})", virt_start, current_phys, virt_end);
+
+            while current_virt < virt_end {
+                crate::kprintln!("      Mapping page {} at virt={:#x} phys={:#x}", page_count, current_virt, current_phys);
+
+                if let Err(e) = mapper.map(
+                    VirtAddr::new(current_virt),
+                    PhysAddr::new(current_phys),
+                    flags,
+                    crate::memory::PageSize::Size4KB,
+                ) {
+                    panic!("[FATAL] Failed to map page at virt={:#x} phys={:#x}: {:?}",
+                        current_virt, current_phys, e);
+                }
+
+                current_virt += PAGE_SIZE;
+                current_phys += PAGE_SIZE;
+                page_count += 1;
+            }
+
+            crate::kprintln!("    Mapped {} pages ({} KB)", page_count, seg_size / 1024);
+            total_pages += page_count;
         }
     }
-
-    let phys_start = phys_file_start + code_file_offset as usize;
-
-    // Map enough pages to cover the entire binary
-    let code_size = ((binary_size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)) + PAGE_SIZE * 4;
-
-    crate::kprintln!("  ELF mapping:");
-    crate::kprintln!("    entry_addr:        {:#x}", entry_addr);
-    crate::kprintln!("    virt_start:        {:#x}", virt_start);
-    crate::kprintln!("    phys_file_start:   {:#x}", phys_file_start);
-    crate::kprintln!("    code_file_offset:  {:#x}", code_file_offset);
-    crate::kprintln!("    phys_start:        {:#x}", phys_start);
-    crate::kprintln!("    code_size:         {:#x} ({} KB)", code_size, code_size / 1024);
-
-    // Map virtual address → physical address (skip ELF headers)
-    let mut current_virt = virt_start;
-    let mut current_phys = phys_start;
-    let end_virt = virt_start + code_size;
-
-    let mut page_count = 0;
-    while current_virt < end_virt && current_phys < phys_end + PAGE_SIZE * 4 {
-        if let Err(e) = mapper.map(
-            VirtAddr::new(current_virt),
-            PhysAddr::new(current_phys),
-            PageTableFlags::USER_RWX,
-            crate::memory::PageSize::Size4KB,
-        ) {
-            crate::kprintln!("[ERROR] Failed to map page {} at virt={:#x} phys={:#x}: {:?}",
-                page_count, current_virt, current_phys, e);
-            return Err(RootTaskError::MemoryMapping);
-        }
-
-        current_virt += PAGE_SIZE;
-        current_phys += PAGE_SIZE;
-        page_count += 1;
-    }
-    crate::kprintln!("  Mapped {} pages successfully", page_count);
+    crate::kprintln!("  Total: {} pages mapped for all LOAD segments", total_pages);
 
     // Map stack (1MB below entry point, 256KB size)
     // Ensure stack_top is page-aligned by rounding entry_addr down to page boundary, then subtracting
@@ -220,25 +284,13 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
         stack_size,
         PageTableFlags::USER_DATA,
     ) {
-        crate::kprintln!("[ERROR] Failed to map stack: {:?}", e);
-        return Err(RootTaskError::MemoryMapping);
+        panic!("[FATAL] Failed to map stack: {:?}", e);
     }
 
-    // Map UART for syscalls (device memory)
-    crate::kprintln!("  Mapping UART: {:#x}", memory_config::UART0_BASE);
-    if let Err(e) = crate::memory::paging::identity_map_region(
-        &mut mapper,
-        memory_config::UART0_BASE as usize,
-        4096,
-        PageTableFlags::USER_DEVICE,
-    ) {
-        crate::kprintln!("[ERROR] Failed to map UART: {:?}", e);
-        return Err(RootTaskError::MemoryMapping);
-    }
+    // UART already mapped with kernel permissions earlier, no need to map again
 
     crate::kprintln!("  Entry point:     {:#x}", entry_addr);
     crate::kprintln!("  Stack:           {:#x} - {:#x} (256 KB)", stack_bottom, stack_top);
-    crate::kprintln!("  Code segment:    {} KB at virt {:#x}", code_size / 1024, virt_start);
     crate::kprintln!("  ✓ Root task ready for EL0 transition");
 
     // Step 2b: Create and map boot info for userspace runtime services
@@ -246,11 +298,11 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("[root_task] Creating boot info for runtime services...");
 
     // Create boot info structure
-    let userspace_boot_info = populate_boot_info()?;
+    let userspace_boot_info = populate_boot_info().expect("[FATAL] Failed to populate boot info");
 
     // Allocate physical frame for boot info
     let boot_info_frame = crate::memory::alloc_frame()
-        .ok_or(RootTaskError::PageTableAllocation)?;
+        .expect("[FATAL] Failed to allocate boot info frame");
     let boot_info_phys = boot_info_frame.phys_addr();
 
     // Write boot info to physical frame
@@ -264,7 +316,7 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
         boot_info_phys,
         PageTableFlags::USER_DATA, // Read-only would be better, but use RW for now
         crate::memory::PageSize::Size4KB,
-    ).map_err(|_| RootTaskError::MemoryMapping)?;
+    ).expect("[FATAL] Failed to map boot info");
 
     crate::kprintln!("  Boot info phys:  {:#x}", boot_info_phys.as_usize());
     crate::kprintln!("  Boot info virt:  {:#x}", BOOT_INFO_VADDR);
@@ -274,20 +326,20 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     // Step 3: Create CNode for root task capability space
     crate::kprintln!("  Creating CNode for capability space...");
     let cnode_frame = crate::memory::alloc_frame()
-        .ok_or(RootTaskError::PageTableAllocation)?;
+        .expect("[FATAL] Failed to allocate CNode frame");
     let cnode_phys = cnode_frame.phys_addr();
     let cnode_ptr = cnode_phys.as_usize() as *mut crate::objects::CNode;
 
     // Create CNode with 256 slots (2^8 = 256 capabilities)
     let cnode = crate::objects::CNode::new(8, cnode_phys)
-        .map_err(|_| RootTaskError::PageTableAllocation)?;
+        .expect("[FATAL] Failed to create CNode");
     core::ptr::write(cnode_ptr, cnode);
     crate::kprintln!("  CNode:           {:#x} (256 slots)", cnode_ptr as usize);
 
     // Step 4: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
     let root_tcb_frame = crate::memory::alloc_frame()
-        .ok_or(RootTaskError::PageTableAllocation)?;
+        .expect("[FATAL] Failed to allocate TCB frame");
     let root_tcb_ptr = root_tcb_frame.phys_addr().as_usize() as *mut crate::objects::TCB;
     crate::kprintln!("  Root TCB frame:  {:#x}", root_tcb_ptr as usize);
 
@@ -325,11 +377,71 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     crate::kprintln!("  Stack:    {:#x}", stack_top);
     crate::kprintln!("  TTBR0:    {:#x}", user_page_table_phys.as_usize());
     crate::kprintln!("  About to call transition_to_el0...");
+    crate::kprintln!("  VBAR_EL1: {:#x}", unsafe {
+        let vbar: usize;
+        core::arch::asm!("mrs {}, vbar_el1", out(reg) vbar);
+        vbar
+    });
+    crate::kprintln!("  CurrentEL before: {:#x}", unsafe {
+        let el: usize;
+        core::arch::asm!("mrs {}, currentel", out(reg) el);
+        el
+    });
 
-    transition_to_el0(entry_addr, stack_top, user_page_table_phys.as_usize());
+    // Clean data cache and invalidate instruction cache for the mapped user code
+    // This ensures the CPU sees the code we just mapped
+    unsafe {
+        core::arch::asm!(
+            "dc civac, {addr}",  // Clean and invalidate data cache by VA
+            "ic ivau, {addr}",   // Invalidate instruction cache by VA
+            "dsb ish",           // Data synchronization barrier
+            "isb",               // Instruction synchronization barrier
+            addr = in(reg) entry_addr,
+        );
+    }
+    crate::kprintln!("  Cache flushed");
 
-    // This should never be reached
-    Ok(())
+    // Verify the code is actually at the physical address
+    let code_phys_offset = 0x10000; // First LOAD segment offset from ELF
+    let code_phys = (phys_file_start + code_phys_offset) & !(PAGE_SIZE - 1);
+    let first_instruction = unsafe { *(code_phys as *const u32) };
+    crate::kprintln!("  First instruction at phys {:#x}: {:#x}", code_phys, first_instruction);
+
+    // Expected first instruction from objdump
+    crate::kprintln!("  Expected: 0xa9ba7bfd (stp x29, x30, [sp, #-0x60]!)");
+
+    // Also verify we can read from the mapped virtual address using the user page table
+    // We need to temporarily switch to the user page table to test this
+    crate::kprintln!("  User PT is at phys {:#x}", user_page_table_phys.as_usize());
+
+    // Directly transition using inline assembly to avoid any compiler-generated cleanup code
+    core::arch::asm!(
+        // Set up TTBR0_EL1 (user page table)
+        "msr ttbr0_el1, {ttbr0}",
+        "isb",
+        // Invalidate TLB for TTBR0
+        "tlbi vmalle1",
+        "dsb ish",
+        "isb",
+        // Set up ELR_EL1 (return address = user entry point)
+        "msr elr_el1, {entry}",
+        // Set up SP_EL0 (user stack pointer)
+        "msr sp_el0, {sp}",
+        // Set up SPSR_EL1 for EL0
+        // M[3:0] = 0b0000 (EL0t - EL0 with SP_EL0)
+        // F = 0 (FIQ not masked)
+        // I = 0 (IRQ not masked)
+        // A = 0 (SError not masked)
+        // D = 1 (Debug exceptions masked)
+        "mov x3, #0x0",  // All zeros = EL0t with interrupts enabled
+        "msr spsr_el1, x3",
+        // Perform exception return to EL0
+        "eret",
+        entry = in(reg) entry_addr,
+        sp = in(reg) stack_top,
+        ttbr0 = in(reg) user_page_table_phys.as_usize(),
+        options(noreturn)
+    );
 }
 
 /// Transition to EL0 and jump to user code

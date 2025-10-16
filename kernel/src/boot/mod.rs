@@ -312,17 +312,8 @@ pub fn kernel_entry() -> ! {
 
     unsafe {
         // Create and start root task in EL0
-        match root_task::create_and_start_root_task() {
-            Ok(()) => {
-                // Should never reach here - transitioned to EL0
-                crate::kprintln!("[ERROR] Unexpected return from EL0 transition");
-                panic!("Root task creation failed: unexpected return");
-            }
-            Err(e) => {
-                crate::kprintln!("[ERROR] Failed to create root task: {:?}", e);
-                panic!("Root task creation failed");
-            }
-        };
+        // This function never returns - it transitions to EL0
+        root_task::create_and_start_root_task();
     }
 
     // Idle loop

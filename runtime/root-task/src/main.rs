@@ -54,18 +54,14 @@ unsafe fn sys_print(msg: &str) {
     // - x1 = arg2 (message length)
     // - svc #0 = trigger supervisor call
     //
-    // Important: Mark all caller-saved registers (x0-x18) as clobbered
-    // to prevent compiler from keeping values in registers across syscalls
+    // Important: Use inout() for input registers to ensure they're clobbered,
+    // preventing the compiler from reusing them across syscalls
     core::arch::asm!(
         "mov x8, {syscall_num}",
-        "mov x0, {msg_ptr}",
-        "mov x1, {msg_len}",
         "svc #0",
         syscall_num = in(reg) SYS_DEBUG_PRINT,
-        msg_ptr = in(reg) msg_ptr,
-        msg_len = in(reg) msg_len,
-        lateout("x0") _,
-        lateout("x1") _,
+        inout("x0") msg_ptr => _,
+        inout("x1") msg_len => _,
         lateout("x2") _,
         lateout("x3") _,
         lateout("x4") _,

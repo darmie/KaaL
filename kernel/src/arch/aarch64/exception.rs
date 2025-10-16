@@ -213,19 +213,16 @@ global_asm!(
     "    stp x0, x1, [sp, #248]",
     "    stp x2, x3, [sp, #264]",
     "    str x4, [sp, #280]",
-    // Chapter 9: Save user's TTBR0 and switch to kernel page table
-    "    mrs x5, ttbr0_el1",           // Save user's page table
+    // Note: With our unified page table design (kernel + user in same PT with EL-based permissions),
+    // we don't need to switch TTBR0. The user page table already contains kernel mappings
+    // with EL1-only access permissions, so kernel code can run while user code can't access it.
+    "    mrs x5, ttbr0_el1",           // Save user's page table (for debugging)
     "    str x5, [sp, #288]",          // Store at offset 288
-    "    mrs x6, ttbr1_el1",           // Get kernel page table
-    "    msr ttbr0_el1, x6",           // Use kernel PT for TTBR0 during exception
-    "    isb",                         // Ensure page table switch completes
+    // No page table switch needed - we stay on the user PT with kernel mappings
     "    mov x0, sp",                  // Pass TrapFrame* to handler
     // Call Rust handler
     "    bl exception_lower_el_aarch64_sync_handler",
-    // Chapter 9: Restore user's TTBR0 before returning to EL0
-    "    ldr x5, [sp, #288]",          // Load saved user page table
-    "    msr ttbr0_el1, x5",           // Restore user's page table
-    "    isb",                         // Ensure page table switch completes
+    // No need to restore TTBR0 since we never changed it
     // Restore context (including potentially modified syscall return value in x0)
     "    ldp x0, x1, [sp, #0]",
     "    ldp x2, x3, [sp, #16]",
@@ -356,6 +353,16 @@ extern "C" fn exception_lower_el_aarch64_sync_handler(frame: &mut TrapFrame) {
     if ec == 0x15 {
         crate::syscall::handle_syscall(frame);
         return;
+    }
+
+    // Check for instruction/prefetch abort
+    if ec == 0x20 || ec == 0x21 {  // Instruction abort from lower EL
+        crate::kprintln!("[exception] Prefetch/Instruction Abort from EL0:");
+        crate::kprintln!("  PC (ELR): {:#x}", frame.elr_el1);
+        crate::kprintln!("  Fault Address (FAR): {:#x}", frame.far_el1);
+        crate::kprintln!("  ESR: {:#x}", esr);
+        crate::kprintln!("  ISS: {:#x}", esr & 0x1FFFFFF);
+        panic!("Instruction abort from EL0");
     }
 
     // Not a syscall - print debug info and panic

@@ -280,46 +280,25 @@ fn sys_debug_putchar(ch: u64) -> u64 {
 /// For Chapter 7, we assume the root task has identity-mapped memory,
 /// so we can directly access the pointer.
 fn sys_debug_print(ptr: u64, len: u64) -> u64 {
+    // Validate pointer looks reasonable (should be in user space 0x40100000-0x40105000)
+    if ptr < 0x40100000 || ptr > 0x40110000 {
+        return u64::MAX; // Error: invalid pointer
+    }
+
     // Validate length (prevent abuse)
     if len > 4096 {
         return u64::MAX; // Error: string too long
     }
 
     unsafe {
-        let current = crate::scheduler::current_thread();
-        if current.is_null() {
-            return u64::MAX; // Error: no current thread
-        }
-
-        // Get current thread's page table (TTBR0)
-        let user_ttbr0 = (*current).context().saved_ttbr0;
-
-        // Temporarily switch to user's page table to copy the string
-        let mut saved_ttbr0: u64;
-        core::arch::asm!(
-            "mrs {}, ttbr0_el1",
-            out(reg) saved_ttbr0,
-        );
-
-        core::arch::asm!(
-            "msr ttbr0_el1, {}",
-            "isb",
-            in(reg) user_ttbr0,
-        );
-
-        // Copy string to kernel buffer
+        // With our unified page table design, user memory is already accessible
+        // (the user page table contains both kernel and user mappings)
+        // No need to switch TTBR0 - just copy directly from user memory
         let mut buffer = [0u8; 4096];
         let copy_len = core::cmp::min(len as usize, 4096);
         core::ptr::copy_nonoverlapping(ptr as *const u8, buffer.as_mut_ptr(), copy_len);
 
-        // Restore kernel's page table BEFORE printing
-        core::arch::asm!(
-            "msr ttbr0_el1, {}",
-            "isb",
-            in(reg) saved_ttbr0,
-        );
-
-        // Now print from kernel buffer (UART is accessible via TTBR1)
+        // Print from kernel buffer
         if let Ok(s) = core::str::from_utf8(&buffer[..copy_len]) {
             crate::kprint!("{}", s);
             0 // Success
