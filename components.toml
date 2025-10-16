@@ -103,6 +103,31 @@ capabilities = [
     "ipc:serial",    # For debug output
 ]
 
+# Test Components - IPC Testing (Phase 5)
+[[component]]
+name = "ipc_producer"
+binary = "ipc-producer"
+type = "service"
+priority = 128
+autostart = false  # Spawned on-demand for IPC testing
+capabilities = [
+    "memory:map",
+    "notification:signal",
+    "notification:wait",
+]
+
+[[component]]
+name = "ipc_consumer"
+binary = "ipc-consumer"
+type = "service"
+priority = 128
+autostart = false  # Spawned on-demand for IPC testing
+capabilities = [
+    "memory:map",
+    "notification:signal",
+    "notification:wait",
+]
+
 # Applications - User-facing programs
 [[component]]
 name = "shell"

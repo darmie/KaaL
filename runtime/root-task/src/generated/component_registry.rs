@@ -73,6 +73,32 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: None,
     },
     ComponentDescriptor {
+        name: "ipc_producer",
+        binary: "ipc-producer",
+        component_type: ComponentType::Service,
+        priority: 128,
+        autostart: false,
+        capabilities:     &[
+        "memory:map",
+        "notification:signal",
+        "notification:wait"
+    ],
+        binary_data: None,
+    },
+    ComponentDescriptor {
+        name: "ipc_consumer",
+        binary: "ipc-consumer",
+        component_type: ComponentType::Service,
+        priority: 128,
+        autostart: false,
+        capabilities:     &[
+        "memory:map",
+        "notification:signal",
+        "notification:wait"
+    ],
+        binary_data: None,
+    },
+    ComponentDescriptor {
         name: "shell",
         binary: "shell",
         component_type: ComponentType::Application,
@@ -98,4 +124,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 6;
+pub const COMPONENT_COUNT: usize = 8;
