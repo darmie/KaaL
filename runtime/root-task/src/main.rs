@@ -377,23 +377,7 @@ unsafe fn test_shared_memory_ipc() {
     sys_print("═══════════════════════════════════════════════════════════\n");
     sys_print("\n");
 
-    sys_print("[ipc] Phase 2 Component Binaries:\n");
-
-    // Embed IPC binaries
-    static IPC_SENDER_ELF: &[u8] = include_bytes!(
-        "../../../examples/ipc-sender/target/aarch64-unknown-none/release/ipc-sender"
-    );
-    static IPC_RECEIVER_ELF: &[u8] = include_bytes!(
-        "../../../examples/ipc-receiver/target/aarch64-unknown-none/release/ipc-receiver"
-    );
-
-    sys_print("  → IPC Sender binary:   ");
-    print_number(IPC_SENDER_ELF.len());
-    sys_print(" bytes\n");
-    sys_print("  → IPC Receiver binary: ");
-    print_number(IPC_RECEIVER_ELF.len());
-    sys_print(" bytes\n");
-    sys_print("\n");
+    // Phase 2 tests notification infrastructure only (no component spawning yet)
 
     sys_print("[ipc] Test 1: Allocating shared memory for ring buffer...\n");
 
@@ -674,46 +658,9 @@ pub extern "C" fn _start() -> ! {
         sys_print("[root_task] Component switching working! ✓\n");
     }
 
-    // TODO: Chapter 9 Phase 3: End-to-End IPC Testing
-    unsafe {
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 3: End-to-End IPC Testing\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-
-        // Embed IPC test binaries
-        static IPC_RECEIVER_ELF: &[u8] = include_bytes!(
-            "../../../examples/ipc-receiver/target/aarch64-unknown-none/release/ipc-receiver"
-        );
-        static IPC_SENDER_ELF: &[u8] = include_bytes!(
-            "../../../examples/ipc-sender/target/aarch64-unknown-none/release/ipc-sender"
-        );
-
-        sys_print("[root_task] IPC Receiver binary: ");
-        print_number(IPC_RECEIVER_ELF.len());
-        sys_print(" bytes\n");
-        sys_print("[root_task] IPC Sender binary: ");
-        print_number(IPC_SENDER_ELF.len());
-        sys_print(" bytes\n");
-        sys_print("\n");
-
-        sys_print("[root_task] NOTE: For Phase 3, IPC receiver will create endpoint\n");
-        sys_print("[root_task]       and sender will use a known capability slot.\n");
-        sys_print("[root_task]       Full capability transfer will be implemented later.\n");
-        sys_print("\n");
-
-        // TODO: Spawn IPC receiver process (will create endpoint)
-        // TODO: Spawn IPC sender process (will use endpoint)
-        // TODO: Let them communicate and verify message passing
-
-        sys_print("[root_task] IPC test binaries embedded and ready\n");
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 3: IPC Infrastructure Ready ✓\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-    }
+    // TODO: Chapter 9 Phase 5: Inter-Component IPC Testing
+    // Will use components/ipc-producer and components/ipc-consumer
+    // spawned via ComponentLoader with shared memory and notifications
 
     // Idle loop - wait for interrupts
     loop {
