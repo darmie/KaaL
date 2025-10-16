@@ -193,12 +193,25 @@ pub fn device_request(device_id: usize) -> Result<usize> {
 
 /// Create a notification object
 ///
+/// **Notifications are synchronization primitives**, not message-passing channels.
+/// They provide lightweight signaling with badge bits but carry no data payload.
+///
+/// For typed message passing, use `Channel<T>` from the `message` module instead,
+/// which combines notifications with shared memory ring buffers.
+///
 /// # Returns
 /// Notification capability slot on success.
+///
+/// # Use Cases
+/// - Event signaling (e.g., "data ready", "work complete")
+/// - Synchronization between threads/processes
+/// - Interrupt notification from drivers
 ///
 /// # Example
 /// ```no_run
 /// let notification = kaal_sdk::syscall::notification_create()?;
+/// // Later: signal it
+/// kaal_sdk::syscall::signal(notification, 0x1)?;
 /// ```
 pub fn notification_create() -> Result<usize> {
     unsafe {

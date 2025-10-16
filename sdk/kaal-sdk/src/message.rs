@@ -1,7 +1,31 @@
 //! Message-Passing IPC Abstraction
 //!
-//! Provides high-level, semantic APIs for inter-component communication.
-//! Hides implementation details (ring buffers, notifications) behind clean interfaces.
+//! **This module provides typed message-passing channels, NOT bare notifications.**
+//!
+//! ## Distinction from Notifications
+//!
+//! - **Notification** (`syscall::notification_create`, `capability::Notification`):
+//!   - Pure synchronization primitive (like eventfd/semaphore)
+//!   - Only carries signal bits (badges), no data payload
+//!   - Use for: event signaling, interrupts, general synchronization
+//!
+//! - **Channel<T>** (this module):
+//!   - Complete message-passing system for typed data transfer
+//!   - Built on: SharedRing (shared memory) + Notifications (for blocking/wakeup)
+//!   - Provides semantic `send(msg)` / `receive()` API
+//!   - Use for: inter-process communication with typed messages
+//!
+//! ## Architecture
+//!
+//! ```text
+//! Channel<T>::send(msg)
+//!   └─> SharedRing::push(msg)     [writes to shared memory]
+//!        └─> sys_signal()          [wakes receiver if blocked]
+//!
+//! Channel<T>::receive()
+//!   └─> SharedRing::pop()          [reads from shared memory]
+//!        └─> sys_wait()            [blocks until data available]
+//! ```
 //!
 //! # Design Philosophy
 //! - Use semantic terminology: send/receive, not push/pop
