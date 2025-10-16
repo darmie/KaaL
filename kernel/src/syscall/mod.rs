@@ -203,6 +203,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
+        numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3]),
 
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
@@ -763,6 +764,122 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
     // For now, this is a no-op (simplified)
     kprintln!("[syscall] memory_unmap -> success ({} pages)", num_pages);
     0
+}
+
+/// Map physical memory into target process's virtual address space (Phase 5)
+///
+/// Args:
+/// - target_tcb_cap: Capability slot for target process's TCB
+/// - phys_addr: Physical address to map
+/// - size: Size in bytes
+/// - permissions: Permission bits (read=1, write=2, exec=4)
+///
+/// Returns: Virtual address in target's address space, or u64::MAX on error
+///
+/// This allows one process (e.g., root-task) to map shared memory into another
+/// process's address space, enabling inter-process IPC via shared memory.
+/// The caller must have a TCB capability for the target process.
+fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissions: u64) -> u64 {
+    use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
+    use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
+    use crate::objects::{CNode, CapType};
+
+    kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
+              target_tcb_cap, phys_addr, size, permissions);
+
+    // Round size up to page boundary
+    let page_size = PAGE_SIZE as u64;
+    let num_pages = ((size + page_size - 1) / page_size) as usize;
+    let aligned_size = num_pages as u64 * page_size;
+
+    // Look up target TCB capability from caller's CSpace
+    unsafe {
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            kprintln!("[syscall] memory_map_into: no current thread");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            kprintln!("[syscall] memory_map_into: thread has no CSpace root");
+            return u64::MAX;
+        }
+
+        // Look up target TCB capability
+        let cnode = &*cspace_root;
+        let cap = match cnode.lookup(target_tcb_cap as usize) {
+            Some(c) => c,
+            None => {
+                kprintln!("[syscall] memory_map_into: cap_slot {} not found in CSpace", target_tcb_cap);
+                return u64::MAX;
+            }
+        };
+
+        // Verify it's a TCB capability
+        if cap.cap_type() != CapType::Tcb {
+            kprintln!("[syscall] memory_map_into: cap_slot {} is not a TCB (type={:?})",
+                     target_tcb_cap, cap.cap_type());
+            return u64::MAX;
+        }
+
+        // Get target TCB pointer
+        let target_tcb_ptr = cap.object_ptr() as *mut TCB;
+        if target_tcb_ptr.is_null() {
+            kprintln!("[syscall] memory_map_into: null target TCB pointer");
+            return u64::MAX;
+        }
+
+        // Get target process's page table (TTBR0)
+        let target_ttbr0 = (*target_tcb_ptr).context().saved_ttbr0;
+        kprintln!("[syscall] memory_map_into: target TTBR0={:#x}", target_ttbr0);
+
+        let target_page_table = &mut *(target_ttbr0 as *mut PageTable);
+
+        // Allocate virtual address from high memory region
+        let virt_addr = {
+            let addr = NEXT_VIRT_ADDR;
+            NEXT_VIRT_ADDR += aligned_size;
+            addr
+        };
+
+        kprintln!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
+                  virt_addr, virt_addr + aligned_size);
+
+        // Use USER_DATA preset for userspace read-write data
+        let flags = PageTableFlags::USER_DATA;
+
+        kprintln!("[syscall] memory_map_into: using USER_DATA flags = {:#x}", flags.bits());
+
+        // Create PageMapper for target's page table
+        let mut mapper = crate::memory::PageMapper::new(target_page_table);
+
+        // Map each page into target's address space
+        for i in 0..num_pages {
+            let page_virt = VirtAddr::new((virt_addr as usize) + (i * PAGE_SIZE));
+            let page_phys = PhysAddr::new((phys_addr as usize) + (i * PAGE_SIZE));
+
+            match mapper.map(page_virt, page_phys, flags, PageSize::Size4KB) {
+                Ok(()) => {
+                    kprintln!("[syscall] memory_map_into: mapped page {} virt={:#x} -> phys={:#x} (in target)",
+                             i, page_virt.as_usize(), page_phys.as_usize());
+                },
+                Err(e) => {
+                    kprintln!("[syscall] memory_map_into: failed to map page {} at virt={:#x}, error={:?}",
+                             i, page_virt.as_usize(), e);
+                    return u64::MAX;
+                }
+            }
+        }
+
+        // Ensure page table updates are visible
+        core::arch::asm!(
+            "dsb ishst",  // Ensure all page table writes complete
+        );
+
+        kprintln!("[syscall] memory_map_into -> virt={:#x} ({} pages mapped in target)", virt_addr, num_pages);
+        virt_addr
+    }
 }
 
 /// IPC Send: Send message to endpoint

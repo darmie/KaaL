@@ -85,6 +85,15 @@ pub const SYS_WAIT: u64 = 0x19;
 /// Returns: signal bits (0 if no signals), or -1 on error
 pub const SYS_POLL: u64 = 0x1A;
 
+/// Map physical memory into target process's virtual address space (Phase 5)
+/// Args: target_process_cap, physical_addr, size, permissions (read=1, write=2, exec=4)
+/// Returns: virtual address in target's address space, or -1 on error
+///
+/// This allows one process (e.g., root-task) to map shared memory into another
+/// process's address space, enabling inter-process IPC via shared memory.
+/// Requires appropriate capabilities to the target process.
+pub const SYS_MEMORY_MAP_INTO: u64 = 0x1B;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success
