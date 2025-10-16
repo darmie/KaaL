@@ -28,10 +28,15 @@ export def "build kernel" [config: record, kernel_addr: string] {
 }
 
 # Build root-task
-export def "build roottask" [platform: string] {
+export def "build roottask" [platform: string, platform_cfg: record, root_task_stack_size: string] {
     print step 2 4 "Building root-task"
 
-    with-env { KAAL_PLATFORM: $platform } {
+    # Generate root-task linker script
+    codegen roottask-linker $platform_cfg $root_task_stack_size
+
+    # Build with linker script
+    let rustflags = $"-C link-arg=-T($env.PWD)/runtime/root-task/root-task.ld"
+    with-env { KAAL_PLATFORM: $platform, RUSTFLAGS: $rustflags } {
         cargo build-safe --manifest-path runtime/root-task/Cargo.toml --target aarch64-unknown-none --release --build-std [core]
     }
 

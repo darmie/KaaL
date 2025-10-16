@@ -92,7 +92,7 @@ def main [
 
     # Build steps
     let kernel_elf = (build kernel $config $kernel_addr)
-    let roottask_elf = (build roottask $platform)
+    let roottask_elf = (build roottask $platform $platform_cfg $config.build.root_task_stack_size)
     build embeddable $kernel_elf $roottask_elf $build_dir
     let bootimage = (build elfloader $platform_cfg $platform $elfloader_addr $stack_top $build_dir)
 

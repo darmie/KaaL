@@ -181,6 +181,75 @@ SECTIONS
     $script | save --force runtime/elfloader/linker.ld
 }
 
+# Generate root-task linker script
+export def "codegen roottask-linker" [platform_cfg: record, root_task_stack_size: string] {
+    print "Generating root-task linker script..."
+
+    let roottask_load_base = (config calc-addr $platform_cfg.ram_base $platform_cfg.roottask_offset)
+
+    let script = $"/*
+ * KaaL Root Task Linker Script \(ARM64\)
+ * AUTO-GENERATED - DO NOT EDIT
+ * Generated from build-config.toml
+ */
+
+ENTRY\(_start\)
+
+SECTIONS
+{
+    /*
+     * Placeholder load address for linker
+     * Actual address determined by elfloader at runtime and passed via boot info
+     */
+    . = ($roottask_load_base);
+
+    /* Text section \(code\) */
+    .text : ALIGN\(($platform_cfg.page_size)\) {
+        *\(.text._start\)    /* Entry point first */
+        *\(.text .text.*\)   /* All other code */
+    }
+
+    /* Read-only data */
+    .rodata : ALIGN\(($platform_cfg.page_size)\) {
+        *\(.rodata .rodata.*\)
+    }
+
+    /* Data section */
+    .data : ALIGN\(($platform_cfg.page_size)\) {
+        *\(.data .data.*\)
+    }
+
+    /* BSS \(zero-initialized data\) */
+    .bss : ALIGN\(($platform_cfg.page_size)\) {
+        __bss_start = .;
+        *\(.bss .bss.*\)
+        *\(COMMON\)
+        __bss_end = .;
+    }
+
+    /* Stack */
+    . = ALIGN\(($platform_cfg.page_size)\);
+    __stack_start = .;
+    . += ($root_task_stack_size);
+    __stack_end = .;
+
+    /* End marker */
+    . = ALIGN\(($platform_cfg.page_size)\);
+    __root_task_end = .;
+
+    /* Discard unwanted sections */
+    /DISCARD/ : {
+        *\(.comment\)
+        *\(.gnu*\)
+        *\(.note*\)
+        *\(.eh_frame*\)
+    }
+}
+"
+
+    $script | save --force runtime/root-task/root-task.ld
+}
+
 # Generate component registry from components.toml
 export def "codegen component-registry" [] {
     print "Generating component registry..."
