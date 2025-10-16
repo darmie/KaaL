@@ -32,6 +32,7 @@ def main [
     --verbose (-v)                         # Verbose output
     --clean (-c)                          # Clean before building
     --list-platforms (-l)                 # List available platforms
+    --run (-r)                            # Run in QEMU after building
 ] {
     # Load configuration
     let config = (config load)
@@ -120,5 +121,30 @@ def main [
         let comp_type = ($component | get type)
         let comp_priority = ($component | get priority)
         print $"  • ($component.name) \(($comp_type), priority: ($comp_priority)\)"
+    }
+
+    # Run in QEMU if requested
+    if $run {
+        if ($platform_cfg | get -o qemu_machine) == null {
+            print $"(ansi red)Error: Platform ($platform) does not support QEMU execution(ansi reset)"
+            return
+        }
+
+        print ""
+        print header "🚀 LAUNCHING QEMU"
+        print ""
+        print $"Machine: ($platform_cfg.qemu_machine)"
+        print $"CPU:     ($platform_cfg.qemu_cpu)"
+        print $"Memory:  ($platform_cfg.qemu_memory)"
+        print $"Image:   ($bootimage)"
+        print ""
+        print $"(ansi yellow)Press Ctrl+A then X to exit QEMU(ansi reset)"
+        print ""
+
+        # Give user time to read the message
+        sleep 2sec
+
+        # Launch QEMU
+        ^qemu-system-aarch64 -machine $platform_cfg.qemu_machine -cpu $platform_cfg.qemu_cpu -m $platform_cfg.qemu_memory -nographic -kernel $bootimage
     }
 }
