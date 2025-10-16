@@ -188,37 +188,53 @@ pub unsafe fn create_and_start_root_task() -> Result<(), RootTaskError> {
     let mut current_phys = phys_start;
     let end_virt = virt_start + code_size;
 
+    let mut page_count = 0;
     while current_virt < end_virt && current_phys < phys_end + PAGE_SIZE * 4 {
-        mapper.map(
+        if let Err(e) = mapper.map(
             VirtAddr::new(current_virt),
             PhysAddr::new(current_phys),
             PageTableFlags::USER_RWX,
             crate::memory::PageSize::Size4KB,
-        ).map_err(|_| RootTaskError::MemoryMapping)?;
+        ) {
+            crate::kprintln!("[ERROR] Failed to map page {} at virt={:#x} phys={:#x}: {:?}",
+                page_count, current_virt, current_phys, e);
+            return Err(RootTaskError::MemoryMapping);
+        }
 
         current_virt += PAGE_SIZE;
         current_phys += PAGE_SIZE;
+        page_count += 1;
     }
+    crate::kprintln!("  Mapped {} pages successfully", page_count);
 
     // Map stack (1MB below entry point, 256KB size)
-    let stack_top = entry_addr - PAGE_SIZE;
+    // Ensure stack_top is page-aligned by rounding entry_addr down to page boundary, then subtracting
+    let stack_top = (entry_addr & !(PAGE_SIZE - 1)) - PAGE_SIZE;
     let stack_size = 256 * 1024; // 256KB stack
     let stack_bottom = stack_top - stack_size;
 
-    crate::memory::paging::identity_map_region(
+    crate::kprintln!("  Mapping stack: {:#x} - {:#x}", stack_bottom, stack_top);
+    if let Err(e) = crate::memory::paging::identity_map_region(
         &mut mapper,
         stack_bottom,
         stack_size,
         PageTableFlags::USER_DATA,
-    ).map_err(|_| RootTaskError::MemoryMapping)?;
+    ) {
+        crate::kprintln!("[ERROR] Failed to map stack: {:?}", e);
+        return Err(RootTaskError::MemoryMapping);
+    }
 
     // Map UART for syscalls (device memory)
-    crate::memory::paging::identity_map_region(
+    crate::kprintln!("  Mapping UART: {:#x}", memory_config::UART0_BASE);
+    if let Err(e) = crate::memory::paging::identity_map_region(
         &mut mapper,
         memory_config::UART0_BASE as usize,
         4096,
         PageTableFlags::USER_DEVICE,
-    ).map_err(|_| RootTaskError::MemoryMapping)?;
+    ) {
+        crate::kprintln!("[ERROR] Failed to map UART: {:?}", e);
+        return Err(RootTaskError::MemoryMapping);
+    }
 
     crate::kprintln!("  Entry point:     {:#x}", entry_addr);
     crate::kprintln!("  Stack:           {:#x} - {:#x} (256 KB)", stack_bottom, stack_top);
