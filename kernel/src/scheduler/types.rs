@@ -4,6 +4,7 @@
 
 use crate::objects::TCB;
 use core::ptr;
+use crate::ksched_debug;
 
 /// Number of priority levels (0 = highest, 255 = lowest)
 pub const NUM_PRIORITIES: usize = 256;
@@ -113,17 +114,17 @@ impl Scheduler {
     /// Returns the highest-priority runnable thread, or the idle thread
     /// if no threads are ready.
     pub unsafe fn schedule(&mut self) -> *mut TCB {
-        crate::kprintln!("[sched] schedule: looking for next thread");
-        crate::kprintln!("[sched] priority_bitmap: [{:#018x}, {:#018x}, {:#018x}, {:#018x}]",
+        crate::ksched_debug!("[sched] schedule: looking for next thread");
+        crate::ksched_debug!("[sched] priority_bitmap: [{:#018x}, {:#018x}, {:#018x}, {:#018x}]",
                          self.priority_bitmap[0], self.priority_bitmap[1],
                          self.priority_bitmap[2], self.priority_bitmap[3]);
 
         // Find highest priority with runnable threads
         if let Some(priority) = self.find_highest_priority() {
-            crate::kprintln!("[sched] schedule: found priority {} with ready threads", priority);
+            crate::ksched_debug!("[sched] schedule: found priority {} with ready threads", priority);
             // Dequeue from that priority level
             if let Some(tcb) = self.ready_queues[priority as usize].dequeue_head() {
-                crate::kprintln!("[sched] schedule: dequeued TCB {} at {:#x}",
+                crate::ksched_debug!("[sched] schedule: dequeued TCB {} at {:#x}",
                                (*tcb).tid(), tcb as usize);
                 // Update bitmap if queue now empty
                 if self.ready_queues[priority as usize].is_empty() {
@@ -133,7 +134,7 @@ impl Scheduler {
             }
         }
 
-        crate::kprintln!("[sched] schedule: no ready threads, returning idle TCB 0");
+        crate::ksched_debug!("[sched] schedule: no ready threads, returning idle TCB 0");
         // No runnable threads, return idle
         self.idle
     }
@@ -231,7 +232,7 @@ impl ThreadQueue {
     pub unsafe fn enqueue(&mut self, tcb: *mut TCB) {
         if self.count >= MAX_QUEUE_SIZE {
             // Queue full (shouldn't happen with reasonable thread counts)
-            crate::kprintln!("[sched] WARNING: Thread queue full, dropping enqueue");
+            crate::ksched_debug!("[sched] WARNING: Thread queue full, dropping enqueue");
             return;
         }
 

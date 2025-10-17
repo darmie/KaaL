@@ -152,6 +152,7 @@ macro_rules! component_metadata {
 /// - Component metadata
 /// - _start entry point
 /// - Panic handler
+/// - Global allocator
 #[macro_export]
 macro_rules! component {
     (
@@ -161,6 +162,7 @@ macro_rules! component {
         $(capabilities: [$($cap:expr),*],)?
         impl: $component_type:ty
     ) => {
+
         // Generate metadata
         #[no_mangle]
         #[link_section = ".component_metadata"]

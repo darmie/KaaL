@@ -103,6 +103,23 @@ pub const SYS_MEMORY_MAP_INTO: u64 = 0x1B;
 /// IPC by passing notification and TCB capabilities to spawned components.
 pub const SYS_CAP_INSERT_INTO: u64 = 0x1C;
 
+// Channel management syscalls
+
+/// Channel_Establish - Establish IPC channel between components
+/// Args: target_pid, buffer_size, role (0=producer, 1=consumer)
+/// Returns: packed channel config (vaddr|notify_slots), or 0 on error
+pub const SYS_CHANNEL_ESTABLISH: u64 = 0x30;
+
+/// Channel_Query - Query channel information
+/// Args: channel_id
+/// Returns: channel state/config, or 0 on error
+pub const SYS_CHANNEL_QUERY: u64 = 0x31;
+
+/// Channel_Close - Close an IPC channel
+/// Args: channel_id
+/// Returns: 1 on success, 0 on error
+pub const SYS_CHANNEL_CLOSE: u64 = 0x32;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

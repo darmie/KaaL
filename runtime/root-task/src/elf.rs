@@ -161,5 +161,12 @@ pub fn parse_elf(elf_data: &[u8]) -> Result<ElfInfo, &'static str> {
         return Err("No LOAD segments found");
     }
 
+    // Debug: Print extracted ELF info
+    // (need to import the print functions)
+    #[cfg(debug_assertions)]
+    {
+        // For now, just return the info - we can add debug later
+    }
+
     Ok(info)
 }

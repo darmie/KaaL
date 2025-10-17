@@ -137,19 +137,28 @@ impl TCB {
         context.elr_el1 = entry_point;
         context.sp_el0 = stack_pointer;
 
-        // Initialize frame pointer and link register to stack pointer
-        // (userspace will set them properly, but they need non-zero values)
+        // Initialize frame pointer to stack pointer (will be set up properly by userspace)
         context.x29 = stack_pointer;  // Frame pointer
-        context.x30 = entry_point;    // Link register (return address)
+        // x30 (link register) should be 0 initially - the entry point is jumped to via eret,
+        // not called, so there's no return address
+        context.x30 = 0;  // No return address for initial entry
 
         // Set SPSR for EL0 execution:
-        // - M[4:0] = 0b00000 (EL0t - EL0 using SP_EL0)
-        // - F (bit 6) = 1 (FIQ masked)
-        // - I (bit 7) = 1 (IRQ masked)
-        // - A (bit 8) = 1 (SError masked)
-        // - D (bit 9) = 1 (Debug masked)
-        // Result: 0x3c0 = 0b0011_1100_0000
-        context.spsr_el1 = 0x3c0; // All interrupts masked, EL0t
+        // - Bits 0-3: Mode = 0b0000 (EL0t - EL0 using SP_EL0)
+        // - Bit 4: 0 (AArch64, not AArch32)
+        // - Bit 5: Reserved, must be 0
+        // - Bits 6-9: DAIF interrupt mask bits
+        //   - D (bit 9) = 0 (Debug not masked)
+        //   - A (bit 8) = 0 (SError not masked)
+        //   - I (bit 7) = 0 (IRQ not masked)
+        //   - F (bit 6) = 0 (FIQ not masked)
+        // - Bits 10-19: Reserved
+        // - Bit 20: IL (illegal execution state) - leave 0
+        // - Other bits: Leave 0 for now
+        // Use the same SPSR value that root-task uses successfully
+        // Root-task uses 0x0 (all zeros = EL0t with interrupts enabled)
+        // and it works, so let's use exactly that
+        context.spsr_el1 = 0x0; // EL0t with interrupts enabled (same as root-task)
 
         Self {
             context,
@@ -340,6 +349,16 @@ impl TCB {
     /// to this thread, defining its virtual address space.
     pub fn set_page_table(&mut self, page_table: usize) {
         self.vspace_root = page_table;
+    }
+
+    /// Set initial argument registers (x0, x1, x2)
+    ///
+    /// Used to pass arguments to a newly spawned process. By ARM64 calling
+    /// convention, arguments are passed in x0-x7.
+    pub fn set_arguments(&mut self, arg0: u64, arg1: u64, arg2: u64) {
+        self.context.x0 = arg0;
+        self.context.x1 = arg1;
+        self.context.x2 = arg2;
     }
 }
 

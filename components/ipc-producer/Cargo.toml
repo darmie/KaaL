@@ -3,6 +3,9 @@ name = "ipc-producer"
 version = "0.1.0"
 edition = "2021"
 
+# Empty workspace table to prevent this from being part of parent workspace
+[workspace]
+
 [dependencies]
 kaal-sdk = { path = "../../sdk/kaal-sdk" }
 

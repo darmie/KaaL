@@ -43,6 +43,7 @@
 
 use crate::objects::TCB;
 use core::ptr;
+use crate::ksched_debug;
 
 mod types;
 pub mod timer;
@@ -142,13 +143,13 @@ pub unsafe fn test_set_current_thread(tcb: *mut TCB) {
 /// boot code to create processes before scheduler init.
 pub unsafe fn enqueue(tcb: *mut TCB) {
     if tcb.is_null() {
-        crate::kprintln!("[sched] enqueue: null TCB, skipping");
+        crate::ksched_debug!("[sched] enqueue: null TCB, skipping");
         return;
     }
 
     // Check if scheduler is initialized
     if SCHEDULER.is_none() {
-        crate::kprintln!("[sched] enqueue: scheduler not initialized, skipping TCB {}", (*tcb).tid());
+        crate::ksched_debug!("[sched] enqueue: scheduler not initialized, skipping TCB {}", (*tcb).tid());
         return; // Silently skip if not initialized
     }
 
@@ -267,7 +268,7 @@ pub unsafe fn block_current() {
 
     if next.is_null() {
         // No other threads, can't block (shouldn't happen with idle thread)
-        crate::kprintln!("[sched] WARNING: No threads available to schedule");
+        crate::ksched_debug!("[sched] WARNING: No threads available to schedule");
         return;
     }
 

@@ -104,14 +104,17 @@ export def "build components" [platform_cfg: record] {
     let components_data = (open components.toml)
     let components = ($components_data | get component)
 
-    # Build each component that has autostart=true
+    # Build ALL components (not just autostart ones)
+    # This ensures components can be spawned on-demand later
     for comp in $components {
-        if $comp.autostart {
-            let comp_dir = $"components/($comp.binary)"
-            if ($comp_dir | path exists) {
-                print $"  → Building ($comp.name)..."
-                cargo build-safe --manifest-path $"($comp_dir)/Cargo.toml" --target aarch64-unknown-none --release
-            }
+        let comp_dir = $"components/($comp.binary)"
+        let cargo_toml = $"($comp_dir)/Cargo.toml"
+        if ($cargo_toml | path exists) {
+            print $"  → Building ($comp.name)..."
+            # Change to component directory so cargo finds .cargo/config.toml
+            cd $comp_dir
+            cargo build-safe --target aarch64-unknown-none --release
+            cd ../..
         }
     }
 

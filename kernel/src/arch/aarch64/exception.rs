@@ -344,6 +344,26 @@ extern "C" fn debug_before_eret(frame: &TrapFrame) {
               frame.elr_el1, frame.sp_el0, frame.spsr_el1, frame.saved_ttbr0);
 }
 
+/// Debug function called right before eret with minimal register clobbering
+#[no_mangle]
+extern "C" fn debug_eret_state(elr: u64, spsr: u64) {
+    // Check if this looks like a first-time userspace transition
+    if spsr == 0x0 && elr > 0x200000 && elr < 0x300000 {
+        kprintln!("[exception] First eret to userspace:");
+        kprintln!("  ELR={:#x}, SPSR={:#x}", elr, spsr);
+
+        // Read current PSTATE to see processor state
+        let current_el: u64;
+        unsafe {
+            core::arch::asm!(
+                "mrs {}, CurrentEL",
+                out(reg) current_el,
+            );
+        }
+        kprintln!("  CurrentEL={:#x} (should be 0x4 for EL1)", current_el >> 2);
+    }
+}
+
 /// Handler for synchronous exceptions from lower EL (EL0 userspace)
 /// Called from assembly stub with TrapFrame* in x0
 #[no_mangle]
@@ -354,6 +374,14 @@ extern "C" fn exception_lower_el_aarch64_sync_handler(frame: &mut TrapFrame) {
 
     // EC 0x15 = SVC instruction from AArch64 (syscall)
     if ec == 0x15 {
+        // Debug: Check for suspicious syscalls
+        if frame.syscall_number() == 0 && frame.elr_el1 > 0x210000 && frame.elr_el1 < 0x220000 {
+            crate::kprintln!("[exception] Suspicious syscall 0:");
+            crate::kprintln!("  ELR={:#x}, SP={:#x}, x30={:#x}",
+                            frame.elr_el1, frame.sp_el0, frame.x30);
+            crate::kprintln!("  x8={:#x}, x0={:#x}, x1={:#x}",
+                            frame.x8, frame.x0, frame.x1);
+        }
         crate::syscall::handle_syscall(frame);
         return;
     }

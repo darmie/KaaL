@@ -128,6 +128,15 @@ capabilities = [
     "notification:wait",
 ]
 
+# Test component - Minimal for debugging
+[[component]]
+name = "test_minimal"
+binary = "test-minimal"
+type = "service"
+priority = 128
+autostart = false  # Spawned on-demand for testing
+capabilities = []
+
 # Applications - User-facing programs
 [[component]]
 name = "shell"

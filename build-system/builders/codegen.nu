@@ -250,6 +250,142 @@ SECTIONS
     $script | save --force runtime/root-task/root-task.ld
 }
 
+# Generate component linker scripts
+export def "codegen component-linkers" [
+    --platform: string = ""  # Platform name from build-config.toml
+] {
+    print "Generating component linker scripts..."
+
+    # Get all components
+    let components_data = (config load-components)
+    let components = ($components_data | get component)
+
+    # Load build configuration
+    let build_config = (open build-config.toml)
+
+    # Determine platform and get its architecture
+    let platform_name = if ($platform | is-empty) {
+        $build_config.build.default_platform
+    } else {
+        $platform
+    }
+
+    let platform_config = ($build_config.platform | get $platform_name)
+    let target_arch = $platform_config.arch
+
+    # Platform-specific memory configuration
+    let memory_config = if $target_arch == "aarch64" {
+        { origin: "0x200000", length: "2M", align: "8" }
+    } else if $target_arch == "x86_64" {
+        { origin: "0x400000", length: "4M", align: "16" }
+    } else if $target_arch == "riscv64" {
+        { origin: "0x80200000", length: "2M", align: "8" }
+    } else {
+        # Default to ARM64 settings
+        { origin: "0x200000", length: "2M", align: "8" }
+    }
+
+    # Add platform-specific discard sections
+    let discard_sections = if $target_arch == "aarch64" {
+        "    *(.ARM.exidx)
+    *(.ARM.exidx.*)
+    *(.ARM.extab)
+    *(.ARM.extab.*)"
+    } else if $target_arch == "x86_64" {
+        "    *(.eh_frame)
+    *(.eh_frame_hdr)"
+    } else if $target_arch == "riscv64" {
+        "    *(.riscv.attributes)"
+    } else {
+        ""
+    }
+
+    # Component linker script template (link.x format for rust-lld)
+    let linker_script = (
+        "/* Component linker script for " + $target_arch + " */\n" +
+        "ENTRY(_start)\n\n" +
+        "MEMORY\n" +
+        "{\n" +
+        "  /* Component memory space starts at " + $memory_config.origin + " */\n" +
+        "  RAM : ORIGIN = " + $memory_config.origin + ", LENGTH = " + $memory_config.length + "\n" +
+        "}\n\n" +
+        "SECTIONS\n" +
+        "{\n" +
+        "  /* Code starts at " + $memory_config.origin + " */\n" +
+        "  .text " + $memory_config.origin + " : AT(" + $memory_config.origin + ")\n" +
+        "  {\n" +
+        "    /* Ensure _start is placed first */\n" +
+        "    KEEP(*(.text._start))\n" +
+        "    KEEP(*(.text.entry))\n" +
+        "    *(.text .text.*)\n" +
+        "  } > RAM\n\n" +
+        "  .rodata : ALIGN(" + $memory_config.align + ")\n" +
+        "  {\n" +
+        "    *(.rodata .rodata.*)\n" +
+        "  } > RAM\n\n" +
+        "  .data : ALIGN(" + $memory_config.align + ")\n" +
+        "  {\n" +
+        "    *(.data .data.*)\n" +
+        "  } > RAM\n\n" +
+        "  .bss : ALIGN(" + $memory_config.align + ")\n" +
+        "  {\n" +
+        "    *(.bss .bss.*)\n" +
+        "    *(COMMON)\n" +
+        "  } > RAM\n\n" +
+        "  /* Discard unwanted sections */\n" +
+        "  /DISCARD/ :\n" +
+        "  {\n" +
+        $discard_sections + "\n" +
+        "    *(.comment)\n" +
+        "    *(.debug*)\n" +
+        "  }\n" +
+        "}"
+    )
+
+    # Platform-specific target configuration
+    let target_triple = if $target_arch == "aarch64" {
+        "aarch64-unknown-none"
+    } else if $target_arch == "x86_64" {
+        "x86_64-unknown-none"
+    } else if $target_arch == "riscv64" {
+        "riscv64gc-unknown-none-elf"
+    } else {
+        "aarch64-unknown-none"
+    }
+
+    # Component cargo config template - use component.ld linker script
+    let cargo_config = (
+        "[target." + $target_triple + "]\n" +
+        "rustflags = [\n" +
+        '    "-C", "link-arg=-Tcomponent.ld",    # Use custom linker script' + "\n" +
+        '    "-C", "relocation-model=static",  # Static relocation' + "\n" +
+        "]\n\n" +
+        "[build]\n" +
+        'target = "' + $target_triple + '"'
+    )
+
+    # Generate for each component
+    for comp in $components {
+        let comp_dir = $"components/($comp.binary)"
+
+        # Skip if component doesn't have Cargo.toml
+        let cargo_toml = $"($comp_dir)/Cargo.toml"
+        if not ($cargo_toml | path exists) {
+            print $"  Skipping ($comp.name) - not a Rust component"
+            continue
+        }
+
+        # Create .cargo directory if it doesn't exist
+        ensure dir $"($comp_dir)/.cargo"
+
+        # Write linker script as component.ld
+        $linker_script | save --force $"($comp_dir)/component.ld"
+
+        # Write cargo config
+        $cargo_config | save --force $"($comp_dir)/.cargo/config.toml"
+    }
+}
+
 # Generate component registry from components.toml
 export def "codegen component-registry" [] {
     print "Generating component registry..."

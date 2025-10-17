@@ -135,3 +135,25 @@ macro_rules! ktrace {
         }
     });
 }
+
+/// Log syscall debug message (only when debug-syscall feature is enabled)
+#[macro_export]
+macro_rules! ksyscall_debug {
+    ($($arg:tt)*) => ({
+        #[cfg(feature = "debug-syscall")]
+        {
+            $crate::kprintln!($($arg)*);
+        }
+    });
+}
+
+/// Log scheduler debug message (only when debug-scheduler feature is enabled)
+#[macro_export]
+macro_rules! ksched_debug {
+    ($($arg:tt)*) => ({
+        #[cfg(feature = "debug-scheduler")]
+        {
+            $crate::kprintln!($($arg)*);
+        }
+    });
+}

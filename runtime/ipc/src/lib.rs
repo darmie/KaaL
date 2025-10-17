@@ -25,7 +25,11 @@
 
 #![no_std]
 
+extern crate alloc;
+
 use core::sync::atomic::{AtomicUsize, Ordering};
+
+pub mod broker;
 
 /// IPC error types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

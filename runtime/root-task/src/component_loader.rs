@@ -189,8 +189,38 @@ impl ComponentLoader {
         let elf_info = crate::elf::parse_elf(binary_data)
             .map_err(|_| ComponentError::InvalidElf)?;
 
-        // 3. Allocate memory for process image (round up to 4KB pages)
-        let process_size = (elf_info.memory_size() + 4095) & !4095;
+        // Debug: Print ELF info
+        crate::sys_print("[loader] ELF for ");
+        crate::sys_print(desc.name);
+        crate::sys_print(":\n");
+        crate::sys_print("  Entry: 0x");
+        crate::print_hex(elf_info.entry_point);
+        crate::sys_print("\n");
+        crate::sys_print("  Segments:\n");
+        for i in 0..elf_info.num_segments {
+            let (vaddr, filesz, memsz, _offset) = elf_info.segments[i];
+            crate::sys_print("    [");
+            crate::print_number(i);
+            crate::sys_print("] vaddr=0x");
+            crate::print_hex(vaddr);
+            crate::sys_print(" filesz=0x");
+            crate::print_hex(filesz);
+            crate::sys_print(" memsz=0x");
+            crate::print_hex(memsz);
+            crate::sys_print("\n");
+        }
+        crate::sys_print("  Total range: 0x");
+        crate::print_hex(elf_info.min_vaddr);
+        crate::sys_print(" - 0x");
+        crate::print_hex(elf_info.max_vaddr);
+        crate::sys_print("\n");
+
+        // 3. Allocate memory for process image
+        // Future-proof: Always allocate an extra page beyond the highest address
+        // This ensures entry stubs at the end of .text have room to execute
+        let base_size = elf_info.memory_size();
+        let extra_safety = 4096;  // One extra page for entry stub safety
+        let process_size = ((base_size + extra_safety + 4095) & !4095);  // Round up to pages
         let process_mem = crate::sys_memory_allocate(process_size);
         if process_mem == usize::MAX {
             return Err(ComponentError::OutOfMemory);
@@ -245,13 +275,36 @@ impl ComponentLoader {
             }
         }
 
+        // Debug: Show what's at the entry point and the actual _start
+        let entry_offset = elf_info.entry_point - base_vaddr;
+        let entry_ptr = (virt_mem + entry_offset) as *const u32;
+        let entry_instr = unsafe { *entry_ptr };
+        crate::sys_print("[loader] Entry stub at 0x");
+        crate::print_hex(elf_info.entry_point);
+        crate::sys_print(": 0x");
+        crate::print_hex(entry_instr as usize);
+        crate::sys_print(" (bl -12 to _start at 0x");
+        crate::print_hex(elf_info.entry_point - 12);
+        crate::sys_print(")\n");
+
+        // Show what's at _start (12 bytes before entry)
+        if entry_offset >= 12 {
+            let start_ptr = ((virt_mem + entry_offset) as *const u32).sub(3);
+            let start_instr = unsafe { *start_ptr };
+            crate::sys_print("[loader] _start at 0x");
+            crate::print_hex(elf_info.entry_point - 12);
+            crate::sys_print(": 0x");
+            crate::print_hex(start_instr as usize);
+            crate::sys_print("\n");
+        }
+
         // 9. Unmap the memory (we're done writing to it)
         crate::sys_memory_unmap(virt_mem, process_size);
 
         // 10. Create the process
         // Stack grows down from top of userspace memory
         const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
-        let stack_top = STACK_VIRT_TOP;
+        let stack_top = STACK_VIRT_TOP;  // Stack pointer at top (will grow down)
 
         let pid = crate::sys_process_create(
             elf_info.entry_point,

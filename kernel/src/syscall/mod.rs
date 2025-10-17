@@ -5,9 +5,10 @@
 //! arguments in x0-x5.
 
 pub mod numbers;
+pub mod channel;
 
 use crate::arch::aarch64::context::TrapFrame;
-use crate::kprintln;
+use crate::{kprintln, ksyscall_debug};
 use crate::objects::{TCB, Endpoint, Notification};
 use core::ptr;
 
@@ -23,13 +24,13 @@ unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
     if current_tcb.is_null() {
-        kprintln!("[syscall] lookup_endpoint: no current thread");
+        ksyscall_debug!("[syscall] lookup_endpoint: no current thread");
         return ptr::null_mut();
     }
 
     let cspace_root = (*current_tcb).cspace_root();
     if cspace_root.is_null() {
-        kprintln!("[syscall] lookup_endpoint: thread has no CSpace root");
+        ksyscall_debug!("[syscall] lookup_endpoint: thread has no CSpace root");
         return ptr::null_mut();
     }
 
@@ -38,14 +39,14 @@ unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
     let cap = match cnode.lookup(cap_slot) {
         Some(c) => c,
         None => {
-            kprintln!("[syscall] lookup_endpoint: cap_slot {} not found in CSpace", cap_slot);
+            ksyscall_debug!("[syscall] lookup_endpoint: cap_slot {} not found in CSpace", cap_slot);
             return ptr::null_mut();
         }
     };
 
     // Verify it's an Endpoint capability
     if cap.cap_type() != CapType::Endpoint {
-        kprintln!("[syscall] lookup_endpoint: cap_slot {} is not an Endpoint (type={:?})",
+        ksyscall_debug!("[syscall] lookup_endpoint: cap_slot {} is not an Endpoint (type={:?})",
                  cap_slot, cap.cap_type());
         return ptr::null_mut();
     }
@@ -63,13 +64,13 @@ unsafe fn insert_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
     if current_tcb.is_null() {
-        kprintln!("[syscall] insert_endpoint: no current thread");
+        ksyscall_debug!("[syscall] insert_endpoint: no current thread");
         return false;
     }
 
     let cspace_root = (*current_tcb).cspace_root();
     if cspace_root.is_null() {
-        kprintln!("[syscall] insert_endpoint: thread has no CSpace root");
+        ksyscall_debug!("[syscall] insert_endpoint: thread has no CSpace root");
         return false;
     }
 
@@ -80,11 +81,11 @@ unsafe fn insert_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -
     let cnode = &mut *cspace_root;
     match cnode.insert(cap_slot, cap) {
         Ok(()) => {
-            kprintln!("[syscall] insert_endpoint: cap_slot {} -> endpoint {:p}", cap_slot, endpoint);
+            ksyscall_debug!("[syscall] insert_endpoint: cap_slot {} -> endpoint {:p}", cap_slot, endpoint);
             true
         }
         Err(e) => {
-            kprintln!("[syscall] insert_endpoint: failed to insert at cap_slot {}: {:?}", cap_slot, e);
+            ksyscall_debug!("[syscall] insert_endpoint: failed to insert at cap_slot {}: {:?}", cap_slot, e);
             false
         }
     }
@@ -212,8 +213,22 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_WAIT => sys_wait(args[0]),
         numbers::SYS_POLL => sys_poll(args[0]),
 
+        // Chapter 9 Phase 6: Channel management syscalls
+        numbers::SYS_CHANNEL_ESTABLISH => channel::sys_channel_establish(tf, args[0], args[1], args[2]),
+        numbers::SYS_CHANNEL_QUERY => channel::sys_channel_query(args[0]),
+        numbers::SYS_CHANNEL_CLOSE => channel::sys_channel_close(args[0]),
+
         _ => {
-            kprintln!("[syscall] Unknown syscall number: {}", syscall_num);
+            ksyscall_debug!("[syscall] Unknown syscall number: {} from ELR={:#x}, x8={:#x}",
+                     syscall_num, tf.elr_el1, tf.syscall_number());
+            // If this is happening repeatedly, stop spamming
+            static mut UNKNOWN_COUNT: u32 = 0;
+            unsafe {
+                UNKNOWN_COUNT += 1;
+                if UNKNOWN_COUNT > 10 {
+                    panic!("Too many unknown syscalls");
+                }
+            }
             u64::MAX // Error: invalid syscall
         }
     };
@@ -254,11 +269,19 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         next_tcb.set_state(crate::objects::ThreadState::Running);
         crate::scheduler::test_set_current_thread(next);
 
+        // Check if this is the first time scheduling this thread
+        let next_context = next_tcb.context();
+        if next_context.x0 == 0 && next_context.x1 == 0 && next_context.x8 == 0 {
+            // First time scheduling - all registers are 0
+            ksyscall_debug!("[syscall] sys_yield: first schedule of new thread");
+            kprintln!("  Will jump to ELR={:#x} with SP={:#x}",
+                     next_context.elr_el1, next_context.sp_el0);
+        }
+
         // Replace our TrapFrame with the next thread's context
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
-        // IMPORTANT: No kprintln or any function calls after this point!
-        *tf = *next_tcb.context();
+        *tf = *next_context;
     }
     0 // Success
 }
@@ -341,7 +364,7 @@ fn sys_memory_allocate(size: u64) -> u64 {
     let first_pfn = match alloc_frame() {
         Some(pfn) => pfn,
         None => {
-            kprintln!("[syscall] memory_allocate: out of memory");
+            ksyscall_debug!("[syscall] memory_allocate: out of memory");
             return u64::MAX;
         }
     };
@@ -357,7 +380,7 @@ fn sys_memory_allocate(size: u64) -> u64 {
                     // Note: Frame allocator provides sequential frames
                 }
                 None => {
-                    kprintln!("[syscall] memory_allocate: allocation failed at page {}/{}", i, pages_needed);
+                    ksyscall_debug!("[syscall] memory_allocate: allocation failed at page {}/{}", i, pages_needed);
                     // TODO: Implement frame deallocation to free partially allocated frames
                     return u64::MAX;
                 }
@@ -383,7 +406,7 @@ fn sys_device_request(device_id: u64) -> u64 {
         DEVICE_RTC => RTC_BASE,
         DEVICE_TIMER => TIMER_BASE,
         _ => {
-            kprintln!("[syscall] device_request: unknown device {}", device_id);
+            ksyscall_debug!("[syscall] device_request: unknown device {}", device_id);
             return u64::MAX; // Error: unknown device
         }
     };
@@ -406,19 +429,19 @@ fn sys_endpoint_create() -> u64 {
     let endpoint_frame = match unsafe { alloc_frame() } {
         Some(pfn) => pfn,
         None => {
-            kprintln!("[syscall] endpoint_create: out of memory");
+            ksyscall_debug!("[syscall] endpoint_create: out of memory");
             return u64::MAX;
         }
     };
 
     let endpoint_phys = endpoint_frame.phys_addr();
-    kprintln!("[syscall] endpoint_create: allocated frame at phys 0x{:x}", endpoint_phys.as_u64());
+    ksyscall_debug!("[syscall] endpoint_create: allocated frame at phys 0x{:x}", endpoint_phys.as_u64());
 
     // Create the Endpoint object
     let endpoint_ptr = endpoint_phys.as_u64() as *mut Endpoint;
     unsafe {
         ptr::write(endpoint_ptr, Endpoint::new());
-        kprintln!("[syscall] endpoint_create: created Endpoint at 0x{:x}", endpoint_ptr as u64);
+        ksyscall_debug!("[syscall] endpoint_create: created Endpoint at 0x{:x}", endpoint_ptr as u64);
     }
 
     // Allocate capability slot for the endpoint
@@ -427,12 +450,12 @@ fn sys_endpoint_create() -> u64 {
     // Insert endpoint capability into current thread's CSpace
     unsafe {
         if !insert_endpoint_capability(slot as usize, endpoint_ptr) {
-            kprintln!("[syscall] endpoint_create: failed to insert capability into CSpace");
+            ksyscall_debug!("[syscall] endpoint_create: failed to insert capability into CSpace");
             return u64::MAX;
         }
     }
 
-    kprintln!("[syscall] endpoint_create -> cap_slot={}, endpoint capability inserted into CSpace", slot);
+    ksyscall_debug!("[syscall] endpoint_create -> cap_slot={}, endpoint capability inserted into CSpace", slot);
     slot
 }
 
@@ -473,7 +496,7 @@ fn sys_process_create(
     let tcb_frame = match alloc_frame() {
         Some(pfn) => pfn.phys_addr(),
         None => {
-            kprintln!("[syscall] process_create: out of memory (TCB)");
+            ksyscall_debug!("[syscall] process_create: out of memory (TCB)");
             return u64::MAX;
         }
     };
@@ -506,7 +529,7 @@ fn sys_process_create(
         kernel_end - kernel_start,
         PageTableFlags::KERNEL_RWX,
     ) {
-        kprintln!("[syscall] process_create: failed to map kernel code: {:?}", e);
+        ksyscall_debug!("[syscall] process_create: failed to map kernel code: {:?}", e);
         return u64::MAX;
     }
 
@@ -521,7 +544,7 @@ fn sys_process_create(
         memory_end - kernel_end,
         PageTableFlags::KERNEL_DATA,
     ) {
-        kprintln!("[syscall] process_create: failed to map kernel data: {:?}", e);
+        ksyscall_debug!("[syscall] process_create: failed to map kernel data: {:?}", e);
         return u64::MAX;
     }
 
@@ -533,7 +556,7 @@ fn sys_process_create(
         4096,
         PageTableFlags::KERNEL_DEVICE,
     ) {
-        kprintln!("[syscall] process_create: failed to map UART: {:?}", e);
+        ksyscall_debug!("[syscall] process_create: failed to map UART: {:?}", e);
         return u64::MAX;
     }
 
@@ -542,13 +565,13 @@ fn sys_process_create(
     // - Loaded the ELF binary at code_phys (physical address)
     // - Parsed the ELF to find min_vaddr (code_vaddr)
     // - We map: code_vaddr -> code_phys
-    kprintln!("[syscall] process_create: entry={:#x}, code_phys={:#x}, code_vaddr={:#x}, code_size={:#x}",
+    ksyscall_debug!("[syscall] process_create: entry={:#x}, code_phys={:#x}, code_vaddr={:#x}, code_size={:#x}",
         entry_point, code_phys, code_vaddr, code_size);
 
     let code_virt_base = code_vaddr as usize;
     let code_pages = ((code_size as usize) + PAGE_SIZE - 1) / PAGE_SIZE;
 
-    kprintln!("[syscall] process_create: mapping {} code pages at virt={:#x} -> phys={:#x}",
+    ksyscall_debug!("[syscall] process_create: mapping {} code pages at virt={:#x} -> phys={:#x}",
         code_pages, code_virt_base, code_phys);
 
     for i in 0..code_pages {
@@ -560,7 +583,9 @@ fn sys_process_create(
         }
     }
 
-    kprintln!("[syscall] process_create: code mapped successfully");
+    ksyscall_debug!("[syscall] process_create: code mapped successfully");
+    ksyscall_debug!("[syscall] process_create: entry_point={:#x} should be in mapped range {:#x}-{:#x}",
+             entry_point, code_virt_base, code_virt_base + (code_pages * PAGE_SIZE));
 
     // Map stack pages (4 pages = 16KB, non-executable, read/write)
     // Stack pointer points to top, map downwards
@@ -568,6 +593,8 @@ fn sys_process_create(
     let stack_pages = stack_size / PAGE_SIZE;
     let stack_base = (stack_pointer as usize) - stack_size;
 
+    ksyscall_debug!("[syscall] process_create: mapping stack at {:#x}-{:#x} (SP={:#x})",
+             stack_base, stack_pointer, stack_pointer);
     for i in 0..stack_pages {
         let virt = VA::new(stack_base + (i * PAGE_SIZE));
         let phys = PA::new(stack_phys as usize + (i * PAGE_SIZE));
@@ -587,7 +614,7 @@ fn sys_process_create(
         );
     }
 
-    kprintln!("[syscall] process_create: page tables set up and TLB flushed");
+    ksyscall_debug!("[syscall] process_create: page tables set up and TLB flushed");
 
     // Generate process ID (use frame address for now - unique per process)
     let pid = tcb_frame.as_usize();
@@ -605,7 +632,7 @@ fn sys_process_create(
         core::ptr::write(cspace_ptr, cnode);
     }
 
-    kprintln!("[syscall] process_create: CNode initialized with 256 slots at {:#x}", cspace_root);
+    ksyscall_debug!("[syscall] process_create: CNode initialized with 256 slots at {:#x}", cspace_root);
 
     // Allocate IPC buffer (for now, placeholder address)
     // TODO: Should allocate actual IPC buffer frame
@@ -637,8 +664,8 @@ fn sys_process_create(
         // TCB is now managed by scheduler
     }
 
-    kprintln!("[syscall] process_create -> PID {:#x}", pid);
-    kprintln!("[syscall] process_create: TCB created and enqueued");
+    ksyscall_debug!("[syscall] process_create -> PID {:#x}", pid);
+    ksyscall_debug!("[syscall] process_create: TCB created and enqueued");
     pid as u64
 }
 
@@ -674,7 +701,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
 
-    kprintln!("[syscall] memory_map: phys={:#x}, size={}, perms={:#x}", phys_addr, size, permissions);
+    ksyscall_debug!("[syscall] memory_map: phys={:#x}, size={}, perms={:#x}", phys_addr, size, permissions);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
@@ -683,7 +710,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 
     // Get caller's page table from TrapFrame (saved during exception entry)
     let page_table_phys = tf.saved_ttbr0 as usize;
-    kprintln!("[syscall] memory_map: caller's TTBR0={:#x} (from TrapFrame)", page_table_phys);
+    ksyscall_debug!("[syscall] memory_map: caller's TTBR0={:#x} (from TrapFrame)", page_table_phys);
 
     // Get mutable reference to caller's page table
     let page_table = unsafe { &mut *(page_table_phys as *mut PageTable) };
@@ -695,7 +722,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
         addr
     };
 
-    kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}",
+    ksyscall_debug!("[syscall] memory_map: allocated virt range {:#x} - {:#x}",
               virt_addr, virt_addr + aligned_size);
 
     // Use USER_DATA preset for userspace read-write data
@@ -703,7 +730,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     //               NORMAL, UXN, PXN, NOT_GLOBAL
     let flags = PageTableFlags::USER_DATA;
 
-    kprintln!("[syscall] memory_map: using USER_DATA flags = {:#x}", flags.bits());
+    ksyscall_debug!("[syscall] memory_map: using USER_DATA flags = {:#x}", flags.bits());
 
     // Create PageMapper once for all mappings
     let mut mapper = unsafe { crate::memory::PageMapper::new(page_table) };
@@ -715,11 +742,11 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 
         match mapper.map(page_virt, page_phys, flags, PageSize::Size4KB) {
             Ok(()) => {
-                kprintln!("[syscall] memory_map: mapped page {} virt={:#x} -> phys={:#x}",
+                ksyscall_debug!("[syscall] memory_map: mapped page {} virt={:#x} -> phys={:#x}",
                          i, page_virt.as_usize(), page_phys.as_usize());
             },
             Err(e) => {
-                kprintln!("[syscall] memory_map: failed to map page {} at virt={:#x}, error={:?}",
+                ksyscall_debug!("[syscall] memory_map: failed to map page {} at virt={:#x}, error={:?}",
                          i, page_virt.as_usize(), e);
                 return u64::MAX;
             }
@@ -737,7 +764,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     // For new mappings, the TLB won't have stale entries since these addresses weren't mapped before
     // So we don't need explicit TLB invalidation here
 
-    kprintln!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
+    ksyscall_debug!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
     virt_addr
 }
 
@@ -751,7 +778,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
     use crate::memory::PAGE_SIZE;
 
-    kprintln!("[syscall] memory_unmap: virt={:#x}, size={}", virt_addr, size);
+    ksyscall_debug!("[syscall] memory_unmap: virt={:#x}, size={}", virt_addr, size);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
@@ -763,7 +790,7 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
     // 3. Flush TLB
 
     // For now, this is a no-op (simplified)
-    kprintln!("[syscall] memory_unmap -> success ({} pages)", num_pages);
+    ksyscall_debug!("[syscall] memory_unmap -> success ({} pages)", num_pages);
     0
 }
 
@@ -785,7 +812,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
     use crate::objects::{CNode, CapType};
 
-    kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
+    ksyscall_debug!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
               target_tcb_cap, phys_addr, size, permissions);
 
     // Round size up to page boundary
@@ -797,13 +824,13 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
     unsafe {
         let current_tcb = crate::scheduler::current_thread();
         if current_tcb.is_null() {
-            kprintln!("[syscall] memory_map_into: no current thread");
+            ksyscall_debug!("[syscall] memory_map_into: no current thread");
             return u64::MAX;
         }
 
         let cspace_root = (*current_tcb).cspace_root();
         if cspace_root.is_null() {
-            kprintln!("[syscall] memory_map_into: thread has no CSpace root");
+            ksyscall_debug!("[syscall] memory_map_into: thread has no CSpace root");
             return u64::MAX;
         }
 
@@ -812,14 +839,14 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
         let cap = match cnode.lookup(target_tcb_cap as usize) {
             Some(c) => c,
             None => {
-                kprintln!("[syscall] memory_map_into: cap_slot {} not found in CSpace", target_tcb_cap);
+                ksyscall_debug!("[syscall] memory_map_into: cap_slot {} not found in CSpace", target_tcb_cap);
                 return u64::MAX;
             }
         };
 
         // Verify it's a TCB capability
         if cap.cap_type() != CapType::Tcb {
-            kprintln!("[syscall] memory_map_into: cap_slot {} is not a TCB (type={:?})",
+            ksyscall_debug!("[syscall] memory_map_into: cap_slot {} is not a TCB (type={:?})",
                      target_tcb_cap, cap.cap_type());
             return u64::MAX;
         }
@@ -827,13 +854,13 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
         // Get target TCB pointer
         let target_tcb_ptr = cap.object_ptr() as *mut TCB;
         if target_tcb_ptr.is_null() {
-            kprintln!("[syscall] memory_map_into: null target TCB pointer");
+            ksyscall_debug!("[syscall] memory_map_into: null target TCB pointer");
             return u64::MAX;
         }
 
         // Get target process's page table (TTBR0)
         let target_ttbr0 = (*target_tcb_ptr).context().saved_ttbr0;
-        kprintln!("[syscall] memory_map_into: target TTBR0={:#x}", target_ttbr0);
+        ksyscall_debug!("[syscall] memory_map_into: target TTBR0={:#x}", target_ttbr0);
 
         let target_page_table = &mut *(target_ttbr0 as *mut PageTable);
 
@@ -844,13 +871,13 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
             addr
         };
 
-        kprintln!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
+        ksyscall_debug!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
                   virt_addr, virt_addr + aligned_size);
 
         // Use USER_DATA preset for userspace read-write data
         let flags = PageTableFlags::USER_DATA;
 
-        kprintln!("[syscall] memory_map_into: using USER_DATA flags = {:#x}", flags.bits());
+        ksyscall_debug!("[syscall] memory_map_into: using USER_DATA flags = {:#x}", flags.bits());
 
         // Create PageMapper for target's page table
         let mut mapper = crate::memory::PageMapper::new(target_page_table);
@@ -862,11 +889,11 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
 
             match mapper.map(page_virt, page_phys, flags, PageSize::Size4KB) {
                 Ok(()) => {
-                    kprintln!("[syscall] memory_map_into: mapped page {} virt={:#x} -> phys={:#x} (in target)",
+                    ksyscall_debug!("[syscall] memory_map_into: mapped page {} virt={:#x} -> phys={:#x} (in target)",
                              i, page_virt.as_usize(), page_phys.as_usize());
                 },
                 Err(e) => {
-                    kprintln!("[syscall] memory_map_into: failed to map page {} at virt={:#x}, error={:?}",
+                    ksyscall_debug!("[syscall] memory_map_into: failed to map page {} at virt={:#x}, error={:?}",
                              i, page_virt.as_usize(), e);
                     return u64::MAX;
                 }
@@ -878,7 +905,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
             "dsb ishst",  // Ensure all page table writes complete
         );
 
-        kprintln!("[syscall] memory_map_into -> virt={:#x} ({} pages mapped in target)", virt_addr, num_pages);
+        ksyscall_debug!("[syscall] memory_map_into -> virt={:#x} ({} pages mapped in target)", virt_addr, num_pages);
         virt_addr
     }
 }
@@ -900,20 +927,20 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
 fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
     use crate::objects::{CNode, Capability, CapType};
 
-    kprintln!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
+    ksyscall_debug!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
               target_tcb_cap, target_slot, cap_type, object_ptr);
 
     unsafe {
         // Get current thread's CSpace
         let current_tcb = crate::scheduler::current_thread();
         if current_tcb.is_null() {
-            kprintln!("[syscall] cap_insert_into: no current thread");
+            ksyscall_debug!("[syscall] cap_insert_into: no current thread");
             return u64::MAX;
         }
 
         let cspace_root = (*current_tcb).cspace_root();
         if cspace_root.is_null() {
-            kprintln!("[syscall] cap_insert_into: thread has no CSpace root");
+            ksyscall_debug!("[syscall] cap_insert_into: thread has no CSpace root");
             return u64::MAX;
         }
 
@@ -922,14 +949,14 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
         let tcb_cap = match cnode.lookup(target_tcb_cap as usize) {
             Some(c) => c,
             None => {
-                kprintln!("[syscall] cap_insert_into: TCB cap_slot {} not found", target_tcb_cap);
+                ksyscall_debug!("[syscall] cap_insert_into: TCB cap_slot {} not found", target_tcb_cap);
                 return u64::MAX;
             }
         };
 
         // Verify it's a TCB capability
         if tcb_cap.cap_type() != CapType::Tcb {
-            kprintln!("[syscall] cap_insert_into: cap_slot {} is not a TCB (type={:?})",
+            ksyscall_debug!("[syscall] cap_insert_into: cap_slot {} is not a TCB (type={:?})",
                      target_tcb_cap, tcb_cap.cap_type());
             return u64::MAX;
         }
@@ -937,13 +964,13 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
         // Get target TCB and its CSpace
         let target_tcb_ptr = tcb_cap.object_ptr() as *mut TCB;
         if target_tcb_ptr.is_null() {
-            kprintln!("[syscall] cap_insert_into: null target TCB pointer");
+            ksyscall_debug!("[syscall] cap_insert_into: null target TCB pointer");
             return u64::MAX;
         }
 
         let target_cspace = (*target_tcb_ptr).cspace_root();
         if target_cspace.is_null() {
-            kprintln!("[syscall] cap_insert_into: target has no CSpace");
+            ksyscall_debug!("[syscall] cap_insert_into: target has no CSpace");
             return u64::MAX;
         }
 
@@ -957,7 +984,7 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
             5 => CapType::CNode,
             6 => CapType::VSpace,
             _ => {
-                kprintln!("[syscall] cap_insert_into: invalid cap_type {}", cap_type);
+                ksyscall_debug!("[syscall] cap_insert_into: invalid cap_type {}", cap_type);
                 return u64::MAX;
             }
         };
@@ -969,12 +996,12 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
         let target_cnode = &mut *target_cspace;
         match target_cnode.insert(target_slot as usize, cap) {
             Ok(()) => {
-                kprintln!("[syscall] cap_insert_into: inserted {:?} cap at slot {} in target CSpace",
+                ksyscall_debug!("[syscall] cap_insert_into: inserted {:?} cap at slot {} in target CSpace",
                          cap_type_enum, target_slot);
                 0
             }
             Err(e) => {
-                kprintln!("[syscall] cap_insert_into: failed to insert: {:?}", e);
+                ksyscall_debug!("[syscall] cap_insert_into: failed to insert: {:?}", e);
                 u64::MAX
             }
         }
@@ -992,18 +1019,18 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
 /// - 0 on success
 /// - u64::MAX on error
 fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, message_len: u64) -> u64 {
-    kprintln!("[syscall] IPC Send: endpoint={}, msg_ptr=0x{:x}, len={}",
+    ksyscall_debug!("[syscall] IPC Send: endpoint={}, msg_ptr=0x{:x}, len={}",
         endpoint_cap_slot, message_ptr, message_len);
 
     // Validate message length (max 256 bytes)
     if message_len > 256 {
-        kprintln!("[syscall] IPC Send -> error: message too large ({} bytes)", message_len);
+        ksyscall_debug!("[syscall] IPC Send -> error: message too large ({} bytes)", message_len);
         return u64::MAX;
     }
 
     // Validate endpoint capability slot
     if endpoint_cap_slot >= 4096 {
-        kprintln!("[syscall] IPC Send -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
+        ksyscall_debug!("[syscall] IPC Send -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
         return u64::MAX;
     }
 
@@ -1011,14 +1038,14 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
         // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
-            kprintln!("[syscall] IPC Send -> error: no current thread");
+            ksyscall_debug!("[syscall] IPC Send -> error: no current thread");
             return u64::MAX;
         }
 
         // Look up endpoint from capability slot
         let endpoint_ptr = lookup_endpoint_capability(endpoint_cap_slot as usize);
         if endpoint_ptr.is_null() {
-            kprintln!("[syscall] IPC Send -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
+            ksyscall_debug!("[syscall] IPC Send -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
             return u64::MAX;
         }
 
@@ -1027,15 +1054,15 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
         // Copy message from userspace to kernel buffer
         let mut kernel_msg_buffer = [0u8; 256];
         if !copy_from_user(message_ptr, &mut kernel_msg_buffer, message_len as usize, tf.saved_ttbr0) {
-            kprintln!("[syscall] IPC Send -> error: failed to copy message from userspace");
+            ksyscall_debug!("[syscall] IPC Send -> error: failed to copy message from userspace");
             return u64::MAX;
         }
 
-        kprintln!("[syscall] IPC Send: copied {} bytes from userspace", message_len);
+        ksyscall_debug!("[syscall] IPC Send: copied {} bytes from userspace", message_len);
 
         // Check if there's a receiver waiting
         if let Some(receiver_tcb) = endpoint.dequeue_receiver() {
-            kprintln!("[syscall] IPC Send: found waiting receiver, transferring message");
+            ksyscall_debug!("[syscall] IPC Send: found waiting receiver, transferring message");
 
             // Copy message to receiver's IPC buffer
             let receiver = &mut *receiver_tcb;
@@ -1044,7 +1071,7 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
             let receiver_ipc_buffer = receiver.ipc_buffer().as_u64();
 
             if !copy_to_user(&kernel_msg_buffer[..message_len as usize], receiver_ipc_buffer, message_len as usize, receiver_ttbr0) {
-                kprintln!("[syscall] IPC Send -> error: failed to copy message to receiver");
+                ksyscall_debug!("[syscall] IPC Send -> error: failed to copy message to receiver");
                 return u64::MAX;
             }
 
@@ -1056,18 +1083,18 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
             receiver.set_state(crate::objects::ThreadState::Runnable);
             crate::scheduler::enqueue(receiver_tcb);
 
-            kprintln!("[syscall] IPC Send -> success, message delivered to receiver");
+            ksyscall_debug!("[syscall] IPC Send -> success, message delivered to receiver");
             return 0;
         }
 
         // No receiver waiting - block sender on endpoint's send queue
-        kprintln!("[syscall] IPC Send: no receiver waiting, blocking sender");
+        ksyscall_debug!("[syscall] IPC Send: no receiver waiting, blocking sender");
 
         // Store message in sender's IPC buffer for later transfer
         let sender = &mut *current;
         let sender_ipc_buffer = sender.ipc_buffer().as_u64();
         if !copy_to_user(&kernel_msg_buffer[..message_len as usize], sender_ipc_buffer, message_len as usize, tf.saved_ttbr0) {
-            kprintln!("[syscall] IPC Send -> error: failed to store message in sender's IPC buffer");
+            ksyscall_debug!("[syscall] IPC Send -> error: failed to store message in sender's IPC buffer");
             return u64::MAX;
         }
 
@@ -1082,7 +1109,7 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
         crate::scheduler::yield_current();
 
         // When we return here, message has been delivered
-        kprintln!("[syscall] IPC Send -> success after blocking");
+        ksyscall_debug!("[syscall] IPC Send -> success after blocking");
         0
     }
 }
@@ -1098,18 +1125,18 @@ fn sys_ipc_send(tf: &mut TrapFrame, endpoint_cap_slot: u64, message_ptr: u64, me
 /// - Number of bytes received on success
 /// - u64::MAX on error
 fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buffer_len: u64) -> u64 {
-    kprintln!("[syscall] IPC Recv: endpoint={}, buf_ptr=0x{:x}, len={}",
+    ksyscall_debug!("[syscall] IPC Recv: endpoint={}, buf_ptr=0x{:x}, len={}",
         endpoint_cap_slot, buffer_ptr, buffer_len);
 
     // Validate buffer length
     if buffer_len > 256 {
-        kprintln!("[syscall] IPC Recv -> error: buffer too large ({} bytes)", buffer_len);
+        ksyscall_debug!("[syscall] IPC Recv -> error: buffer too large ({} bytes)", buffer_len);
         return u64::MAX;
     }
 
     // Validate endpoint capability slot
     if endpoint_cap_slot >= 4096 {
-        kprintln!("[syscall] IPC Recv -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
+        ksyscall_debug!("[syscall] IPC Recv -> error: invalid endpoint cap slot {}", endpoint_cap_slot);
         return u64::MAX;
     }
 
@@ -1117,14 +1144,14 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
         // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
-            kprintln!("[syscall] IPC Recv -> error: no current thread");
+            ksyscall_debug!("[syscall] IPC Recv -> error: no current thread");
             return u64::MAX;
         }
 
         // Look up endpoint from capability slot
         let endpoint_ptr = lookup_endpoint_capability(endpoint_cap_slot as usize);
         if endpoint_ptr.is_null() {
-            kprintln!("[syscall] IPC Recv -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
+            ksyscall_debug!("[syscall] IPC Recv -> error: endpoint not found for cap_slot {}", endpoint_cap_slot);
             return u64::MAX;
         }
 
@@ -1132,7 +1159,7 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
 
         // Check if there's a sender waiting
         if let Some(sender_tcb) = endpoint.dequeue_sender() {
-            kprintln!("[syscall] IPC Recv: found waiting sender, transferring message");
+            ksyscall_debug!("[syscall] IPC Recv: found waiting sender, transferring message");
 
             let sender = &mut *sender_tcb;
 
@@ -1141,7 +1168,7 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
             let message_len = sender_context.x2 as usize;
 
             if message_len > buffer_len as usize {
-                kprintln!("[syscall] IPC Recv -> error: sender message ({} bytes) larger than buffer ({} bytes)",
+                ksyscall_debug!("[syscall] IPC Recv -> error: sender message ({} bytes) larger than buffer ({} bytes)",
                          message_len, buffer_len);
                 return u64::MAX;
             }
@@ -1152,13 +1179,13 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
             let sender_ipc_buffer = sender.ipc_buffer().as_u64();
 
             if !copy_from_user(sender_ipc_buffer, &mut kernel_msg_buffer, message_len, sender_ttbr0) {
-                kprintln!("[syscall] IPC Recv -> error: failed to copy message from sender's IPC buffer");
+                ksyscall_debug!("[syscall] IPC Recv -> error: failed to copy message from sender's IPC buffer");
                 return u64::MAX;
             }
 
             // Copy message to receiver's buffer
             if !copy_to_user(&kernel_msg_buffer[..message_len], buffer_ptr, message_len, tf.saved_ttbr0) {
-                kprintln!("[syscall] IPC Recv -> error: failed to copy message to receiver's buffer");
+                ksyscall_debug!("[syscall] IPC Recv -> error: failed to copy message to receiver's buffer");
                 return u64::MAX;
             }
 
@@ -1166,12 +1193,12 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
             sender.set_state(crate::objects::ThreadState::Runnable);
             crate::scheduler::enqueue(sender_tcb);
 
-            kprintln!("[syscall] IPC Recv -> success, received {} bytes from sender", message_len);
+            ksyscall_debug!("[syscall] IPC Recv -> success, received {} bytes from sender", message_len);
             return message_len as u64;
         }
 
         // No sender waiting - block receiver on endpoint's recv queue
-        kprintln!("[syscall] IPC Recv: no sender waiting, blocking receiver");
+        ksyscall_debug!("[syscall] IPC Recv: no sender waiting, blocking receiver");
 
         let receiver = &mut *current;
 
@@ -1190,7 +1217,7 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
         // The message length is stored in x0 by the sender
         let final_context = (*current).context();
         let bytes_received = final_context.x0;
-        kprintln!("[syscall] IPC Recv -> success after blocking, received {} bytes", bytes_received);
+        ksyscall_debug!("[syscall] IPC Recv -> success after blocking, received {} bytes", bytes_received);
         bytes_received
     }
 }
@@ -1209,7 +1236,7 @@ fn sys_ipc_recv(tf: &mut TrapFrame, endpoint_cap_slot: u64, buffer_ptr: u64, buf
 /// - u64::MAX on error
 fn sys_ipc_call(tf: &mut TrapFrame, endpoint_cap_slot: u64, request_ptr: u64, request_len: u64,
                 reply_ptr: u64, reply_len: u64) -> u64 {
-    kprintln!("[syscall] IPC Call: endpoint={}, req_ptr=0x{:x}, req_len={}, rep_ptr=0x{:x}, rep_len={}",
+    ksyscall_debug!("[syscall] IPC Call: endpoint={}, req_ptr=0x{:x}, req_len={}, rep_ptr=0x{:x}, rep_len={}",
         endpoint_cap_slot, request_ptr, request_len, reply_ptr, reply_len);
 
     // TODO: Full implementation
@@ -1221,7 +1248,7 @@ fn sys_ipc_call(tf: &mut TrapFrame, endpoint_cap_slot: u64, request_ptr: u64, re
     // 6. Copy reply to userspace
 
     // For Phase 2, return 0 bytes to test the syscall path
-    kprintln!("[syscall] IPC Call -> success (stub, 0 bytes)");
+    ksyscall_debug!("[syscall] IPC Call -> success (stub, 0 bytes)");
     0
 }
 
@@ -1235,7 +1262,7 @@ fn sys_ipc_call(tf: &mut TrapFrame, endpoint_cap_slot: u64, request_ptr: u64, re
 /// - 0 on success
 /// - u64::MAX on error
 fn sys_ipc_reply(tf: &mut TrapFrame, reply_cap_slot: u64, message_ptr: u64) -> u64 {
-    kprintln!("[syscall] IPC Reply: reply_cap={}, msg_ptr=0x{:x}",
+    ksyscall_debug!("[syscall] IPC Reply: reply_cap={}, msg_ptr=0x{:x}",
         reply_cap_slot, message_ptr);
 
     // TODO: Full implementation
@@ -1246,7 +1273,7 @@ fn sys_ipc_reply(tf: &mut TrapFrame, reply_cap_slot: u64, message_ptr: u64) -> u
     // 5. Wake up caller
 
     // For Phase 2, return success to test the syscall path
-    kprintln!("[syscall] IPC Reply -> success (stub)");
+    ksyscall_debug!("[syscall] IPC Reply -> success (stub)");
     0
 }
 
@@ -1266,19 +1293,19 @@ fn sys_notification_create() -> u64 {
     let notification_frame = match alloc_frame() {
         Some(pfn) => pfn,
         None => {
-            kprintln!("[syscall] notification_create: out of memory");
+            ksyscall_debug!("[syscall] notification_create: out of memory");
             return u64::MAX;
         }
     };
 
     let notification_phys = notification_frame.phys_addr();
-    kprintln!("[syscall] notification_create: allocated frame at phys 0x{:x}", notification_phys.as_u64());
+    ksyscall_debug!("[syscall] notification_create: allocated frame at phys 0x{:x}", notification_phys.as_u64());
 
     // Create the Notification object
     let notification_ptr = notification_phys.as_u64() as *mut Notification;
     unsafe {
         ptr::write(notification_ptr, Notification::new());
-        kprintln!("[syscall] notification_create: created Notification at 0x{:x}", notification_ptr as u64);
+        ksyscall_debug!("[syscall] notification_create: created Notification at 0x{:x}", notification_ptr as u64);
     }
 
     // Allocate capability slot for the notification
@@ -1287,12 +1314,12 @@ fn sys_notification_create() -> u64 {
     // Insert notification capability into current thread's CSpace
     unsafe {
         if !insert_notification_capability(slot as usize, notification_ptr) {
-            kprintln!("[syscall] notification_create: failed to insert capability into CSpace");
+            ksyscall_debug!("[syscall] notification_create: failed to insert capability into CSpace");
             return u64::MAX;
         }
     }
 
-    kprintln!("[syscall] notification_create -> cap_slot={}, notification capability inserted into CSpace", slot);
+    ksyscall_debug!("[syscall] notification_create -> cap_slot={}, notification capability inserted into CSpace", slot);
     slot
 }
 
@@ -1303,13 +1330,13 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
     if current_tcb.is_null() {
-        kprintln!("[syscall] insert_notification: no current thread");
+        ksyscall_debug!("[syscall] insert_notification: no current thread");
         return false;
     }
 
     let cspace_root = (*current_tcb).cspace_root();
     if cspace_root.is_null() {
-        kprintln!("[syscall] insert_notification: thread has no CSpace root");
+        ksyscall_debug!("[syscall] insert_notification: thread has no CSpace root");
         return false;
     }
 
@@ -1320,11 +1347,11 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
     let cnode = &mut *cspace_root;
     match cnode.insert(cap_slot, cap) {
         Ok(()) => {
-            kprintln!("[syscall] insert_notification: cap_slot {} -> notification {:p}", cap_slot, notification);
+            ksyscall_debug!("[syscall] insert_notification: cap_slot {} -> notification {:p}", cap_slot, notification);
             true
         }
         Err(e) => {
-            kprintln!("[syscall] insert_notification: failed to insert at cap_slot {}: {:?}", cap_slot, e);
+            ksyscall_debug!("[syscall] insert_notification: failed to insert at cap_slot {}: {:?}", cap_slot, e);
             false
         }
     }
@@ -1337,13 +1364,13 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
     if current_tcb.is_null() {
-        kprintln!("[syscall] lookup_notification: no current thread");
+        ksyscall_debug!("[syscall] lookup_notification: no current thread");
         return ptr::null_mut();
     }
 
     let cspace_root = (*current_tcb).cspace_root();
     if cspace_root.is_null() {
-        kprintln!("[syscall] lookup_notification: thread has no CSpace root");
+        ksyscall_debug!("[syscall] lookup_notification: thread has no CSpace root");
         return ptr::null_mut();
     }
 
@@ -1352,14 +1379,14 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
     let cap = match cnode.lookup(cap_slot) {
         Some(c) => c,
         None => {
-            kprintln!("[syscall] lookup_notification: cap_slot {} not found in CSpace", cap_slot);
+            ksyscall_debug!("[syscall] lookup_notification: cap_slot {} not found in CSpace", cap_slot);
             return ptr::null_mut();
         }
     };
 
     // Verify it's a Notification capability
     if cap.cap_type() != CapType::Notification {
-        kprintln!("[syscall] lookup_notification: cap_slot {} is not a Notification (type={:?})",
+        ksyscall_debug!("[syscall] lookup_notification: cap_slot {} is not a Notification (type={:?})",
                  cap_slot, cap.cap_type());
         return ptr::null_mut();
     }
@@ -1376,13 +1403,13 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
 ///
 /// Returns: 0 on success, u64::MAX on error
 fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
-    kprintln!("[syscall] Signal: notification={}, badge=0x{:x}", notification_cap_slot, badge);
+    ksyscall_debug!("[syscall] Signal: notification={}, badge=0x{:x}", notification_cap_slot, badge);
 
     unsafe {
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
         if notification_ptr.is_null() {
-            kprintln!("[syscall] Signal -> error: notification not found for cap_slot {}", notification_cap_slot);
+            ksyscall_debug!("[syscall] Signal -> error: notification not found for cap_slot {}", notification_cap_slot);
             return u64::MAX;
         }
 
@@ -1391,7 +1418,7 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
         // Signal the notification
         notification.signal(badge);
 
-        kprintln!("[syscall] Signal -> success, signaled with badge 0x{:x}", badge);
+        ksyscall_debug!("[syscall] Signal -> success, signaled with badge 0x{:x}", badge);
         0
     }
 }
@@ -1403,20 +1430,20 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
 ///
 /// Returns: signal bits (non-zero), or u64::MAX on error
 fn sys_wait(notification_cap_slot: u64) -> u64 {
-    kprintln!("[syscall] Wait: notification={}", notification_cap_slot);
+    ksyscall_debug!("[syscall] Wait: notification={}", notification_cap_slot);
 
     unsafe {
         // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
-            kprintln!("[syscall] Wait -> error: no current thread");
+            ksyscall_debug!("[syscall] Wait -> error: no current thread");
             return u64::MAX;
         }
 
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
         if notification_ptr.is_null() {
-            kprintln!("[syscall] Wait -> error: notification not found for cap_slot {}", notification_cap_slot);
+            ksyscall_debug!("[syscall] Wait -> error: notification not found for cap_slot {}", notification_cap_slot);
             return u64::MAX;
         }
 
@@ -1425,7 +1452,7 @@ fn sys_wait(notification_cap_slot: u64) -> u64 {
         // Wait for notification (blocks if no signals pending)
         let signals = notification.wait(current);
 
-        kprintln!("[syscall] Wait -> received signals 0x{:x}", signals);
+        ksyscall_debug!("[syscall] Wait -> received signals 0x{:x}", signals);
         signals
     }
 }
@@ -1437,13 +1464,13 @@ fn sys_wait(notification_cap_slot: u64) -> u64 {
 ///
 /// Returns: signal bits (0 if no signals), or u64::MAX on error
 fn sys_poll(notification_cap_slot: u64) -> u64 {
-    kprintln!("[syscall] Poll: notification={}", notification_cap_slot);
+    ksyscall_debug!("[syscall] Poll: notification={}", notification_cap_slot);
 
     unsafe {
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
         if notification_ptr.is_null() {
-            kprintln!("[syscall] Poll -> error: notification not found for cap_slot {}", notification_cap_slot);
+            ksyscall_debug!("[syscall] Poll -> error: notification not found for cap_slot {}", notification_cap_slot);
             return u64::MAX;
         }
 
@@ -1452,7 +1479,7 @@ fn sys_poll(notification_cap_slot: u64) -> u64 {
         // Poll for signals (non-blocking)
         let signals = notification.poll();
 
-        kprintln!("[syscall] Poll -> signals 0x{:x}", signals);
+        ksyscall_debug!("[syscall] Poll -> signals 0x{:x}", signals);
         signals
     }
 }

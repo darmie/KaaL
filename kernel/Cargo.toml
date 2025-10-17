@@ -37,6 +37,12 @@ log-info = []
 log-debug = []
 log-trace = []
 
+# Syscall debugging (disabled by default for cleaner output)
+debug-syscall = []
+
+# Scheduler debugging (disabled by default for cleaner output)
+debug-scheduler = []
+
 # Console components (compile-time selection)
 console-pl011 = []  # PL011 UART console (default for QEMU virt)
 console-null = []   # No console output (production builds)

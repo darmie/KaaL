@@ -29,6 +29,7 @@ use build-system/builders/components.nu *
 #   ./build.nu --clean                  # Clean before building
 def main [
     --platform (-p): string = "qemu-virt"  # Platform to build for
+    --arch (-a): string = "aarch64"       # Target architecture (aarch64, x86_64, riscv64)
     --verbose (-v)                         # Verbose output
     --clean (-c)                          # Clean before building
     --list-platforms (-l)                 # List available platforms
@@ -59,11 +60,45 @@ def main [
     print $"Target:   ($platform_cfg.arch)"
     print ""
 
+    # Clean if requested
+    if $clean {
+        print "🧹 Cleaning build artifacts..."
+        # Clean component targets
+        let comp_tomls = (try { ls components/*/Cargo.toml } catch { [] })
+        for comp_toml in $comp_tomls {
+            let comp_dir = ($comp_toml.name | path dirname)
+            let target_dir = $"($comp_dir)/target"
+            if ($target_dir | path exists) {
+                rm -rf $target_dir
+                print $"  Cleaned ($comp_dir | path basename)"
+            }
+        }
+        # Clean kernel target
+        if ("kernel/target" | path exists) {
+            rm -rf kernel/target
+            print "  Cleaned kernel"
+        }
+        # Clean runtime targets
+        let runtime_tomls = (try { ls runtime/*/Cargo.toml } catch { [] })
+        for runtime_toml in $runtime_tomls {
+            let runtime_dir = ($runtime_toml.name | path dirname)
+            let target_dir = $"($runtime_dir)/target"
+            if ($target_dir | path exists) {
+                rm -rf $target_dir
+                print $"  Cleaned ($runtime_dir | path basename)"
+            }
+        }
+        print ""
+    }
+
     # Discover and validate components
     let components = (components validate)
 
-    # Build components
+    # Generate component linker scripts and configs
     print ""
+    codegen component-linkers --platform $platform
+
+    # Build components
     build components $platform_cfg
 
     # Generate component registry
