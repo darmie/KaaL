@@ -1,0 +1,662 @@
+══════════════════════════════════════════════════════════
+  KaaL Build System (Modular Nushell)
+══════════════════════════════════════════════════════════
+Platform: QEMU virt (ARM64)
+Target:   aarch64
+
+🔍 Discovered 9 components from components.toml:
+  [✓] system_init
+      Type: service, Priority: 255, Caps: 3
+  [✓] serial_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] timer_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] process_manager
+      Type: service, Priority: 150, Caps: 4
+  [ ] vfs_service
+      Type: service, Priority: 100, Caps: 2
+  [ ] ipc_producer
+      Type: service, Priority: 128, Caps: 3
+  [ ] ipc_consumer
+      Type: service, Priority: 128, Caps: 3
+  [ ] test_minimal
+      Type: service, Priority: 128, Caps: 0
+  [ ] shell
+      Type: application, Priority: 50, Caps: 3
+
+✓ Component manifest validation passed
+
+
+Building components...
+  → Building system_init...
+  → Building ipc_producer...
+  → Building ipc_consumer...
+  → Building test_minimal...
+✓ Components built
+
+Generating component registry...
+✓ Generated registry with 9 components
+Generating kernel memory configuration...
+
+[1/4] Building kernel...
+Generating kernel linker script...
+     Removed 113 files, 112.2MiB total
+✓ Kernel: 172.6 kB
+
+[2/4] Building root-task...
+Generating root-task linker script...
+✓ Root-task: 91.1 kB
+
+[3/4] Creating embeddable objects...
+✓ kernel.o: 173.2 kB
+✓ roottask.o: 91.8 kB
+
+[4/4] Building elfloader...
+     Removed 291 files, 151.8MiB total
+
+══════════════════════════════════════════════════════════
+  ✓ BUILD COMPLETE
+══════════════════════════════════════════════════════════
+
+Platform:  QEMU virt (ARM64)
+Bootimage: runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+✓ Final Image: 356.7 kB
+
+Run in QEMU:
+  qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+📦 Autostart Components: 4
+  • system_init (service, priority: 255)
+  • serial_driver (driver, priority: 200)
+  • timer_driver (driver, priority: 200)
+  • process_manager (service, priority: 150)
+
+══════════════════════════════════════════════════════════
+  🚀 LAUNCHING QEMU
+══════════════════════════════════════════════════════════
+
+Machine: virt
+CPU:     cortex-a53
+Memory:  128M
+Image:   runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+[33mPress Ctrl+A then X to exit QEMU[0m
+
+!@═══════════════════════════════════════════════════════════
+  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader
+═══════════════════════════════════════════════════════════
+
+DTB address: 0x40000000
+Device tree parsed successfully
+Model: linux,dummy-virt
+Memory region: 0x40000000 - 0x48000000 (128 MB)
+
+Loading images...
+Loading embedded images from ELF sections...
+  Kernel: 0x40205000 - 0x4022f240 (168 KB)
+  User:   0x40230000 - 0x40246430 (89 KB)
+ELF: entry=0x40400000, 4 program headers at offset 0x40
+  LOAD segment 0: vaddr=0x40400000, filesz=0x8b04, memsz=0x8b04
+  LOAD segment 1: vaddr=0x40409000, filesz=0x6580, memsz=0x6580
+  LOAD segment 2: vaddr=0x40410000, filesz=0x10, memsz=0x2e000
+Kernel loaded at entry point: 0x40400000
+ELF: entry=0x40100000, 3 program headers at offset 0x40
+  LOAD segment 0: vaddr=0x40100000, filesz=0x2420, memsz=0x2420
+  LOAD segment 1: vaddr=0x40103000, filesz=0x32d2, memsz=0x32d2
+Root task loaded at entry point: 0x40100000
+Images loaded successfully!
+Kernel entry: 0x40400000
+Root task:  0x40230000 - 0x40246430
+Root entry: 0x40100000
+DTB info will be passed to kernel via function parameters
+  DTB: 0x40000000 (size: 1048576)
+Kernel entry: 0x40400000
+User image: 0x40230000 - 0x40246430
+User entry: 0x40100000
+
+Setting up page tables...
+Setting up identity map: 0x10000000 - 0x40246e28
+Page tables configured
+TTBR0: 0x47ffc000
+
+Skipping MMU setup - kernel will handle it
+
+Jumping to KaaL kernel at 0x40400000...
+  Passing root task info:
+    user_img: 0x40230000 - 0x40246430
+    user_entry: 0x40100000
+    pv_offset: 0x0
+    dtb: 0x40000000 (size: 1048576)
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  KaaL Rust Microkernel v0.1.0
+  Chapter 1: Bare Metal Boot & Early Init
+═══════════════════════════════════════════════════════════
+
+Boot parameters:
+  DTB:         0x40000000 (size: 1048576 bytes)
+  Root task:   0x40230000 - 0x40246430
+  Entry:       0x40100000
+  PV offset:   0x0
+
+[boot] Boot info initialized and stored globally
+Parsing device tree...
+DTB parse: reading header at 0x40000000
+DTB magic: 0xd00dfeed (expected 0xd00dfeed)
+DTB magic OK
+Parsing DTB structure at 0x40000040
+  [1] Token 0x1 at offset 0x0
+  [2] Token 0x3 at offset 0x8
+    -> Prop 'interrupt-parent' (len=4)
+  [3] Token 0x3 at offset 0x18
+    -> Prop 'dma-coherent' (len=0)
+  [4] Token 0x3 at offset 0x24
+    -> Prop 'model' (len=17)
+  Found model: 'linux,dummy-virt'
+  [5] Token 0x3 at offset 0x44
+    -> Prop '#size-cells' (len=4)
+  [6] Token 0x3 at offset 0x54
+    -> Prop '#address-cells' (len=4)
+  [7] Token 0x3 at offset 0x64
+    -> Prop 'compatible' (len=17)
+  [8] Token 0x1 at offset 0x84
+  [9] Token 0x3 at offset 0x90
+    -> Prop 'migrate' (len=4)
+  [10] Token 0x3 at offset 0xa0
+    -> Prop 'cpu_on' (len=4)
+  [11] Token 0x3 at offset 0xb0
+    -> Prop 'cpu_off' (len=4)
+  [12] Token 0x3 at offset 0xc0
+    -> Prop 'cpu_suspend' (len=4)
+  [13] Token 0x3 at offset 0xd0
+    -> Prop 'method' (len=4)
+  [14] Token 0x3 at offset 0xe0
+    -> Prop 'compatible' (len=35)
+  [15] Token 0x2 at offset 0x110
+  [16] Token 0x1 at offset 0x114
+    -> Entering memory node: 'memory@40000000'
+  [17] Token 0x3 at offset 0x128
+    -> Prop 'reg' (len=16)
+    -> Reading memory reg property (len=16)
+    -> Got start: 0x40000000
+    -> Got size: 0x8000000
+  Found memory: 0x40000000 - 0x48000000
+  Found all required info, stopping parse
+Device tree parsed successfully:
+  Model:       linux,dummy-virt
+  Memory:      0x40000000 - 0x48000000 (128 MB)
+
+═══════════════════════════════════════════════════════════
+  Chapter 1: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 2: Memory Management
+═══════════════════════════════════════════════════════════
+
+[memory] Initializing memory subsystem
+  RAM:    0x40000000 - 0x48000000 (128MB)
+  Kernel: 0x40400000 - 0x4043e000 (248KB)
+  Frames: 31682/32768 free (123MB usable)
+
+[test] Testing frame allocator...
+  Allocated frame: PFN(263230) @ 0x4043e000
+  Allocated frame: PFN(263231) @ 0x4043f000
+  Deallocated both frames
+  Final stats: 31682/32768 frames free
+[memory] Setting up page tables and MMU...
+  Mapping DTB: 0x40000000 - 0x40400000
+  Mapping kernel: 0x40400000 - 0x4043e000
+  Mapping stack/heap region: 0x4043e000 - 0x48000000
+  Mapping UART device: 0x9000000
+  Root page table at: 0x4043e000
+[exception] Installing exception vector table at 0x0000000040400800
+[exception] Exception handlers installed
+  Enabling MMU...
+  MMU enabled: true
+  ✓ MMU enabled successfully with virtual memory!
+[memory] No kernel heap (seL4 design: static allocation only)
+
+═══════════════════════════════════════════════════════════
+  Chapter 2: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: Exception Handling & Syscalls
+═══════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: Phase 1 COMPLETE ✓ (Exception vectors)
+═══════════════════════════════════════════════════════════
+
+[info] Exception handling verified:
+  ✓ Trap frame saves/restores all 36 registers
+  ✓ ESR/FAR decoding for fault analysis
+  ✓ Data abort detection (EC 0x25)
+  ✓ Syscall detection (EC 0x15)
+  ✓ Context switching infrastructure ready
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+Kernel initialization complete!
+
+═══════════════════════════════════════════════════════════
+  Scheduler Initialization
+═══════════════════════════════════════════════════════════
+
+[scheduler] Initialized with idle thread at 0x40444000
+
+═══════════════════════════════════════════════════════════
+  Chapter 7: Root Task & Boot Protocol
+═══════════════════════════════════════════════════════════
+
+[root_task] Creating root task:
+  Root task image: 0x40230000 - 0x40246430 (89 KB)
+  Entry point:     0x40100000
+  User page table: 0x40445000
+  Mapping kernel regions into user PT (EL1-only):
+    Kernel: 0x40400000 - 0x4043e000
+    Kernel data: 0x4043e000 - 0x48000000
+    UART: 0x9000000
+  ✓ Kernel regions mapped
+  ELF header: 3 program headers at offset 0x40
+  LOAD segment 0:
+    vaddr:  0x40100000
+    offset: 0x10000
+    filesz: 0x2420 (9248 bytes)
+    memsz:  0x2420 (9248 bytes)
+    flags:  0x5 (R-X)
+    Mapping virt 0x40100000 → phys 0x40240000 (end: 0x40103000)
+      Mapping page 0 at virt=0x40100000 phys=0x40240000
+      Mapping page 1 at virt=0x40101000 phys=0x40241000
+      Mapping page 2 at virt=0x40102000 phys=0x40242000
+    Mapped 3 pages (12 KB)
+  LOAD segment 1:
+    vaddr:  0x40103000
+    offset: 0x13000
+    filesz: 0x32d2 (13010 bytes)
+    memsz:  0x32d2 (13010 bytes)
+    flags:  0x4 (R--)
+    Mapping virt 0x40103000 → phys 0x40243000 (end: 0x40107000)
+      Mapping page 0 at virt=0x40103000 phys=0x40243000
+      Mapping page 1 at virt=0x40104000 phys=0x40244000
+      Mapping page 2 at virt=0x40105000 phys=0x40245000
+      Mapping page 3 at virt=0x40106000 phys=0x40246000
+    Mapped 4 pages (16 KB)
+  Total: 7 pages mapped for all LOAD segments
+  Mapping stack: 0x400bf000 - 0x400ff000
+  Entry point:     0x40100000
+  Stack:           0x400bf000 - 0x400ff000 (256 KB)
+  ✓ Root task ready for EL0 transition
+
+[root_task] Creating boot info for runtime services...
+[boot_info] Created userspace boot info:
+  Devices:  4 regions
+  Untyped:  1 regions
+  RAM size: 128 MB
+  Boot info phys:  0x4044c000
+  Boot info virt:  0x7ffff000
+  Boot info size:  11088 bytes
+  ✓ Boot info mapped for userspace
+  Creating CNode for capability space...
+  CNode:           0x4044e000 (256 slots)
+  Creating root TCB...
+  Root TCB frame:  0x4044f000
+  Initializing TCB...
+  Writing TCB...
+  Setting state to Running...
+  Setting saved_ttbr0...
+  Registering with scheduler...
+  Root TCB:        0x4044f000 ✓
+
+[root_task] Transitioning to EL0...
+  Entry:    0x40100000
+  Stack:    0x400ff000
+  TTBR0:    0x40445000
+  About to call transition_to_el0...
+  VBAR_EL1: 0x40400800
+  CurrentEL before: 0x4
+  Cache flushed
+  First instruction at phys 0x40240000: 0xa9bb7bfd
+  Expected: 0xa9ba7bfd (stp x29, x30, [sp, #-0x60]!)
+  User PT is at phys 0x40445000
+
+    $$╲   $$╲                    $$╲       
+    $$ │ $$  │                   $$ │      
+    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      
+    $$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │      
+    $$  $$<   $$$$$$$ │ $$$$$$$ │$$ │      
+    $$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │      
+    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ 
+    ╲__│  ╲__│╲_______│ ╲_______│╲________│
+
+═══════════════════════════════════════════════════════════
+  KaaL Root Task (EL0) v0.1.0
+  Chapter 7: Root Task & Boot Protocol
+═══════════════════════════════════════════════════════════
+
+[root_task] Hello from userspace (EL0)!
+[root_task] Syscalls working: sys_print functional
+
+═══════════════════════════════════════════════════════════
+  Chapter 7: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 1: Testing Capability Broker API
+═══════════════════════════════════════════════════════════
+
+[root_task] Initializing Capability Broker...
+  ✓ Capability Broker initialized
+
+[root_task] Test 1: Allocating memory via broker...
+  ✓ Allocated 4096 bytes at: 0x0000000040450000
+    Cap slot: 100
+
+[root_task] Test 2: Requesting UART0 device via broker...
+  ✓ UART0 device allocated:
+    MMIO base: 0x0000000009000000
+    MMIO size: 4096 bytes
+    IRQ cap: 101
+
+[root_task] Test 3: Creating IPC endpoint via broker...
+[syscall] endpoint_create: allocated frame at phys 0x40451000
+[syscall] endpoint_create: created Endpoint at 0x40451000
+[syscall] insert_endpoint: cap_slot 100 -> endpoint 0x40451000
+[syscall] endpoint_create -> cap_slot=100, endpoint capability inserted into CSpace
+  ✓ IPC endpoint created:
+    Cap slot: 102
+    Endpoint ID: 0
+
+[root_task] Test 4: Requesting multiple devices...
+  → Requesting RTC...
+    ✓ RTC MMIO: 0x000000000a000000
+  → Requesting Timer...
+    ✓ Timer MMIO: 0x000000000a003000
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 1: Capability Broker Tests Complete ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 2: Testing IPC Syscalls
+═══════════════════════════════════════════════════════════
+
+[root_task] Test 1: IPC Send syscall
+  → Calling sys_send(endpoint=102, msg_ptr=0x1000, len=18)...
+[syscall] IPC Send: endpoint=102, msg_ptr=0x40103147, len=18
+[syscall] lookup_endpoint: cap_slot 102 not found in CSpace
+[syscall] IPC Send -> error: endpoint not found for cap_slot 102
+  ✗ sys_send returned error (-1)
+
+[root_task] Test 2: IPC Recv syscall
+  → Calling sys_recv(endpoint=102, buf_ptr=0x2000, len=256)...
+[syscall] IPC Recv: endpoint=102, buf_ptr=0x400feeb0, len=256
+[syscall] lookup_endpoint: cap_slot 102 not found in CSpace
+[syscall] IPC Recv -> error: endpoint not found for cap_slot 102
+  ✗ sys_recv returned error (-1)
+
+[root_task] Test 3: IPC Call syscall (RPC)
+  → Calling sys_call(endpoint=102, req_len=7, rep_len=256)...
+[syscall] IPC Call: endpoint=102, req_ptr=0x401032cc, req_len=7, rep_ptr=0x400fded0, rep_len=256
+[syscall] IPC Call -> success (stub, 0 bytes)
+  ✓ sys_call returned 0 bytes in reply
+
+[root_task] Test 4: IPC Reply syscall
+  → Calling sys_reply(reply_cap=200, msg_ptr=0x3000)...
+[syscall] IPC Reply: reply_cap=200, msg_ptr=0x4010338f
+[syscall] IPC Reply -> success (stub)
+  ✓ sys_reply returned success (0)
+
+[root_task] Test 5: Error handling (invalid params)
+  → Calling sys_send with invalid endpoint=9999...
+[syscall] IPC Send: endpoint=9999, msg_ptr=0x40103147, len=18
+[syscall] IPC Send -> error: invalid endpoint cap slot 9999
+  ✓ Correctly returned error (-1) for invalid endpoint
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 2: IPC Syscall Tests Complete ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 2: Testing Notification Syscalls
+═══════════════════════════════════════════════════════════
+
+[notification] Test 1: Creating notification object...
+[syscall] notification_create: allocated frame at phys 0x40452000
+[syscall] notification_create: created Notification at 0x40452000
+[syscall] insert_notification: cap_slot 101 -> notification 0x40452000
+[syscall] notification_create -> cap_slot=101, notification capability inserted into CSpace
+  ✓ Notification created at cap slot 101
+[notification] Test 2: Polling empty notification...
+[syscall] Poll: notification=101
+[syscall] Poll -> signals 0x0
+  ✓ Poll returned 0 (no signals)
+[notification] Test 3: Signaling notification with badge 0x5...
+[syscall] Signal: notification=101, badge=0x5
+[syscall] Signal -> success, signaled with badge 0x5
+  ✓ Signal succeeded
+[notification] Test 4: Polling signaled notification...
+[syscall] Poll: notification=101
+[syscall] Poll -> signals 0x5
+  ✓ Poll returned 0x5 (correct badge)
+[notification] Test 5: Polling again (should be cleared)...
+[syscall] Poll: notification=101
+[syscall] Poll -> signals 0x0
+  ✓ Poll returned 0 (signals cleared)
+[notification] Test 6: Testing badge coalescing...
+[syscall] Signal: notification=101, badge=0x1
+[syscall] Signal -> success, signaled with badge 0x1
+[syscall] Signal: notification=101, badge=0x2
+[syscall] Signal -> success, signaled with badge 0x2
+[syscall] Signal: notification=101, badge=0x4
+[syscall] Signal -> success, signaled with badge 0x4
+[syscall] Poll: notification=101
+[syscall] Poll -> signals 0x7
+  ✓ Badge coalescing works (0x1 | 0x2 | 0x4 = 0x7)
+
+═══════════════════════════════════════════════════════════
+  Notification Tests: PASS ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 2: Testing Shared Memory IPC
+═══════════════════════════════════════════════════════════
+
+[ipc] Test 1: Allocating shared memory for ring buffer...
+  ✓ Shared memory allocated at phys: 0x0000000040453000
+[ipc] Test 2: Creating notification objects for signaling...
+[syscall] notification_create: allocated frame at phys 0x40454000
+[syscall] notification_create: created Notification at 0x40454000
+[syscall] insert_notification: cap_slot 102 -> notification 0x40454000
+[syscall] notification_create -> cap_slot=102, notification capability inserted into CSpace
+[syscall] notification_create: allocated frame at phys 0x40455000
+[syscall] notification_create: created Notification at 0x40455000
+[syscall] insert_notification: cap_slot 103 -> notification 0x40455000
+[syscall] notification_create -> cap_slot=103, notification capability inserted into CSpace
+  ✓ Consumer notification: cap_slot 102
+  ✓ Producer notification: cap_slot 103
+
+[ipc] Test 3: Verifying notification-based signaling...
+  → Producer signals consumer (badge=0x1: data available)...
+[syscall] Signal: notification=102, badge=0x1
+[syscall] Signal -> success, signaled with badge 0x1
+[syscall] Poll: notification=102
+[syscall] Poll -> signals 0x1
+  ✓ Consumer received signal: 0x1
+  → Consumer signals producer (badge=0x2: space available)...
+[syscall] Signal: notification=103, badge=0x2
+[syscall] Signal -> success, signaled with badge 0x2
+[syscall] Poll: notification=103
+[syscall] Poll -> signals 0x2
+  ✓ Producer received signal: 0x2
+
+═══════════════════════════════════════════════════════════
+  Shared Memory IPC Infrastructure: VERIFIED ✓
+═══════════════════════════════════════════════════════════
+
+[ipc] Summary:
+  ✓ Shared memory allocation works
+  ✓ Notification creation works
+  ✓ Producer→Consumer signaling works
+  ✓ Consumer→Producer signaling works
+  ✓ Ready for process-level IPC implementation
+
+[ipc] Note: Full process spawning with shared memory requires:
+  1. Spawn sender and receiver as separate processes
+  2. Map shared memory into both process address spaces
+  3. Pass notification capabilities to both processes
+  4. Initialize SharedRing in mapped shared memory
+
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 4: Component Loading & Spawning
+═══════════════════════════════════════════════════════════
+
+[root_task] Component Registry:
+  → Total components: 9
+  → Autostart components: 4
+
+[root_task] Spawning system_init component...
+[syscall] memory_map: phys=0x40456000, size=69632, perms=0x3
+[syscall] memory_map: caller's TTBR0=0x40445000 (from TrapFrame)
+[syscall] memory_map: allocated virt range 0x80000000 - 0x80011000
+[syscall] memory_map: using USER_DATA flags = 0x60000000000f43
+[syscall] memory_map: mapped page 0 virt=0x80000000 -> phys=0x40456000
+[syscall] memory_map: mapped page 1 virt=0x80001000 -> phys=0x40457000
+[syscall] memory_map: mapped page 2 virt=0x80002000 -> phys=0x40458000
+[syscall] memory_map: mapped page 3 virt=0x80003000 -> phys=0x40459000
+[syscall] memory_map: mapped page 4 virt=0x80004000 -> phys=0x4045a000
+[syscall] memory_map: mapped page 5 virt=0x80005000 -> phys=0x4045b000
+[syscall] memory_map: mapped page 6 virt=0x80006000 -> phys=0x4045c000
+[syscall] memory_map: mapped page 7 virt=0x80007000 -> phys=0x4045d000
+[syscall] memory_map: mapped page 8 virt=0x80008000 -> phys=0x4045e000
+[syscall] memory_map: mapped page 9 virt=0x80009000 -> phys=0x4045f000
+[syscall] memory_map: mapped page 10 virt=0x8000a000 -> phys=0x40460000
+[syscall] memory_map: mapped page 11 virt=0x8000b000 -> phys=0x40461000
+[syscall] memory_map: mapped page 12 virt=0x8000c000 -> phys=0x40462000
+[syscall] memory_map: mapped page 13 virt=0x8000d000 -> phys=0x40463000
+[syscall] memory_map: mapped page 14 virt=0x8000e000 -> phys=0x40464000
+[syscall] memory_map: mapped page 15 virt=0x8000f000 -> phys=0x40465000
+[syscall] memory_map: mapped page 16 virt=0x80010000 -> phys=0x40466000
+[syscall] memory_map -> virt=0x80000000 (17 pages mapped)
+[syscall] memory_unmap: virt=0x80000000, size=69632
+[syscall] memory_unmap -> success (17 pages)
+[syscall] process_create: entry=0x2104c0, code_phys=0x40456000, code_vaddr=0x200000, code_size=0x11000
+[syscall] process_create: mapping 17 code pages at virt=0x200000 -> phys=0x40456000
+[syscall] process_create: code mapped successfully
+[syscall] process_create: page tables set up and TLB flushed
+[syscall] process_create: CNode initialized with 256 slots at 0x4046c000
+[syscall] process_create -> PID 0x4046f000
+[syscall] process_create: TCB created and enqueued
+  ✓ system_init spawned successfully (PID: 1078390784)
+
+═══════════════════════════════════════════════════════════
+  Component Spawning: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+[root_task] Yielding to system_init...
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1078390784 at 0x4046f000
+[syscall] sys_yield: first schedule of TCB 0x4046f000
+  ELR=0x2104c0, SP=0x80000000, SPSR=0x3c0
+  x30=0x2104c0, x29=0x80000000, saved_ttbr0=0x4046b000
+  x8=0x0 (should be 0 initially)
+
+═══════════════════════════════════════════════════════════
+  System Init Component v0.1.0
+═══════════════════════════════════════════════════════════
+
+[system_init] Initializing...
+[system_init] Component spawned successfully!
+[system_init] Running in userspace (EL0)
+
+[system_init] Starting main loop
+[system_init] TODO: Spawn other components
+[system_init] TODO: Initialize system services
+
+═══════════════════════════════════════════════════════════
+  System Init: Ready ✓
+═══════════════════════════════════════════════════════════
+
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1 at 0x4044f000
+[root_task] Back from system_init!
+[root_task] Yielding to system_init...
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1078390784 at 0x4046f000
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1 at 0x4044f000
+[root_task] Back from system_init!
+[root_task] Component switching working! ✓
+
+═══════════════════════════════════════════════════════════
+  Chapter 9 Phase 5: Inter-Component IPC
+═══════════════════════════════════════════════════════════
+
+[phase5] Step 1: Spawning test_minimal component (debugging)...
+[syscall] memory_map: phys=0x40477000, size=69632, perms=0x3
+[syscall] memory_map: caller's TTBR0=0x40445000 (from TrapFrame)
+[syscall] memory_map: allocated virt range 0x80011000 - 0x80022000
+[syscall] memory_map: using USER_DATA flags = 0x60000000000f43
+[syscall] memory_map: mapped page 0 virt=0x80011000 -> phys=0x40477000
+[syscall] memory_map: mapped page 1 virt=0x80012000 -> phys=0x40478000
+[syscall] memory_map: mapped page 2 virt=0x80013000 -> phys=0x40479000
+[syscall] memory_map: mapped page 3 virt=0x80014000 -> phys=0x4047a000
+[syscall] memory_map: mapped page 4 virt=0x80015000 -> phys=0x4047b000
+[syscall] memory_map: mapped page 5 virt=0x80016000 -> phys=0x4047c000
+[syscall] memory_map: mapped page 6 virt=0x80017000 -> phys=0x4047d000
+[syscall] memory_map: mapped page 7 virt=0x80018000 -> phys=0x4047e000
+[syscall] memory_map: mapped page 8 virt=0x80019000 -> phys=0x4047f000
+[syscall] memory_map: mapped page 9 virt=0x8001a000 -> phys=0x40480000
+[syscall] memory_map: mapped page 10 virt=0x8001b000 -> phys=0x40481000
+[syscall] memory_map: mapped page 11 virt=0x8001c000 -> phys=0x40482000
+[syscall] memory_map: mapped page 12 virt=0x8001d000 -> phys=0x40483000
+[syscall] memory_map: mapped page 13 virt=0x8001e000 -> phys=0x40484000
+[syscall] memory_map: mapped page 14 virt=0x8001f000 -> phys=0x40485000
+[syscall] memory_map: mapped page 15 virt=0x80020000 -> phys=0x40486000
+[syscall] memory_map: mapped page 16 virt=0x80021000 -> phys=0x40487000
+[syscall] memory_map -> virt=0x80011000 (17 pages mapped)
+[syscall] memory_unmap: virt=0x80011000, size=69632
+[syscall] memory_unmap -> success (17 pages)
+[syscall] process_create: entry=0x210120, code_phys=0x40477000, code_vaddr=0x200000, code_size=0x11000
+[syscall] process_create: mapping 17 code pages at virt=0x200000 -> phys=0x40477000
+[syscall] process_create: code mapped successfully
+[syscall] process_create: page tables set up and TLB flushed
+[syscall] process_create: CNode initialized with 256 slots at 0x4048d000
+[syscall] process_create -> PID 0x4048f000
+[syscall] process_create: TCB created and enqueued
+  ✓ test_minimal spawned (PID: 1078521856)
+[phase5] Step 2: Skipping IPC consumer (testing minimal only)...
+
+[phase5] Step 3: Yielding to test_minimal...
+  (Test component should just yield back)
+
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1078390784 at 0x4046f000
+[sched] schedule: looking for next thread
+[sched] priority_bitmap: [0x0000000000000000, 0x0000000000000000, 0x8000000000000000, 0x0000000000000000]
+[sched] schedule: found priority 128 with ready threads
+[sched] schedule: dequeued TCB 1078521856 at 0x4048f000
+[syscall] sys_yield: first schedule of TCB 0x4048f000
+  ELR=0x210120, SP=0x80000000, SPSR=0x3c0
+  x30=0x210120, x29=0x80000000, saved_ttbr0=0x4048c000
+  x8=0x0 (should be 0 initially)
+[exception] Unhandled EL0 exception:
+  EC: 0x0, ESR: 0x2000000
+  ELR: 0x210120, FAR: 0x0

@@ -1,0 +1,8 @@
+[target.aarch64-unknown-none]
+rustflags = [
+    "-C", "link-arg=-Tcomponent.ld",     # Use custom linker script
+    "-C", "relocation-model=static",     # Static relocation
+]
+
+[build]
+target = "aarch64-unknown-none"

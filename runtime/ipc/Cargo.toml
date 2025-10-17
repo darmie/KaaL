@@ -15,6 +15,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
+alloc = []  # Enable allocator-dependent features like broker
 
 [profile.release]
 opt-level = "z"       # Optimize for size

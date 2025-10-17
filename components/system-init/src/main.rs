@@ -9,7 +9,7 @@
 #![no_main]
 
 use kaal_sdk::{
-    component::{Component, ServiceBase},
+    component::Component,
     syscall,
 };
 

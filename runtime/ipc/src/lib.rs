@@ -25,10 +25,12 @@
 
 #![no_std]
 
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(feature = "alloc")]
 pub mod broker;
 
 /// IPC error types

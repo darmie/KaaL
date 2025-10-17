@@ -4,8 +4,8 @@
 
 use crate::{Result, Error};
 
-/// Syscall numbers
-mod numbers {
+/// Syscall numbers (re-exported for use in other modules)
+pub mod numbers {
     pub const SYS_YIELD: usize = 0x01;
     pub const SYS_CAP_ALLOCATE: usize = 0x10;
     pub const SYS_MEMORY_ALLOCATE: usize = 0x11;
@@ -18,6 +18,12 @@ mod numbers {
     pub const SYS_SIGNAL: usize = 0x18;
     pub const SYS_WAIT: usize = 0x19;
     pub const SYS_POLL: usize = 0x1A;
+
+    // Channel management syscalls
+    pub const SYS_CHANNEL_ESTABLISH: usize = 0x30;
+    pub const SYS_CHANNEL_QUERY: usize = 0x31;
+    pub const SYS_CHANNEL_CLOSE: usize = 0x32;
+
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
 
@@ -346,4 +352,135 @@ pub fn endpoint_create() -> Result<usize> {
         );
         Error::from_syscall(result)
     }
+}
+
+// ============================================================================
+// Raw syscall helpers - for internal use by SDK modules
+// ============================================================================
+
+/// Perform a raw system call with 1 argument
+///
+/// # Safety
+/// Caller must ensure the syscall number and argument are valid for the kernel.
+///
+/// # Parameters
+/// - `syscall_num`: The syscall number from `numbers` module
+/// - `arg0`: First argument to pass in x0
+///
+/// # Returns
+/// The raw return value from the kernel in x0
+#[doc(hidden)]
+pub unsafe fn raw_syscall_1arg(syscall_num: usize, arg0: usize) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {arg0}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) syscall_num,
+        arg0 = in(reg) arg0,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+    );
+    result
+}
+
+/// Perform a raw system call with 3 arguments
+///
+/// # Safety
+/// Caller must ensure the syscall number and arguments are valid for the kernel.
+///
+/// # Parameters
+/// - `syscall_num`: The syscall number from `numbers` module
+/// - `arg0`: First argument to pass in x0
+/// - `arg1`: Second argument to pass in x1
+/// - `arg2`: Third argument to pass in x2
+///
+/// # Returns
+/// The raw return value from the kernel in x0
+#[doc(hidden)]
+pub unsafe fn raw_syscall_3args(syscall_num: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "mov x8, {syscall_num}",
+        "mov x0, {arg0}",
+        "mov x1, {arg1}",
+        "mov x2, {arg2}",
+        "svc #0",
+        "mov {result}, x0",
+        syscall_num = in(reg) syscall_num,
+        arg0 = in(reg) arg0,
+        arg1 = in(reg) arg1,
+        arg2 = in(reg) arg2,
+        result = out(reg) result,
+        out("x8") _,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+    );
+    result
+}
+
+// ============================================================================
+// Syscall invocation macro for cleaner code
+// ============================================================================
+
+/// Invoke a system call with variable number of arguments
+///
+/// # Examples
+/// ```
+/// syscall!(SYS_YIELD);                               // 0 args
+/// syscall!(SYS_CHANNEL_QUERY, channel_id);           // 1 arg
+/// syscall!(SYS_MEMORY_MAP, addr, size, perms);       // 3 args
+/// ```
+#[macro_export]
+macro_rules! syscall {
+    // 0 arguments
+    ($num:expr) => {{
+        let result: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov x8, {syscall_num}",
+                "svc #0",
+                "mov {result}, x0",
+                syscall_num = in(reg) $num,
+                result = out(reg) result,
+                out("x8") _,
+            );
+            result
+        }
+    }};
+
+    // 1 argument
+    ($num:expr, $arg0:expr) => {{
+        unsafe { $crate::syscall::raw_syscall_1arg($num, $arg0 as usize) }
+    }};
+
+    // 2 arguments
+    ($num:expr, $arg0:expr, $arg1:expr) => {{
+        let result: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov x8, {syscall_num}",
+                "mov x0, {arg0}",
+                "mov x1, {arg1}",
+                "svc #0",
+                "mov {result}, x0",
+                syscall_num = in(reg) $num,
+                arg0 = in(reg) $arg0 as usize,
+                arg1 = in(reg) $arg1 as usize,
+                result = out(reg) result,
+                out("x8") _,
+                out("x0") _,
+                out("x1") _,
+            );
+            result
+        }
+    }};
+
+    // 3 arguments
+    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr) => {{
+        unsafe { $crate::syscall::raw_syscall_3args($num, $arg0 as usize, $arg1 as usize, $arg2 as usize) }
+    }};
 }

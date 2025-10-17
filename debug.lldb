@@ -1,0 +1,28 @@
+# LLDB script to debug the crash at 0x40408f38
+
+# Load kernel symbols first
+file kernel/target/aarch64-unknown-none/release/kaal-kernel
+
+# Connect to QEMU GDB stub
+gdb-remote localhost:1234
+
+# Set breakpoint at crash address
+break set --address 0x40408f38
+
+# Also set breakpoint just before - at the start of memcpy
+break set --address 0x40408f30
+
+# Continue execution
+c
+
+# When breakpoint hits, show registers
+register read
+
+# Show backtrace
+bt
+
+# Show memory around crash location
+memory read --size 8 --format x --count 16 $pc-64
+
+# Show instruction disassembly
+disassemble --pc

@@ -83,7 +83,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "notification:signal",
         "notification:wait"
     ],
-        binary_data: None,
+        binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
     },
     ComponentDescriptor {
         name: "ipc_consumer",
@@ -96,7 +96,16 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "notification:signal",
         "notification:wait"
     ],
-        binary_data: None,
+        binary_data: Some(include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer")),
+    },
+    ComponentDescriptor {
+        name: "test_minimal",
+        binary: "test-minimal",
+        component_type: ComponentType::Service,
+        priority: 128,
+        autostart: false,
+        capabilities:     &[],
+        binary_data: Some(include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal")),
     },
     ComponentDescriptor {
         name: "shell",
@@ -124,4 +133,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 8;
+pub const COMPONENT_COUNT: usize = 9;
