@@ -45,7 +45,7 @@
 name = "system_init"
 binary = "system-init"
 type = "service"
-priority = 100  # Lowered to allow other components to run
+priority = 200  # Very low priority so root_task (128) can continue
 autostart = true  # Re-enabled now that priorities work
 capabilities = [
     "process:create",      # Can spawn other processes
@@ -108,7 +108,7 @@ capabilities = [
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
-priority = 128
+priority = 60  # High priority to run early
 autostart = false  # Spawned on-demand for IPC testing
 capabilities = [
     "memory:map",
@@ -120,7 +120,7 @@ capabilities = [
 name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
-priority = 128
+priority = 70  # Slightly lower priority than producer
 autostart = false  # Spawned on-demand for IPC testing
 capabilities = [
     "memory:map",
@@ -134,7 +134,7 @@ name = "test_minimal"
 binary = "test-minimal"
 type = "service"
 priority = 50  # High priority to run before system_init (lower = higher priority)
-autostart = true  # Enable for debugging component execution
+autostart = false  # Disabled so root_task can continue to Phase 5
 capabilities = []
 
 # Applications - User-facing programs

@@ -15,6 +15,7 @@ use kaal_sdk::{
     component::{Component, ServiceBase},
     syscall,
     message::{Channel, ChannelConfig},
+    channel_setup::{establish_channel, ChannelRole},
 };
 
 // Declare this as a service component
@@ -48,26 +49,63 @@ impl Component for IpcConsumer {
         unsafe {
             syscall::print("[consumer] Starting message reception\n");
 
-            // Create our own notification for receiving signals
-            syscall::print("[consumer] Creating notification capability...\n");
-            let consumer_notify = match syscall::notification_create() {
-                Ok(slot) => {
-                    syscall::print("  ✓ Created notification at slot: ");
+            // Step 1: Establish channel with producer
+            // For demo, we'll use a hardcoded producer PID (would be discovered in real system)
+            let producer_pid = 9; // Assuming producer is PID 9
+            let buffer_size = 0x1000; // 4KB buffer
+
+            syscall::print("[consumer] Establishing channel with producer...\n");
+            syscall::print("  - Target PID: 9 (assumed)\n");
+            syscall::print("  - Buffer size: 4KB\n");
+            syscall::print("  - Role: Consumer\n");
+
+            let channel_config = match establish_channel(producer_pid, buffer_size, ChannelRole::Consumer) {
+                Ok(config) => {
+                    syscall::print("  ✓ Channel established!\n");
+                    syscall::print("    - Buffer at: 0x");
+                    if config.buffer_addr != 0 {
+                        syscall::print("MAPPED\n");
+                    } else {
+                        syscall::print("NULL\n");
+                    }
+                    syscall::print("    - Channel ID: ");
                     syscall::print("X\n");
-                    slot
+                    syscall::print("    - Notification cap: ");
+                    syscall::print("X\n");
+                    config
                 }
-                Err(_) => {
-                    syscall::print("  ✗ Failed to create notification\n");
-                    loop { syscall::yield_now(); }
+                Err(e) => {
+                    syscall::print("  ✗ Failed to establish channel: ");
+                    syscall::print(e);
+                    syscall::print("\n");
+
+                    // Fall back to direct memory access for demo
+                    syscall::print("[consumer] Falling back to direct memory access...\n");
+
+                    // Create our own notification
+                    let consumer_notify = match syscall::notification_create() {
+                        Ok(slot) => slot,
+                        Err(_) => {
+                            syscall::print("  ✗ Failed to create notification\n");
+                            loop { syscall::yield_now(); }
+                        }
+                    };
+
+                    // Use hardcoded shared memory
+                    kaal_sdk::channel_setup::ChannelConfig {
+                        buffer_addr: 0x80000000,
+                        buffer_size: 0x1000,
+                        notification_cap: consumer_notify,
+                        memory_cap: None,
+                        channel_id: 0,
+                        role: ChannelRole::Consumer,
+                    }
                 }
             };
 
-            // For demo: we'll use hardcoded shared memory location
-            let shared_mem_virt = 0x80000000u64; // Hardcoded for demo
-
-            syscall::print("[consumer] Configuration:\n");
-            syscall::print("  - Shared memory at: 0x80000000 (hardcoded)\n");
-            syscall::print("  - Consumer notification created\n");
+            syscall::print("\n[consumer] Configuration complete:\n");
+            syscall::print("  - Shared memory ready\n");
+            syscall::print("  - Notification capability ready\n");
             syscall::print("\n");
 
             // Wait a bit for producer to initialize
@@ -77,47 +115,61 @@ impl Component for IpcConsumer {
 
             // Check the magic value written by producer
             syscall::print("[consumer] Checking shared memory...\n");
-            let shared_ptr = shared_mem_virt as *mut u32;
-            let magic = *shared_ptr;
 
-            if magic == 0xDEADBEEF {
-                syscall::print("  ✓ Found magic value 0xDEADBEEF - shared memory working!\n");
-            } else {
-                syscall::print("  ✗ Magic value mismatch - shared memory not working\n");
-            }
-            syscall::print("\n");
+            if channel_config.buffer_addr != 0 {
+                let shared_ptr = channel_config.buffer_addr as *mut u32;
+                let magic = *shared_ptr;
 
-            // For demo: just read the test data from shared memory
-            // In real implementation, we'd wait for signals from producer
-            syscall::print("[consumer] Reading test messages from shared memory...\n");
-
-            // Wait for producer to write data
-            for _ in 0..10 {
-                syscall::yield_now();
-            }
-
-            // Read the test messages
-            for i in 0..5 {
-                // Read message from shared memory
-                let msg_ptr = (shared_mem_virt + 4 + (i * 4)) as *mut u32;
-                let message = *msg_ptr;
-
-                syscall::print("  ← Read message ");
-                // Check if it's what we expect (0x1000 + i)
-                if message == 0x1000 + i as u32 {
-                    syscall::print("✓\n");
+                if magic == 0xDEADBEEF {
+                    syscall::print("  ✓ Found magic value 0xDEADBEEF - shared memory working!\n");
                 } else {
-                    syscall::print("(unexpected value)\n");
+                    syscall::print("  ✗ Magic value mismatch - shared memory not working\n");
                 }
+                syscall::print("\n");
+
+                // Read test messages with optional notification waiting
+                syscall::print("[consumer] Reading test messages from shared memory...\n");
+
+                // Wait for producer to write data
+                for _ in 0..10 {
+                    // Check for notifications if we have the capability
+                    if channel_config.notification_cap != 0 {
+                        let signals = syscall::poll(channel_config.notification_cap).unwrap_or(0);
+                        if signals != 0 {
+                            syscall::print("  [Received signal: ");
+                            syscall::print("X");
+                            syscall::print("]\n");
+                        }
+                    }
+                    syscall::yield_now();
+                }
+
+                // Read the test messages
+                for i in 0..5 {
+                    // Read message from shared memory
+                    let msg_ptr = (channel_config.buffer_addr + 4 + (i * 4)) as *mut u32;
+                    let message = *msg_ptr;
+
+                    syscall::print("  ← Read message ");
+                    // Check if it's what we expect (0x1000 + i)
+                    if message == 0x1000 + i as u32 {
+                        syscall::print("✓\n");
+                    } else {
+                        syscall::print("(unexpected value)\n");
+                    }
+                }
+
+                syscall::print("[consumer] All messages received!\n");
+                syscall::print("\n");
+
+                syscall::print("═══════════════════════════════════════════════════════════\n");
+                syscall::print("  IPC COMMUNICATION SUCCESSFUL! ✓\n");
+                syscall::print("═══════════════════════════════════════════════════════════\n");
+                syscall::print("\n");
+            } else {
+                syscall::print("[consumer] Warning: No valid shared memory buffer!\n");
+                syscall::print("[consumer] Channel establishment may have failed.\n");
             }
-
-            syscall::print("[consumer] All messages received!\n");
-            syscall::print("\n");
-
-            syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  IPC COMMUNICATION SUCCESSFUL! ✓\n");
-            syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("\n");
         }
 
         // Continue yielding

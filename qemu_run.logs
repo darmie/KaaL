@@ -1,0 +1,961 @@
+!@═══════════════════════════════════════════════════════════
+  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader
+═══════════════════════════════════════════════════════════
+
+DTB address: 0x40000000
+Device tree parsed successfully
+Model: linux,dummy-virt
+Memory region: 0x40000000 - 0x48000000 (128 MB)
+
+Loading images...
+Loading embedded images from ELF sections...
+  Kernel: 0x40205000 - 0x40228a38 (142 KB)
+  User:   0x40229000 - 0x4027fbd8 (346 KB)
+ELF: entry=0x40400000, 4 program headers at offset 0x40
+  LOAD segment 0: vaddr=0x40400000, filesz=0x774c, memsz=0x774c
+  LOAD segment 1: vaddr=0x40408000, filesz=0x3c68, memsz=0x3c68
+  LOAD segment 2: vaddr=0x4040c000, filesz=0x10, memsz=0x2e000
+Kernel loaded at entry point: 0x40400000
+ELF: entry=0x40100000, 3 program headers at offset 0x40
+  LOAD segment 0: vaddr=0x40100000, filesz=0x280c, memsz=0x280c
+  LOAD segment 1: vaddr=0x40103000, filesz=0x43a73, memsz=0x43a73
+Root task loaded at entry point: 0x40100000
+Images loaded successfully!
+Kernel entry: 0x40400000
+Root task:  0x40229000 - 0x4027fbd8
+Root entry: 0x40100000
+DTB info will be passed to kernel via function parameters
+  DTB: 0x40000000 (size: 1048576)
+Kernel entry: 0x40400000
+User image: 0x40229000 - 0x4027fbd8
+User entry: 0x40100000
+
+Setting up page tables...
+Setting up identity map: 0x10000000 - 0x402805d0
+Page tables configured
+TTBR0: 0x47ffc000
+
+Skipping MMU setup - kernel will handle it
+
+Jumping to KaaL kernel at 0x40400000...
+  Passing root task info:
+    user_img: 0x40229000 - 0x4027fbd8
+    user_entry: 0x40100000
+    pv_offset: 0x0
+    dtb: 0x40000000 (size: 1048576)
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  KaaL Rust Microkernel v0.1.0
+  Chapter 1: Bare Metal Boot & Early Init
+═══════════════════════════════════════════════════════════
+
+Boot parameters:
+  DTB:         0x40000000 (size: 1048576 bytes)
+  Root task:   0x40229000 - 0x4027fbd8
+  Entry:       0x40100000
+  PV offset:   0x0
+
+[boot] Boot info initialized and stored globally
+Parsing device tree...
+DTB parse: reading header at 0x40000000
+DTB magic: 0xd00dfeed (expected 0xd00dfeed)
+DTB magic OK
+Parsing DTB structure at 0x40000040
+  [1] Token 0x1 at offset 0x0
+  [2] Token 0x3 at offset 0x8
+    -> Prop 'interrupt-parent' (len=4)
+  [3] Token 0x3 at offset 0x18
+    -> Prop 'dma-coherent' (len=0)
+  [4] Token 0x3 at offset 0x24
+    -> Prop 'model' (len=17)
+  Found model: 'linux,dummy-virt'
+  [5] Token 0x3 at offset 0x44
+    -> Prop '#size-cells' (len=4)
+  [6] Token 0x3 at offset 0x54
+    -> Prop '#address-cells' (len=4)
+  [7] Token 0x3 at offset 0x64
+    -> Prop 'compatible' (len=17)
+  [8] Token 0x1 at offset 0x84
+  [9] Token 0x3 at offset 0x90
+    -> Prop 'migrate' (len=4)
+  [10] Token 0x3 at offset 0xa0
+    -> Prop 'cpu_on' (len=4)
+  [11] Token 0x3 at offset 0xb0
+    -> Prop 'cpu_off' (len=4)
+  [12] Token 0x3 at offset 0xc0
+    -> Prop 'cpu_suspend' (len=4)
+  [13] Token 0x3 at offset 0xd0
+    -> Prop 'method' (len=4)
+  [14] Token 0x3 at offset 0xe0
+    -> Prop 'compatible' (len=35)
+  [15] Token 0x2 at offset 0x110
+  [16] Token 0x1 at offset 0x114
+    -> Entering memory node: 'memory@40000000'
+  [17] Token 0x3 at offset 0x128
+    -> Prop 'reg' (len=16)
+    -> Reading memory reg property (len=16)
+    -> Got start: 0x40000000
+    -> Got size: 0x8000000
+  Found memory: 0x40000000 - 0x48000000
+  Found all required info, stopping parse
+Device tree parsed successfully:
+  Model:       linux,dummy-virt
+  Memory:      0x40000000 - 0x48000000 (128 MB)
+
+═══════════════════════════════════════════════════════════
+  Chapter 1: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 2: Memory Management
+═══════════════════════════════════════════════════════════
+
+[memory] Initializing memory subsystem
+  RAM:    0x40000000 - 0x48000000 (128MB)
+  Kernel: 0x40400000 - 0x4043a000 (232KB)
+  Frames: 31686/32768 free (123MB usable)
+
+[test] Testing frame allocator...
+  Allocated frame: PFN(263226) @ 0x4043a000
+  Allocated frame: PFN(263227) @ 0x4043b000
+  Deallocated both frames
+  Final stats: 31686/32768 frames free
+[memory] Setting up page tables and MMU...
+  Mapping DTB: 0x40000000 - 0x40400000
+  Mapping kernel: 0x40400000 - 0x4043a000
+  Mapping stack/heap region: 0x4043a000 - 0x48000000
+  Mapping UART device: 0x9000000
+  Root page table at: 0x4043a000
+[exception] Installing exception vector table at 0x0000000040400800
+[exception] Exception handlers installed
+  Enabling MMU...
+  MMU enabled: true
+  ✓ MMU enabled successfully with virtual memory!
+[memory] No kernel heap (seL4 design: static allocation only)
+
+═══════════════════════════════════════════════════════════
+  Chapter 2: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: Exception Handling & Syscalls
+═══════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: Phase 1 COMPLETE ✓ (Exception vectors)
+═══════════════════════════════════════════════════════════
+
+[info] Exception handling verified:
+  ✓ Trap frame saves/restores all 36 registers
+  ✓ ESR/FAR decoding for fault analysis
+  ✓ Data abort detection (EC 0x25)
+  ✓ Syscall detection (EC 0x15)
+  ✓ Context switching infrastructure ready
+
+═══════════════════════════════════════════════════════════
+  Chapter 3: COMPLETE ✓
+═══════════════════════════════════════════════════════════
+
+Kernel initialization complete!
+
+═══════════════════════════════════════════════════════════
+  Scheduler Initialization
+═══════════════════════════════════════════════════════════
+
+[scheduler] Initialized with idle thread at 0x40440000
+
+═══════════════════════════════════════════════════════════
+  Chapter 7: Root Task & Boot Protocol
+═══════════════════════════════════════════════════════════
+
+[root_task] Creating root task:
+  Root task image: 0x40229000 - 0x4027fbd8 (346 KB)
+  Entry point:     0x40100000
+  User page table: 0x40441000
+  Mapping kernel regions into user PT (EL1-only):
+    Kernel: 0x40400000 - 0x4043a000
+    Kernel data: 0x4043a000 - 0x48000000
+    UART: 0x9000000
+  ✓ Kernel regions mapped
+  ELF header: 3 program headers at offset 0x40
+  LOAD segment 0:
+    vaddr:  0x40100000
+    offset: 0x10000
+    filesz: 0x280c (10252 bytes)
+    memsz:  0x280c (10252 bytes)
+    flags:  0x5 (R-X)
+    Mapping virt 0x40100000 → phys 0x40239000 (end: 0x40103000)
+      Mapping page 0 at virt=0x40100000 phys=0x40239000
+      Mapping page 1 at virt=0x40101000 phys=0x4023a000
+      Mapping page 2 at virt=0x40102000 phys=0x4023b000
+    Mapped 3 pages (12 KB)
+  LOAD segment 1:
+    vaddr:  0x40103000
+    offset: 0x13000
+    filesz: 0x43a73 (277107 bytes)
+    memsz:  0x43a73 (277107 bytes)
+    flags:  0x4 (R--)
+    Mapping virt 0x40103000 → phys 0x4023c000 (end: 0x40147000)
+      Mapping page 0 at virt=0x40103000 phys=0x4023c000
+      Mapping page 1 at virt=0x40104000 phys=0x4023d000
+      Mapping page 2 at virt=0x40105000 phys=0x4023e000
+      Mapping page 3 at virt=0x40106000 phys=0x4023f000
+      Mapping page 4 at virt=0x40107000 phys=0x40240000
+      Mapping page 5 at virt=0x40108000 phys=0x40241000
+      Mapping page 6 at virt=0x40109000 phys=0x40242000
+      Mapping page 7 at virt=0x4010a000 phys=0x40243000
+      Mapping page 8 at virt=0x4010b000 phys=0x40244000
+      Mapping page 9 at virt=0x4010c000 phys=0x40245000
+      Mapping page 10 at virt=0x4010d000 phys=0x40246000
+      Mapping page 11 at virt=0x4010e000 phys=0x40247000
+      Mapping page 12 at virt=0x4010f000 phys=0x40248000
+      Mapping page 13 at virt=0x40110000 phys=0x40249000
+      Mapping page 14 at virt=0x40111000 phys=0x4024a000
+      Mapping page 15 at virt=0x40112000 phys=0x4024b000
+      Mapping page 16 at virt=0x40113000 phys=0x4024c000
+      Mapping page 17 at virt=0x40114000 phys=0x4024d000
+      Mapping page 18 at virt=0x40115000 phys=0x4024e000
+      Mapping page 19 at virt=0x40116000 phys=0x4024f000
+      Mapping page 20 at virt=0x40117000 phys=0x40250000
+      Mapping page 21 at virt=0x40118000 phys=0x40251000
+      Mapping page 22 at virt=0x40119000 phys=0x40252000
+      Mapping page 23 at virt=0x4011a000 phys=0x40253000
+      Mapping page 24 at virt=0x4011b000 phys=0x40254000
+      Mapping page 25 at virt=0x4011c000 phys=0x40255000
+      Mapping page 26 at virt=0x4011d000 phys=0x40256000
+      Mapping page 27 at virt=0x4011e000 phys=0x40257000
+      Mapping page 28 at virt=0x4011f000 phys=0x40258000
+      Mapping page 29 at virt=0x40120000 phys=0x40259000
+      Mapping page 30 at virt=0x40121000 phys=0x4025a000
+      Mapping page 31 at virt=0x40122000 phys=0x4025b000
+      Mapping page 32 at virt=0x40123000 phys=0x4025c000
+      Mapping page 33 at virt=0x40124000 phys=0x4025d000
+      Mapping page 34 at virt=0x40125000 phys=0x4025e000
+      Mapping page 35 at virt=0x40126000 phys=0x4025f000
+      Mapping page 36 at virt=0x40127000 phys=0x40260000
+      Mapping page 37 at virt=0x40128000 phys=0x40261000
+      Mapping page 38 at virt=0x40129000 phys=0x40262000
+      Mapping page 39 at virt=0x4012a000 phys=0x40263000
+      Mapping page 40 at virt=0x4012b000 phys=0x40264000
+      Mapping page 41 at virt=0x4012c000 phys=0x40265000
+      Mapping page 42 at virt=0x4012d000 phys=0x40266000
+      Mapping page 43 at virt=0x4012e000 phys=0x40267000
+      Mapping page 44 at virt=0x4012f000 phys=0x40268000
+      Mapping page 45 at virt=0x40130000 phys=0x40269000
+      Mapping page 46 at virt=0x40131000 phys=0x4026a000
+      Mapping page 47 at virt=0x40132000 phys=0x4026b000
+      Mapping page 48 at virt=0x40133000 phys=0x4026c000
+      Mapping page 49 at virt=0x40134000 phys=0x4026d000
+      Mapping page 50 at virt=0x40135000 phys=0x4026e000
+      Mapping page 51 at virt=0x40136000 phys=0x4026f000
+      Mapping page 52 at virt=0x40137000 phys=0x40270000
+      Mapping page 53 at virt=0x40138000 phys=0x40271000
+      Mapping page 54 at virt=0x40139000 phys=0x40272000
+      Mapping page 55 at virt=0x4013a000 phys=0x40273000
+      Mapping page 56 at virt=0x4013b000 phys=0x40274000
+      Mapping page 57 at virt=0x4013c000 phys=0x40275000
+      Mapping page 58 at virt=0x4013d000 phys=0x40276000
+      Mapping page 59 at virt=0x4013e000 phys=0x40277000
+      Mapping page 60 at virt=0x4013f000 phys=0x40278000
+      Mapping page 61 at virt=0x40140000 phys=0x40279000
+      Mapping page 62 at virt=0x40141000 phys=0x4027a000
+      Mapping page 63 at virt=0x40142000 phys=0x4027b000
+      Mapping page 64 at virt=0x40143000 phys=0x4027c000
+      Mapping page 65 at virt=0x40144000 phys=0x4027d000
+      Mapping page 66 at virt=0x40145000 phys=0x4027e000
+      Mapping page 67 at virt=0x40146000 phys=0x4027f000
+    Mapped 68 pages (272 KB)
+  Total: 71 pages mapped for all LOAD segments
+  Mapping stack: 0x400bf000 - 0x400ff000
+  Entry point:     0x40100000
+  Stack:           0x400bf000 - 0x400ff000 (256 KB)
+  ✓ Root task ready for EL0 transition
+
+[root_task] Creating boot info for runtime services...
+[boot_info] Created userspace boot info:
+  Devices:  4 regions
+  Untyped:  1 regions
+  RAM size: 128 MB
+  Boot info phys:  0x40448000
+  Boot info virt:  0x7ffff000
+  Boot info size:  11088 bytes
+  ✓ Boot info mapped for userspace
+  Creating CNode for capability space...
+  CNode:           0x4044a000 (256 slots)
+  Creating root TCB...
+  Root TCB frame:  0x4044b000
+  Initializing TCB...
+  Writing TCB...
+  Setting state to Running...
+  Setting saved_ttbr0...
+  Registering with scheduler...
+  Root TCB:        0x4044b000 ✓
+
+[root_task] Transitioning to EL0...
+  Entry:    0x40100000
+  Stack:    0x400ff000
+  TTBR0:    0x40441000
+  About to call transition_to_el0...
+  VBAR_EL1: 0x40400800
+  CurrentEL before: 0x4
+  Cache flushed
+  First instruction at phys 0x40239000: 0xa9ba7bfd
+  Expected: 0xa9ba7bfd (stp x29, x30, [sp, #-0x60]!)
+  User PT is at phys 0x40441000
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40146368, len=50, ttbr0=0x40441000
+    $$╲   $$╲                    $$╲       
+[syscall] sys_debug_print: ptr=0x4014639a, len=50, ttbr0=0x40441000
+    $$ │ $$  │                   $$ │      
+[syscall] sys_debug_print: ptr=0x401463cc, len=54, ttbr0=0x40441000
+    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      
+[syscall] sys_debug_print: ptr=0x40146402, len=56, ttbr0=0x40441000
+    $$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │      
+[syscall] sys_debug_print: ptr=0x4014643a, len=50, ttbr0=0x40441000
+    $$  $$<   $$$$$$$ │ $$$$$$$ │$$ │      
+[syscall] sys_debug_print: ptr=0x4014646c, len=56, ttbr0=0x40441000
+    $$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │      
+[syscall] sys_debug_print: ptr=0x401464a4, len=60, ttbr0=0x40441000
+    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ 
+[syscall] sys_debug_print: ptr=0x401464e0, len=64, ttbr0=0x40441000
+    ╲__│  ╲__│╲_______│ ╲_______│╲________│
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x40146520, len=30, ttbr0=0x40441000
+  KaaL Root Task (EL0) v0.1.0
+[syscall] sys_debug_print: ptr=0x4014653e, len=39, ttbr0=0x40441000
+  Chapter 7: Root Task & Boot Protocol
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40146565, len=40, ttbr0=0x40441000
+[root_task] Hello from userspace (EL0)!
+[syscall] sys_debug_print: ptr=0x4014658d, len=51, ttbr0=0x40441000
+[root_task] Syscalls working: sys_print functional
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x401465c0, len=26, ttbr0=0x40441000
+  Chapter 7: COMPLETE ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x401035af, len=51, ttbr0=0x40441000
+  Chapter 9 Phase 1: Testing Capability Broker API
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401035e2, len=46, ttbr0=0x40441000
+[root_task] Initializing Capability Broker...
+[syscall] sys_debug_print: ptr=0x40103610, len=36, ttbr0=0x40441000
+  ✓ Capability Broker initialized
+[syscall] sys_debug_print: ptr=0x40103634, len=53, ttbr0=0x40441000
+
+[root_task] Test 1: Allocating memory via broker...
+[syscall] sys_debug_print: ptr=0x40103669, len=33, ttbr0=0x40441000
+  ✓ Allocated 4096 bytes at: 0x[syscall] sys_debug_print: ptr=0x400fce70, len=16, ttbr0=0x40441000
+000000004044c000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010368a, len=14, ttbr0=0x40441000
+    Cap slot: [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401036b7, len=59, ttbr0=0x40441000
+
+[root_task] Test 2: Requesting UART0 device via broker...
+[syscall] sys_debug_print: ptr=0x401036f2, len=30, ttbr0=0x40441000
+  ✓ UART0 device allocated:
+[syscall] sys_debug_print: ptr=0x40103710, len=17, ttbr0=0x40441000
+    MMIO base: 0x[syscall] sys_debug_print: ptr=0x400fce70, len=16, ttbr0=0x40441000
+0000000009000000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103721, len=15, ttbr0=0x40441000
+    MMIO size: [syscall] sys_debug_print: ptr=0x400fce4b, len=1, ttbr0=0x40441000
+4[syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+9[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+6[syscall] sys_debug_print: ptr=0x401032df, len=7, ttbr0=0x40441000
+ bytes
+[syscall] sys_debug_print: ptr=0x40103730, len=13, ttbr0=0x40441000
+    IRQ cap: [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103759, len=57, ttbr0=0x40441000
+
+[root_task] Test 3: Creating IPC endpoint via broker...
+[syscall] sys_debug_print: ptr=0x40103792, len=28, ttbr0=0x40441000
+  ✓ IPC endpoint created:
+[syscall] sys_debug_print: ptr=0x4010368a, len=14, ttbr0=0x40441000
+    Cap slot: [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401037ae, len=17, ttbr0=0x40441000
+    Endpoint ID: [syscall] sys_debug_print: ptr=0x4010301c, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401037de, len=52, ttbr0=0x40441000
+
+[root_task] Test 4: Requesting multiple devices...
+[syscall] sys_debug_print: ptr=0x40103812, len=24, ttbr0=0x40441000
+  → Requesting RTC...
+[syscall] sys_debug_print: ptr=0x4010382a, len=20, ttbr0=0x40441000
+    ✓ RTC MMIO: 0x[syscall] sys_debug_print: ptr=0x400fce70, len=16, ttbr0=0x40441000
+000000000a000000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103859, len=26, ttbr0=0x40441000
+  → Requesting Timer...
+[syscall] sys_debug_print: ptr=0x40103873, len=22, ttbr0=0x40441000
+    ✓ Timer MMIO: 0x[syscall] sys_debug_print: ptr=0x400fce70, len=16, ttbr0=0x40441000
+000000000a003000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x401038a6, len=58, ttbr0=0x40441000
+  Chapter 9 Phase 1: Capability Broker Tests Complete ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x40103161, len=42, ttbr0=0x40441000
+  Chapter 9 Phase 2: Testing IPC Syscalls
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010318b, len=37, ttbr0=0x40441000
+[root_task] Test 1: IPC Send syscall
+[syscall] sys_debug_print: ptr=0x401031b0, len=64, ttbr0=0x40441000
+  → Calling sys_send(endpoint=102, msg_ptr=0x1000, len=18)...
+[syscall] sys_debug_print: ptr=0x4010323d, len=35, ttbr0=0x40441000
+  ✗ sys_send returned error (-1)
+[syscall] sys_debug_print: ptr=0x40103260, len=38, ttbr0=0x40441000
+
+[root_task] Test 2: IPC Recv syscall
+[syscall] sys_debug_print: ptr=0x40103286, len=65, ttbr0=0x40441000
+  → Calling sys_recv(endpoint=102, buf_ptr=0x2000, len=256)...
+[syscall] sys_debug_print: ptr=0x401032e6, len=35, ttbr0=0x40441000
+  ✗ sys_recv returned error (-1)
+[syscall] sys_debug_print: ptr=0x40103309, len=44, ttbr0=0x40441000
+
+[root_task] Test 3: IPC Call syscall (RPC)
+[syscall] sys_debug_print: ptr=0x40103335, len=64, ttbr0=0x40441000
+  → Calling sys_call(endpoint=102, req_len=7, rep_len=256)...
+[syscall] sys_debug_print: ptr=0x4010337c, len=24, ttbr0=0x40441000
+  ✓ sys_call returned [syscall] sys_debug_print: ptr=0x4010301c, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x401033a4, len=16, ttbr0=0x40441000
+ bytes in reply
+[syscall] sys_debug_print: ptr=0x401033e7, len=39, ttbr0=0x40441000
+
+[root_task] Test 4: IPC Reply syscall
+[syscall] sys_debug_print: ptr=0x4010340e, len=58, ttbr0=0x40441000
+  → Calling sys_reply(reply_cap=200, msg_ptr=0x3000)...
+[syscall] sys_debug_print: ptr=0x4010344d, len=37, ttbr0=0x40441000
+  ✓ sys_reply returned success (0)
+[syscall] sys_debug_print: ptr=0x401034ae, len=53, ttbr0=0x40441000
+
+[root_task] Test 5: Error handling (invalid params)
+[syscall] sys_debug_print: ptr=0x401034e3, len=53, ttbr0=0x40441000
+  → Calling sys_send with invalid endpoint=9999...
+[syscall] sys_debug_print: ptr=0x40103542, len=57, ttbr0=0x40441000
+  ✓ Correctly returned error (-1) for invalid endpoint
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010357b, len=52, ttbr0=0x40441000
+  Chapter 9 Phase 2: IPC Syscall Tests Complete ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010390d, len=51, ttbr0=0x40441000
+  Chapter 9 Phase 2: Testing Notification Syscalls
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103940, len=55, ttbr0=0x40441000
+[notification] Test 1: Creating notification object...
+[syscall] sys_debug_print: ptr=0x40103977, len=39, ttbr0=0x40441000
+  ✓ Notification created at cap slot [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010399e, len=53, ttbr0=0x40441000
+[notification] Test 2: Polling empty notification...
+[syscall] sys_debug_print: ptr=0x401039d3, len=35, ttbr0=0x40441000
+  ✓ Poll returned 0 (no signals)
+[syscall] sys_debug_print: ptr=0x401039f6, len=64, ttbr0=0x40441000
+[notification] Test 3: Signaling notification with badge 0x5...
+[syscall] sys_debug_print: ptr=0x40103a36, len=23, ttbr0=0x40441000
+  ✓ Signal succeeded
+[syscall] sys_debug_print: ptr=0x40103a4d, len=56, ttbr0=0x40441000
+[notification] Test 4: Polling signaled notification...
+[syscall] sys_debug_print: ptr=0x40103a85, len=40, ttbr0=0x40441000
+  ✓ Poll returned 0x5 (correct badge)
+[syscall] sys_debug_print: ptr=0x40103aad, len=60, ttbr0=0x40441000
+[notification] Test 5: Polling again (should be cleared)...
+[syscall] sys_debug_print: ptr=0x40103ae9, len=40, ttbr0=0x40441000
+  ✓ Poll returned 0 (signals cleared)
+[syscall] sys_debug_print: ptr=0x40103b11, len=51, ttbr0=0x40441000
+[notification] Test 6: Testing badge coalescing...
+[syscall] sys_debug_print: ptr=0x40103b44, len=53, ttbr0=0x40441000
+  ✓ Badge coalescing works (0x1 | 0x2 | 0x4 = 0x7)
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x40103b79, len=31, ttbr0=0x40441000
+  Notification Tests: PASS ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x40103c65, len=47, ttbr0=0x40441000
+  Chapter 9 Phase 2: Testing Shared Memory IPC
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103c94, len=58, ttbr0=0x40441000
+[ipc] Test 1: Allocating shared memory for ring buffer...
+[syscall] sys_debug_print: ptr=0x40103cce, len=41, ttbr0=0x40441000
+  ✓ Shared memory allocated at phys: 0x[syscall] sys_debug_print: ptr=0x400fce70, len=16, ttbr0=0x40441000
+000000004044f000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103cf7, len=61, ttbr0=0x40441000
+[ipc] Test 2: Creating notification objects for signaling...
+[syscall] sys_debug_print: ptr=0x40103d34, len=38, ttbr0=0x40441000
+  ✓ Consumer notification: cap_slot [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103d5a, len=38, ttbr0=0x40441000
+  ✓ Producer notification: cap_slot [syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+3[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103d80, len=57, ttbr0=0x40441000
+
+[ipc] Test 3: Verifying notification-based signaling...
+[syscall] sys_debug_print: ptr=0x40103db9, len=63, ttbr0=0x40441000
+  → Producer signals consumer (badge=0x1: data available)...
+[syscall] sys_debug_print: ptr=0x40103df8, len=36, ttbr0=0x40441000
+  ✓ Consumer received signal: 0x1
+[syscall] sys_debug_print: ptr=0x40103e1c, len=64, ttbr0=0x40441000
+  → Consumer signals producer (badge=0x2: space available)...
+[syscall] sys_debug_print: ptr=0x40103e5c, len=36, ttbr0=0x40441000
+  ✓ Producer received signal: 0x2
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x40103e80, len=49, ttbr0=0x40441000
+  Shared Memory IPC Infrastructure: VERIFIED ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103eb1, len=15, ttbr0=0x40441000
+[ipc] Summary:
+[syscall] sys_debug_print: ptr=0x40103ec0, len=37, ttbr0=0x40441000
+  ✓ Shared memory allocation works
+[syscall] sys_debug_print: ptr=0x40103ee5, len=34, ttbr0=0x40441000
+  ✓ Notification creation works
+[syscall] sys_debug_print: ptr=0x40103f07, len=42, ttbr0=0x40441000
+  ✓ Producer→Consumer signaling works
+[syscall] sys_debug_print: ptr=0x40103f31, len=42, ttbr0=0x40441000
+  ✓ Consumer→Producer signaling works
+[syscall] sys_debug_print: ptr=0x40103f5b, len=49, ttbr0=0x40441000
+  ✓ Ready for process-level IPC implementation
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103f8c, len=63, ttbr0=0x40441000
+[ipc] Note: Full process spawning with shared memory requires:
+[syscall] sys_debug_print: ptr=0x40103fcb, len=53, ttbr0=0x40441000
+  1. Spawn sender and receiver as separate processes
+[syscall] sys_debug_print: ptr=0x40104000, len=56, ttbr0=0x40441000
+  2. Map shared memory into both process address spaces
+[syscall] sys_debug_print: ptr=0x40104038, len=54, ttbr0=0x40441000
+  3. Pass notification capabilities to both processes
+[syscall] sys_debug_print: ptr=0x4010406e, len=51, ttbr0=0x40441000
+  4. Initialize SharedRing in mapped shared memory
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x401465da, len=50, ttbr0=0x40441000
+  Chapter 9 Phase 4: Component Loading & Spawning
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4014660c, len=32, ttbr0=0x40441000
+[root_task] Component Registry:
+[syscall] sys_debug_print: ptr=0x4014662c, len=24, ttbr0=0x40441000
+  → Total components: [syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+9[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40146644, len=28, ttbr0=0x40441000
+  → Autostart components: [syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+4[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40146660, len=45, ttbr0=0x40441000
+[root_task] Spawning autostart components...
+[syscall] sys_debug_print: ptr=0x401469f6, len=15, ttbr0=0x40441000
+  → Spawning [syscall] sys_debug_print: ptr=0x401145f6, len=11, ttbr0=0x40441000
+system_init[syscall] sys_debug_print: ptr=0x40146a05, len=4, ttbr0=0x40441000
+...
+[syscall] sys_debug_print: ptr=0x4010301d, len=17, ttbr0=0x40441000
+[loader] ELF for [syscall] sys_debug_print: ptr=0x401145f6, len=11, ttbr0=0x40441000
+system_init[syscall] sys_debug_print: ptr=0x4010302e, len=2, ttbr0=0x40441000
+:
+[syscall] sys_debug_print: ptr=0x40103030, len=11, ttbr0=0x40441000
+  Entry: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303c, len=12, ttbr0=0x40441000
+  Segments:
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x4010301c, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000001c8[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000001c8[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x400fcb68, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000002001c8[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000001db[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000001db[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103048, len=17, ttbr0=0x40441000
+  Total range: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103059, len=5, ttbr0=0x40441000
+ - 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000002003a3[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010305e, len=23, ttbr0=0x40441000
+[loader] Entry point 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103075, len=24, ttbr0=0x40441000
+: first instruction = 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+000000009400006f[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x40458000, priority=200
+[syscall] process_create: set priority 200 for component
+[syscall] process_create: enqueuing TCB at 0x4045c000
+[sched] enqueue: adding TCB at 0x4045c000 to scheduler
+[sched] enqueue: TCB at 0x4045c000 has priority 200
+[syscall] process_create: SUCCESS - PID=0x4045c000
+[syscall] sys_debug_print: ptr=0x40146a09, len=8, ttbr0=0x40441000
+    ✓ [syscall] sys_debug_print: ptr=0x401145f6, len=11, ttbr0=0x40441000
+system_init[syscall] sys_debug_print: ptr=0x40146a11, len=15, ttbr0=0x40441000
+ spawned (PID: [syscall] sys_debug_print: ptr=0x400fce51, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce50, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce4f, len=1, ttbr0=0x40441000
+7[syscall] sys_debug_print: ptr=0x400fce4e, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x400fce4d, len=1, ttbr0=0x40441000
+3[syscall] sys_debug_print: ptr=0x400fce4c, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce4b, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+9[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+6[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x40146879, len=2, ttbr0=0x40441000
+)
+[syscall] sys_debug_print: ptr=0x401469f6, len=15, ttbr0=0x40441000
+  → Spawning [syscall] sys_debug_print: ptr=0x40114660, len=13, ttbr0=0x40441000
+serial_driver[syscall] sys_debug_print: ptr=0x40146a05, len=4, ttbr0=0x40441000
+...
+[syscall] sys_debug_print: ptr=0x40146a20, len=24, ttbr0=0x40441000
+    ✗ Failed to spawn [syscall] sys_debug_print: ptr=0x40114660, len=13, ttbr0=0x40441000
+serial_driver[syscall] sys_debug_print: ptr=0x40146a38, len=2, ttbr0=0x40441000
+: [syscall] sys_debug_print: ptr=0x40146a43, len=9, ttbr0=0x40441000
+no binary[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401469f6, len=15, ttbr0=0x40441000
+  → Spawning [syscall] sys_debug_print: ptr=0x401146e0, len=12, ttbr0=0x40441000
+timer_driver[syscall] sys_debug_print: ptr=0x40146a05, len=4, ttbr0=0x40441000
+...
+[syscall] sys_debug_print: ptr=0x40146a20, len=24, ttbr0=0x40441000
+    ✗ Failed to spawn [syscall] sys_debug_print: ptr=0x401146e0, len=12, ttbr0=0x40441000
+timer_driver[syscall] sys_debug_print: ptr=0x40146a38, len=2, ttbr0=0x40441000
+: [syscall] sys_debug_print: ptr=0x40146a43, len=9, ttbr0=0x40441000
+no binary[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401469f6, len=15, ttbr0=0x40441000
+  → Spawning [syscall] sys_debug_print: ptr=0x40114758, len=15, ttbr0=0x40441000
+process_manager[syscall] sys_debug_print: ptr=0x40146a05, len=4, ttbr0=0x40441000
+...
+[syscall] sys_debug_print: ptr=0x40146a20, len=24, ttbr0=0x40441000
+    ✗ Failed to spawn [syscall] sys_debug_print: ptr=0x40114758, len=15, ttbr0=0x40441000
+process_manager[syscall] sys_debug_print: ptr=0x40146a38, len=2, ttbr0=0x40441000
+: [syscall] sys_debug_print: ptr=0x40146a43, len=9, ttbr0=0x40441000
+no binary[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4014668d, len=35, ttbr0=0x40441000
+  Component Spawning: COMPLETE ✓
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401466b0, len=46, ttbr0=0x40441000
+[root_task] Yielding to spawned components...
+[sched] enqueue: adding TCB at 0x4044b000 to scheduler
+[sched] enqueue: TCB at 0x4044b000 has priority 128
+[sched] schedule: looking for next thread
+[sched] schedule: highest priority with threads = 128
+[sched] schedule: picked TCB at 0x4044b000 with priority 128
+[syscall] sys_debug_print: ptr=0x401466de, len=34, ttbr0=0x40441000
+[root_task] Back from components!
+[syscall] sys_debug_print: ptr=0x40146700, len=45, ttbr0=0x40441000
+[root_task] Component switching working! ✓
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4014672d, len=41, ttbr0=0x40441000
+  Chapter 9 Phase 5: Inter-Component IPC
+[syscall] sys_debug_print: ptr=0x401030af, len=178, ttbr0=0x40441000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40146756, len=52, ttbr0=0x40441000
+[phase5] Step 1: Initializing IPC Channel Broker...
+[syscall] sys_debug_print: ptr=0x4014678a, len=46, ttbr0=0x40441000
+  → Broker is part of runtime IPC subsystem
+[syscall] sys_debug_print: ptr=0x401467b8, len=59, ttbr0=0x40441000
+  → Manages channel establishment with kernel privileges
+[syscall] sys_debug_print: ptr=0x401467f3, len=48, ttbr0=0x40441000
+  ✓ Initialized with capacity for 32 channels
+[syscall] sys_debug_print: ptr=0x40146823, len=53, ttbr0=0x40441000
+
+[phase5] Step 2: Spawning IPC producer component...
+[syscall] sys_debug_print: ptr=0x4010301d, len=17, ttbr0=0x40441000
+[loader] ELF for [syscall] sys_debug_print: ptr=0x40125280, len=12, ttbr0=0x40441000
+ipc_producer[syscall] sys_debug_print: ptr=0x4010302e, len=2, ttbr0=0x40441000
+:
+[syscall] sys_debug_print: ptr=0x40103030, len=11, ttbr0=0x40441000
+  Entry: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303c, len=12, ttbr0=0x40441000
+  Segments:
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x4010301c, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000000514[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000000514[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x400fcb68, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200518[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+000000000000043f[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+000000000000043f[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103048, len=17, ttbr0=0x40441000
+  Total range: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103059, len=5, ttbr0=0x40441000
+ - 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200957[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010305e, len=23, ttbr0=0x40441000
+[loader] Entry point 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103075, len=24, ttbr0=0x40441000
+: first instruction = 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000094000142[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4046a000, priority=60
+[syscall] process_create: set priority 60 for component
+[syscall] process_create: enqueuing TCB at 0x4046d000
+[sched] enqueue: adding TCB at 0x4046d000 to scheduler
+[sched] enqueue: TCB at 0x4046d000 has priority 60
+[syscall] process_create: SUCCESS - PID=0x4046d000
+[syscall] sys_debug_print: ptr=0x40146858, len=33, ttbr0=0x40441000
+  ✓ IPC producer spawned (PID: [syscall] sys_debug_print: ptr=0x400fce51, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce50, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce4f, len=1, ttbr0=0x40441000
+7[syscall] sys_debug_print: ptr=0x400fce4e, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x400fce4d, len=1, ttbr0=0x40441000
+3[syscall] sys_debug_print: ptr=0x400fce4c, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x400fce4b, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+5[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+9[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x40146879, len=2, ttbr0=0x40441000
+)
+[syscall] sys_debug_print: ptr=0x4014687b, len=48, ttbr0=0x40441000
+    (Channel Broker will establish IPC channel)
+[syscall] sys_debug_print: ptr=0x401468ab, len=53, ttbr0=0x40441000
+
+[phase5] Step 3: Spawning IPC consumer component...
+[syscall] sys_debug_print: ptr=0x4010301d, len=17, ttbr0=0x40441000
+[loader] ELF for [syscall] sys_debug_print: ptr=0x40135f28, len=12, ttbr0=0x40441000
+ipc_consumer[syscall] sys_debug_print: ptr=0x4010302e, len=2, ttbr0=0x40441000
+:
+[syscall] sys_debug_print: ptr=0x40103030, len=11, ttbr0=0x40441000
+  Entry: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010303c, len=12, ttbr0=0x40441000
+  Segments:
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x4010301c, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+000000000000064c[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+000000000000064c[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010308d, len=5, ttbr0=0x40441000
+    [[syscall] sys_debug_print: ptr=0x400fcb68, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x40103092, len=10, ttbr0=0x40441000
+] vaddr=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200650[syscall] sys_debug_print: ptr=0x4010309c, len=10, ttbr0=0x40441000
+ filesz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000004c1[syscall] sys_debug_print: ptr=0x401030a6, len=9, ttbr0=0x40441000
+ memsz=0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+00000000000004c1[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x40103048, len=17, ttbr0=0x40441000
+  Total range: 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103059, len=5, ttbr0=0x40441000
+ - 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200b11[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_debug_print: ptr=0x4010305e, len=23, ttbr0=0x40441000
+[loader] Entry point 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000000200000[syscall] sys_debug_print: ptr=0x40103075, len=24, ttbr0=0x40441000
+: first instruction = 0x[syscall] sys_debug_print: ptr=0x400fcb90, len=16, ttbr0=0x40441000
+0000000094000190[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4047b000, priority=70
+[syscall] process_create: set priority 70 for component
+[syscall] process_create: enqueuing TCB at 0x4047d000
+[sched] enqueue: adding TCB at 0x4047d000 to scheduler
+[sched] enqueue: TCB at 0x4047d000 has priority 70
+[syscall] process_create: SUCCESS - PID=0x4047d000
+[syscall] sys_debug_print: ptr=0x401468e0, len=33, ttbr0=0x40441000
+  ✓ IPC consumer spawned (PID: [syscall] sys_debug_print: ptr=0x400fce51, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce50, len=1, ttbr0=0x40441000
+0[syscall] sys_debug_print: ptr=0x400fce4f, len=1, ttbr0=0x40441000
+7[syscall] sys_debug_print: ptr=0x400fce4e, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x400fce4d, len=1, ttbr0=0x40441000
+4[syscall] sys_debug_print: ptr=0x400fce4c, len=1, ttbr0=0x40441000
+4[syscall] sys_debug_print: ptr=0x400fce4b, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x400fce4a, len=1, ttbr0=0x40441000
+1[syscall] sys_debug_print: ptr=0x400fce49, len=1, ttbr0=0x40441000
+2[syscall] sys_debug_print: ptr=0x400fce48, len=1, ttbr0=0x40441000
+8[syscall] sys_debug_print: ptr=0x40146879, len=2, ttbr0=0x40441000
+)
+[syscall] sys_debug_print: ptr=0x4014687b, len=48, ttbr0=0x40441000
+    (Channel Broker will establish IPC channel)
+[syscall] sys_debug_print: ptr=0x40146901, len=46, ttbr0=0x40441000
+
+[phase5] Step 4: Components ready for IPC...
+[syscall] sys_debug_print: ptr=0x4014692f, len=58, ttbr0=0x40441000
+  (Yielding to let components initialize and communicate)
+[syscall] sys_debug_print: ptr=0x4010303b, len=1, ttbr0=0x40441000
+
+[sched] enqueue: adding TCB at 0x4044b000 to scheduler
+[sched] enqueue: TCB at 0x4044b000 has priority 128
+[sched] schedule: looking for next thread
+[sched] schedule: highest priority with threads = 60
+[sched] schedule: picked TCB at 0x4046d000 with priority 60
+  Will jump to ELR=0x200000 with SP=0x80000000
+[syscall] sys_debug_print: ptr=0x200518, len=1, ttbr0=0x4046a000
+
+[syscall] sys_debug_print: ptr=0x20082b, len=178, ttbr0=0x4046a000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x2008dd, len=22, ttbr0=0x4046a000
+  IPC Producer v0.1.0
+[syscall] sys_debug_print: ptr=0x20082b, len=178, ttbr0=0x4046a000
+═══════════════════════════════════════════════════════════
+[syscall] sys_debug_print: ptr=0x200518, len=1, ttbr0=0x4046a000
+
+[syscall] sys_debug_print: ptr=0x2008f3, len=27, ttbr0=0x4046a000
+[producer] Initializing...
+[syscall] sys_debug_print: ptr=0x20090e, len=46, ttbr0=0x4046a000
+[producer] Using semantic message-passing API
+[syscall] sys_debug_print: ptr=0x200519, len=39, ttbr0=0x4046a000
+[producer] Starting message production
+[syscall] sys_debug_print: ptr=0x200540, len=49, ttbr0=0x4046a000
+[producer] Establishing channel with consumer...
+[syscall] sys_debug_print: ptr=0x200571, len=29, ttbr0=0x4046a000
+  - Target PID: 10 (assumed)
+[syscall] sys_debug_print: ptr=0x20058e, len=21, ttbr0=0x4046a000
+  - Buffer size: 4KB
+[syscall] sys_debug_print: ptr=0x2005a3, len=19, ttbr0=0x4046a000
+  - Role: Producer
+[syscall] sys_debug_print: ptr=0x20061c, len=35, ttbr0=0x4046a000
+  ✗ Failed to establish channel: [syscall] sys_debug_print: ptr=0x20093c, len=27, ttbr0=0x4046a000
+Failed to establish channel[syscall] sys_debug_print: ptr=0x200518, len=1, ttbr0=0x4046a000
+
+[syscall] sys_debug_print: ptr=0x20063f, len=51, ttbr0=0x4046a000
+[producer] Falling back to direct memory access...
+[syscall] sys_debug_print: ptr=0x200672, len=36, ttbr0=0x4046a000
+
+[producer] Configuration complete:
+[syscall] sys_debug_print: ptr=0x200696, len=24, ttbr0=0x4046a000
+  - Shared memory ready
+[syscall] sys_debug_print: ptr=0x2006ae, len=34, ttbr0=0x4046a000
+  - Notification capability ready
+[syscall] sys_debug_print: ptr=0x200518, len=1, ttbr0=0x4046a000
+
+[syscall] sys_debug_print: ptr=0x2006d0, len=45, ttbr0=0x4046a000
+[producer] Initializing SharedRing buffer...
+[exception] Unhandled EL0 exception:
+  EC: 0x24, ESR: 0x92000045
+  ELR: 0x2002e8, FAR: 0x80000000

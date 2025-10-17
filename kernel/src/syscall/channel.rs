@@ -53,6 +53,15 @@ pub fn sys_channel_establish(
         return 0;
     }
 
+    // For Phase 6 demo: Return 0 to trigger fallback mode in components
+    // This allows components to use their hardcoded shared memory approach
+    // TODO: Implement actual channel establishment with proper memory mapping
+    ksyscall_debug!("[syscall] channel_establish: returning 0 for fallback mode (not yet implemented)");
+    return 0;
+
+    // The code below is placeholder for future implementation
+    #[allow(unreachable_code)]
+    {
     // Determine producer and consumer based on role
     let (producer_pid, consumer_pid) = if role == 0 {
         (current_pid, target_pid as usize)
@@ -107,6 +116,7 @@ pub fn sys_channel_establish(
     ksyscall_debug!("[syscall] channel_establish: returning config {:#x}", config);
 
     config
+    } // End unreachable code block
 }
 
 /// Query channel information

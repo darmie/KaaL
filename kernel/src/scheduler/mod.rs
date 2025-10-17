@@ -149,10 +149,11 @@ pub unsafe fn enqueue(tcb: *mut TCB) {
 
     // Check if scheduler is initialized
     if SCHEDULER.is_none() {
-        crate::ksched_debug!("[sched] enqueue: scheduler not initialized, skipping TCB {}", (*tcb).tid());
+        crate::kprintln!("[sched] enqueue: scheduler not initialized, skipping TCB at {:#x}", tcb as usize);
         return; // Silently skip if not initialized
     }
 
+    crate::kprintln!("[sched] enqueue: adding TCB at {:#x} to scheduler", tcb as usize);
     scheduler().enqueue(tcb);
 }
 

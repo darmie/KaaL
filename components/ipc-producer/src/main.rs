@@ -15,6 +15,7 @@ use kaal_sdk::{
     component::{Component, ServiceBase},
     syscall,
     message::{Channel, ChannelConfig},
+    channel_setup::{establish_channel, ChannelRole},
 };
 
 // Declare this as a service component
@@ -48,58 +49,102 @@ impl Component for IpcProducer {
         unsafe {
             syscall::print("[producer] Starting message production\n");
 
-            // Create our own notification for signaling
-            syscall::print("[producer] Creating notification capability...\n");
-            let producer_notify = match syscall::notification_create() {
-                Ok(slot) => {
-                    syscall::print("  ✓ Created notification at slot: ");
-                    // Can't print number easily, just indicate success
+            // Step 1: Establish channel with consumer
+            // For demo, we'll use a hardcoded consumer PID (would be discovered in real system)
+            let consumer_pid = 10; // Assuming consumer is PID 10
+            let buffer_size = 0x1000; // 4KB buffer
+
+            syscall::print("[producer] Establishing channel with consumer...\n");
+            syscall::print("  - Target PID: 10 (assumed)\n");
+            syscall::print("  - Buffer size: 4KB\n");
+            syscall::print("  - Role: Producer\n");
+
+            let channel_config = match establish_channel(consumer_pid, buffer_size, ChannelRole::Producer) {
+                Ok(config) => {
+                    syscall::print("  ✓ Channel established!\n");
+                    syscall::print("    - Buffer at: 0x");
+                    // Print buffer address in hex (simplified)
+                    if config.buffer_addr != 0 {
+                        syscall::print("MAPPED\n");
+                    } else {
+                        syscall::print("NULL\n");
+                    }
+                    syscall::print("    - Channel ID: ");
                     syscall::print("X\n");
-                    slot
+                    syscall::print("    - Notification cap: ");
+                    syscall::print("X\n");
+                    config
                 }
-                Err(_) => {
-                    syscall::print("  ✗ Failed to create notification\n");
-                    loop { syscall::yield_now(); }
+                Err(e) => {
+                    syscall::print("  ✗ Failed to establish channel: ");
+                    syscall::print(e);
+                    syscall::print("\n");
+
+                    // Fall back to direct memory access for demo
+                    syscall::print("[producer] Falling back to direct memory access...\n");
+
+                    // Create our own notification
+                    let producer_notify = match syscall::notification_create() {
+                        Ok(slot) => slot,
+                        Err(_) => {
+                            syscall::print("  ✗ Failed to create notification\n");
+                            loop { syscall::yield_now(); }
+                        }
+                    };
+
+                    // Use hardcoded shared memory
+                    kaal_sdk::channel_setup::ChannelConfig {
+                        buffer_addr: 0x80000000,
+                        buffer_size: 0x1000,
+                        notification_cap: producer_notify,
+                        memory_cap: None,
+                        channel_id: 0,
+                        role: ChannelRole::Producer,
+                    }
                 }
             };
 
-            // For demo: we'll use hardcoded shared memory location
-            // In real implementation, this would be discovered or passed
-            let shared_mem_virt = 0x80000000u64; // Hardcoded for demo
-
-            syscall::print("[producer] Configuration:\n");
-            syscall::print("  - Shared memory at: 0x80000000 (hardcoded)\n");
-            syscall::print("  - Producer notification created\n");
+            syscall::print("\n[producer] Configuration complete:\n");
+            syscall::print("  - Shared memory ready\n");
+            syscall::print("  - Notification capability ready\n");
             syscall::print("\n");
 
             // Initialize the shared ring buffer
             syscall::print("[producer] Initializing SharedRing buffer...\n");
 
             // Write a magic value to shared memory to test it's working
-            let shared_ptr = shared_mem_virt as *mut u32;
-            *shared_ptr = 0xDEADBEEF;
+            let shared_ptr = channel_config.buffer_addr as *mut u32;
+            if shared_ptr as usize != 0 {
+                *shared_ptr = 0xDEADBEEF;
+                syscall::print("[producer] Wrote magic value 0xDEADBEEF to shared memory\n");
 
-            syscall::print("[producer] Wrote magic value 0xDEADBEEF to shared memory\n");
+                // Write test data to shared memory
+                syscall::print("[producer] Writing test data to shared memory...\n");
+                for i in 0..5 {
+                    // Write message to shared memory (simplified - no ring buffer yet)
+                    let msg_ptr = (channel_config.buffer_addr + 4 + (i * 4)) as *mut u32;
+                    *msg_ptr = 0x1000 + i as u32;
 
-            // For this demo, we'll just write test data to shared memory
-            // In real implementation, we'd exchange capabilities with consumer first
-            syscall::print("[producer] Writing test data to shared memory...\n");
-            for i in 0..5 {
-                // Write message to shared memory (simplified - no ring buffer yet)
-                let msg_ptr = (shared_mem_virt + 4 + (i * 4)) as *mut u32;
-                *msg_ptr = 0x1000 + i as u32;
+                    syscall::print("  → Wrote test message ");
+                    syscall::print("X\n");
 
-                syscall::print("  → Wrote test message ");
-                syscall::print("X\n");
+                    // Signal consumer if we have notification capability
+                    if channel_config.notification_cap != 0 {
+                        let _ = syscall::signal(channel_config.notification_cap, 1 << i);
+                    }
 
-                // Yield to let consumer see the data
-                for _ in 0..5 {
-                    syscall::yield_now();
+                    // Yield to let consumer see the data
+                    for _ in 0..5 {
+                        syscall::yield_now();
+                    }
                 }
-            }
 
-            syscall::print("[producer] All test data written!\n");
-            syscall::print("\n");
+                syscall::print("[producer] All test data written!\n");
+                syscall::print("\n");
+            } else {
+                syscall::print("[producer] Warning: No valid shared memory buffer!\n");
+                syscall::print("[producer] Channel establishment may have failed.\n");
+            }
         }
 
         // Continue yielding

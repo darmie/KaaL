@@ -74,7 +74,9 @@ impl Scheduler {
         }
 
         let priority = (*tcb).priority() as usize;
+        crate::kprintln!("[sched] enqueue: TCB at {:#x} has priority {}", tcb as usize, priority);
         if priority >= NUM_PRIORITIES {
+            crate::kprintln!("[sched] enqueue: invalid priority {} >= {}", priority, NUM_PRIORITIES);
             return; // Invalid priority
         }
 
@@ -114,18 +116,16 @@ impl Scheduler {
     /// Returns the highest-priority runnable thread, or the idle thread
     /// if no threads are ready.
     pub unsafe fn schedule(&mut self) -> *mut TCB {
-        crate::ksched_debug!("[sched] schedule: looking for next thread");
-        crate::ksched_debug!("[sched] priority_bitmap: [{:#018x}, {:#018x}, {:#018x}, {:#018x}]",
-                         self.priority_bitmap[0], self.priority_bitmap[1],
-                         self.priority_bitmap[2], self.priority_bitmap[3]);
+        // Debug: show what's available to schedule
+        crate::kprintln!("[sched] schedule: looking for next thread");
 
         // Find highest priority with runnable threads
         if let Some(priority) = self.find_highest_priority() {
-            crate::ksched_debug!("[sched] schedule: found priority {} with ready threads", priority);
+            crate::kprintln!("[sched] schedule: highest priority with threads = {}", priority);
             // Dequeue from that priority level
             if let Some(tcb) = self.ready_queues[priority as usize].dequeue_head() {
-                crate::ksched_debug!("[sched] schedule: dequeued TCB {} at {:#x}",
-                               (*tcb).tid(), tcb as usize);
+                crate::kprintln!("[sched] schedule: picked TCB at {:#x} with priority {}",
+                                 tcb as usize, priority);
                 // Update bitmap if queue now empty
                 if self.ready_queues[priority as usize].is_empty() {
                     self.clear_priority_bit(priority);
