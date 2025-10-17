@@ -275,28 +275,15 @@ impl ComponentLoader {
             }
         }
 
-        // Debug: Show what's at the entry point and the actual _start
+        // Debug: Show what's at the entry point
         let entry_offset = elf_info.entry_point - base_vaddr;
         let entry_ptr = (virt_mem + entry_offset) as *const u32;
         let entry_instr = unsafe { *entry_ptr };
-        crate::sys_print("[loader] Entry stub at 0x");
+        crate::sys_print("[loader] Entry point 0x");
         crate::print_hex(elf_info.entry_point);
-        crate::sys_print(": 0x");
+        crate::sys_print(": first instruction = 0x");
         crate::print_hex(entry_instr as usize);
-        crate::sys_print(" (bl -12 to _start at 0x");
-        crate::print_hex(elf_info.entry_point - 12);
-        crate::sys_print(")\n");
-
-        // Show what's at _start (12 bytes before entry)
-        if entry_offset >= 12 {
-            let start_ptr = ((virt_mem + entry_offset) as *const u32).sub(3);
-            let start_instr = unsafe { *start_ptr };
-            crate::sys_print("[loader] _start at 0x");
-            crate::print_hex(elf_info.entry_point - 12);
-            crate::sys_print(": 0x");
-            crate::print_hex(start_instr as usize);
-            crate::sys_print("\n");
-        }
+        crate::sys_print("\n");
 
         // 9. Unmap the memory (we're done writing to it)
         crate::sys_memory_unmap(virt_mem, process_size);
@@ -315,6 +302,7 @@ impl ComponentLoader {
             elf_info.min_vaddr,  // Virtual address where code should be mapped
             process_size,
             stack_mem,
+            desc.priority,  // Pass the component priority from manifest
         );
 
         if pid == usize::MAX {

@@ -45,8 +45,8 @@
 name = "system_init"
 binary = "system-init"
 type = "service"
-priority = 255  # Highest priority
-autostart = true
+priority = 100  # Lowered to allow other components to run
+autostart = true  # Re-enabled now that priorities work
 capabilities = [
     "process:create",      # Can spawn other processes
     "memory:allocate",     # Can allocate memory
@@ -133,8 +133,8 @@ capabilities = [
 name = "test_minimal"
 binary = "test-minimal"
 type = "service"
-priority = 128
-autostart = false  # Spawned on-demand for testing
+priority = 50  # High priority to run before system_init (lower = higher priority)
+autostart = true  # Enable for debugging component execution
 capabilities = []
 
 # Applications - User-facing programs

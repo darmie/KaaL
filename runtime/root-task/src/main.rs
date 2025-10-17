@@ -25,6 +25,9 @@ mod elf;
 mod elf_xmas;
 mod generated;
 
+// Import ComponentError for error handling
+use component_loader::ComponentError;
+
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;
 const SYS_CAP_ALLOCATE: usize = 0x10;
@@ -180,6 +183,7 @@ unsafe fn sys_process_create(
     code_vaddr: usize,
     code_size: usize,
     stack_phys: usize,
+    priority: u8,  // Added priority parameter
 ) -> usize {
     let result: usize;
     core::arch::asm!(
@@ -192,6 +196,7 @@ unsafe fn sys_process_create(
         "mov x5, {code_vaddr}",
         "mov x6, {code_size}",
         "mov x7, {stack_phys}",
+        "mov x9, {priority}",     // Pass priority in x9
         "svc #0",
         "mov {result}, x0",
         syscall_num = in(reg) SYS_PROCESS_CREATE,
@@ -203,6 +208,7 @@ unsafe fn sys_process_create(
         code_vaddr = in(reg) code_vaddr,
         code_size = in(reg) code_size,
         stack_phys = in(reg) stack_phys,
+        priority = in(reg) priority as usize,  // Pass priority
         result = out(reg) result,
         out("x8") _,
         out("x0") _,
@@ -213,6 +219,7 @@ unsafe fn sys_process_create(
         out("x5") _,
         out("x6") _,
         out("x7") _,
+        out("x9") _,  // Added x9 for priority
     );
     result
 }
@@ -688,35 +695,51 @@ pub extern "C" fn _start() -> ! {
         sys_print("\n");
         sys_print("\n");
 
-        // Spawn system_init (first component)
-        sys_print("[root_task] Spawning system_init component...\n");
-        match loader.spawn("system_init") {
-            Ok(pid) => {
-                sys_print("  ✓ system_init spawned successfully (PID: ");
-                print_number(pid);
-                sys_print(")\n");
-                sys_print("\n");
-                sys_print("═══════════════════════════════════════════════════════════\n");
-                sys_print("  Component Spawning: COMPLETE ✓\n");
-                sys_print("═══════════════════════════════════════════════════════════\n");
-                sys_print("\n");
+        // Spawn all autostart components
+        sys_print("[root_task] Spawning autostart components...\n");
+        for component in generated::component_registry::get_autostart_components() {
+            sys_print("  → Spawning ");
+            sys_print(component.name);
+            sys_print("...\n");
 
-                // Yield to system_init to let it run
-                sys_print("[root_task] Yielding to system_init...\n");
-                sys_yield();
-                sys_print("[root_task] Back from system_init!\n");
-            }
-            Err(_) => {
-                sys_print("  ✗ Failed to spawn system_init\n");
+            match loader.spawn(component.name) {
+                Ok(pid) => {
+                    sys_print("    ✓ ");
+                    sys_print(component.name);
+                    sys_print(" spawned (PID: ");
+                    print_number(pid);
+                    sys_print(")\n");
+                }
+                Err(e) => {
+                    sys_print("    ✗ Failed to spawn ");
+                    sys_print(component.name);
+                    sys_print(": ");
+                    match e {
+                        ComponentError::NotFound => sys_print("not found"),
+                        ComponentError::NoBinary => sys_print("no binary"),
+                        ComponentError::InvalidElf => sys_print("invalid ELF"),
+                        ComponentError::OutOfMemory => sys_print("out of memory"),
+                        ComponentError::CapabilityError => sys_print("capability error"),
+                        ComponentError::NotImplemented => sys_print("not implemented"),
+                    }
+                    sys_print("\n");
+                }
             }
         }
+        sys_print("\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("  Component Spawning: COMPLETE ✓\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("\n");
+
+        // Yield to let components run
+        sys_print("[root_task] Yielding to spawned components...\n");
+        sys_yield();
+        sys_print("[root_task] Back from components!\n");
     }
 
-    // Component spawning complete - now yield to spawned components
+    // Component spawning complete - system continues running
     unsafe {
-        sys_print("[root_task] Yielding to system_init...\n");
-        sys_yield();
-        sys_print("[root_task] Back from system_init!\n");
         sys_print("[root_task] Component switching working! ✓\n");
     }
 

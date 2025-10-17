@@ -200,7 +200,8 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(
-            args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
+            tf.x9  // Priority passed in x9
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
@@ -301,8 +302,13 @@ fn sys_debug_putchar(ch: u64) -> u64 {
 /// Uses copy_from_user to safely access userspace memory by temporarily
 /// switching to the calling process's TTBR0 page table.
 fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
+    // Debug: log the syscall (always show for debugging)
+    crate::kprintln!("[syscall] sys_debug_print: ptr={:#x}, len={}, ttbr0={:#x}",
+                    ptr, len, tf.saved_ttbr0);
+
     // Validate length (prevent abuse)
     if len > 4096 {
+        ksyscall_debug!("[syscall] sys_debug_print: string too long ({})", len);
         return u64::MAX; // Error: string too long
     }
 
@@ -313,8 +319,15 @@ fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
     // Get caller's TTBR0 from TrapFrame
     let caller_ttbr0 = tf.saved_ttbr0;
 
+    // Debug: Check if TTBR0 is valid
+    if caller_ttbr0 == 0 {
+        crate::kprintln!("[ERROR] sys_debug_print: saved_ttbr0 is 0!");
+        return u64::MAX;
+    }
+
     // Copy from userspace using TTBR0 switching
     if !unsafe { copy_from_user(ptr, &mut buffer, copy_len, caller_ttbr0) } {
+        ksyscall_debug!("[syscall] sys_debug_print: failed to copy from user");
         return u64::MAX; // Error: failed to copy from user
     }
 
@@ -323,6 +336,7 @@ fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
         crate::kprint!("{}", s);
         0 // Success
     } else {
+        ksyscall_debug!("[syscall] sys_debug_print: invalid UTF-8");
         u64::MAX // Error: invalid UTF-8
     }
 }
@@ -487,10 +501,15 @@ fn sys_process_create(
     code_vaddr: u64,
     code_size: u64,
     stack_phys: u64,
+    priority: u64,  // Added priority parameter from x9
 ) -> u64 {
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
     use crate::scheduler;
+
+    // Debug output (always show for debugging spawned components)
+    crate::kprintln!("[syscall] sys_process_create: entry={:#x}, stack={:#x}, pt={:#x}, priority={}",
+                     entry_point, stack_pointer, page_table_root, priority);
 
     // Allocate frame for TCB
     let tcb_frame = match alloc_frame() {
@@ -654,18 +673,23 @@ fn sys_process_create(
         // Initialize saved_ttbr0 in the context for context switching
         (*tcb_ptr).context_mut().saved_ttbr0 = page_table_root;
 
+        // Set the priority from the component manifest
+        // NOTE: In our scheduler, lower numbers = higher priority!
+        (*tcb_ptr).set_priority(priority as u8);
+        crate::kprintln!("[syscall] process_create: set priority {} for component", priority);
+
         // Set state to Runnable
         (*tcb_ptr).set_state(crate::objects::ThreadState::Runnable);
 
         // Add to scheduler
         // Note: scheduler::enqueue handles uninitialized scheduler gracefully
+        crate::kprintln!("[syscall] process_create: enqueuing TCB at {:#x}", tcb_ptr as usize);
         scheduler::enqueue(tcb_ptr);
 
         // TCB is now managed by scheduler
     }
 
-    ksyscall_debug!("[syscall] process_create -> PID {:#x}", pid);
-    ksyscall_debug!("[syscall] process_create: TCB created and enqueued");
+    crate::kprintln!("[syscall] process_create: SUCCESS - PID={:#x}", pid);
     pid as u64
 }
 
