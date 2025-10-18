@@ -882,8 +882,10 @@ pub extern "C" fn _start() -> ! {
                                 shared_mem_size,
                                 0x3,  // USER_DATA permissions (read|write)
                             );
-                            if map_result == 0 {
-                                sys_print("    ✓ Producer memory mapped\n");
+                            if map_result != usize::MAX {
+                                sys_print("    ✓ Producer memory mapped at 0x");
+                                print_hex(map_result);
+                                sys_print("\n");
                             } else {
                                 sys_print("    ✗ Failed to map producer memory\n");
                             }
@@ -899,8 +901,10 @@ pub extern "C" fn _start() -> ! {
                                 shared_mem_size,
                                 0x3,  // USER_DATA permissions (read|write)
                             );
-                            if map_result == 0 {
-                                sys_print("    ✓ Consumer memory mapped\n");
+                            if map_result != usize::MAX {
+                                sys_print("    ✓ Consumer memory mapped at 0x");
+                                print_hex(map_result);
+                                sys_print("\n");
                             } else {
                                 sys_print("    ✗ Failed to map consumer memory\n");
                             }

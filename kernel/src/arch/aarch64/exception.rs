@@ -223,7 +223,17 @@ global_asm!(
     // Call Rust handler
     "    bl exception_lower_el_aarch64_sync_handler",
     // No need to restore TTBR0 since we never changed it
-    // Restore context (including potentially modified syscall return value in x0)
+    // Restore system registers first (using temporary registers)
+    "    ldr x10, [sp, #248]",         // sp_el0
+    "    ldr x11, [sp, #256]",         // elr_el1
+    "    ldr x12, [sp, #264]",         // spsr_el1
+    "    ldr x13, [sp, #288]",         // ttbr0_el1
+    "    msr sp_el0, x10",
+    "    msr elr_el1, x11",
+    "    msr spsr_el1, x12",
+    "    msr ttbr0_el1, x13",
+    "    isb",                         // Synchronize context for page table switch
+    // Now restore GPRs (including x0-x3 with potentially modified syscall returns)
     "    ldp x0, x1, [sp, #0]",
     "    ldp x2, x3, [sp, #16]",
     "    ldp x4, x5, [sp, #32]",
@@ -240,15 +250,6 @@ global_asm!(
     "    ldp x26, x27, [sp, #208]",
     "    ldp x28, x29, [sp, #224]",
     "    ldr x30, [sp, #240]",
-    "    ldr x1, [sp, #248]",
-    "    ldr x2, [sp, #256]",
-    "    ldr x3, [sp, #264]",
-    "    ldr x4, [sp, #288]",          // Load saved TTBR0
-    "    msr sp_el0, x1",
-    "    msr elr_el1, x2",
-    "    msr spsr_el1, x3",
-    "    msr ttbr0_el1, x4",           // Restore user page table
-    "    isb",                         // Synchronize context for page table switch
     "    add sp, sp, #296",            // Adjusted for new stack frame size
     "    eret",
 );

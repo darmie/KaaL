@@ -914,7 +914,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
             addr
         };
 
-        ksyscall_debug!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
+        crate::kprintln!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
                   virt_addr, virt_addr + aligned_size);
 
         // Use USER_DATA preset for userspace read-write data
@@ -932,12 +932,12 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
 
             match mapper.map(page_virt, page_phys, flags, PageSize::Size4KB) {
                 Ok(()) => {
-                    ksyscall_debug!("[syscall] memory_map_into: mapped page {} virt={:#x} -> phys={:#x} (in target)",
+                    crate::kprintln!("[syscall] memory_map_into: ✓ mapped page {} virt={:#x} -> phys={:#x}",
                              i, page_virt.as_usize(), page_phys.as_usize());
                 },
                 Err(e) => {
-                    ksyscall_debug!("[syscall] memory_map_into: failed to map page {} at virt={:#x}, error={:?}",
-                             i, page_virt.as_usize(), e);
+                    crate::kprintln!("[syscall] memory_map_into: ✗ failed to map page {}: {:?}",
+                             i, e);
                     return u64::MAX;
                 }
             }
@@ -948,7 +948,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
             "dsb ishst",  // Ensure all page table writes complete
         );
 
-        ksyscall_debug!("[syscall] memory_map_into -> virt={:#x} ({} pages mapped in target)", virt_addr, num_pages);
+        crate::kprintln!("[syscall] memory_map_into: ✓ SUCCESS -> virt={:#x} ({} pages)", virt_addr, num_pages);
         virt_addr
     }
 }
