@@ -13,8 +13,7 @@
 #![no_std]
 #![no_main]
 
-// TODO: Enable when alloc conflict is resolved
-// extern crate alloc;
+extern crate alloc;
 
 use core::panic::PanicInfo;
 
@@ -757,8 +756,15 @@ pub extern "C" fn _start() -> ! {
         sys_print("  → Manages channel establishment with kernel privileges\n");
 
         // Actually initialize the broker
-        // TODO: Enable once alloc conflict is resolved
-        // kaal_ipc::broker::init_broker(32);
+        // WORKAROUND: Force allocator initialization with a dummy allocation
+        // Without this, BTreeMap initialization crashes (likely due to lazy allocator init)
+        {
+            use alloc::vec::Vec;
+            let mut dummy: Vec<u8> = Vec::new();
+            dummy.push(1); // Force actual allocation
+        }
+
+        kaal_ipc::broker::init_broker(32);
 
         sys_print("  ✓ Initialized with capacity for 32 channels\n");
 

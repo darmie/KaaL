@@ -43,20 +43,49 @@ impl Component for SystemInit {
 
     fn run(&mut self) -> ! {
         unsafe {
-            syscall::print("[system_init] Starting main loop\n");
-            syscall::print("[system_init] TODO: Spawn other components\n");
+            syscall::print("[system_init] Starting initialization\n");
+
+            // Create a notification object for event-driven operation
+            syscall::print("[system_init] Creating notification for event handling...\n");
+            let notification_cap = match syscall::notification_create() {
+                Ok(cap) => {
+                    syscall::print("[system_init] Notification created successfully\n");
+                    cap
+                }
+                Err(_) => {
+                    syscall::print("[system_init] ERROR: Failed to create notification!\n");
+                    // Can't proceed without notification, just yield forever
+                    loop {
+                        syscall::yield_now();
+                    }
+                }
+            };
+
+            syscall::print("[system_init] TODO: Spawn IPC producer component\n");
+            syscall::print("[system_init] TODO: Spawn IPC consumer component\n");
             syscall::print("[system_init] TODO: Initialize system services\n");
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("  System Init: Ready ✓\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
-        }
 
-        // Main loop - yield to allow other tasks to run
-        loop {
-            unsafe {
-                syscall::yield_now();
+            // Event loop - block waiting for notifications instead of busy-yielding
+            syscall::print("[system_init] Entering event loop (blocking on notifications)\n");
+            loop {
+                // Block waiting for notification events
+                // This removes us from the scheduler's ready queue
+                match syscall::wait(notification_cap) {
+                    Ok(signals) => {
+                        if signals != 0 {
+                            syscall::print("[system_init] Received notification signal\n");
+                            // Handle events here
+                        }
+                    }
+                    Err(_) => {
+                        syscall::print("[system_init] Wait error\n");
+                    }
+                }
             }
         }
     }

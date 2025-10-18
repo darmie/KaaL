@@ -14,7 +14,8 @@ path = "src/main.rs"
 
 [dependencies]
 capability_broker = { package = "kaal-capability-broker", path = "../capability-broker" }
-# kaal_ipc = { package = "kaal-ipc", path = "../ipc", features = ["alloc"] }  # TODO: Fix alloc conflict
+kaal_allocator = { package = "kaal-allocator", path = "../kaal-allocator" }
+kaal_ipc = { package = "kaal-ipc", path = "../ipc", features = ["alloc"] }
 # ELF parsing in no_std
 xmas-elf = { version = "0.9", default-features = false }
 

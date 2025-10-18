@@ -11,7 +11,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "system_init",
         binary: "system-init",
         component_type: ComponentType::Service,
-        priority: 200,
+        priority: 50,
         autostart: true,
         capabilities:     &[
         "process:create",

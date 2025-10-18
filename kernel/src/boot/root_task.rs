@@ -287,10 +287,25 @@ pub unsafe fn create_and_start_root_task() -> ! {
         panic!("[FATAL] Failed to map stack: {:?}", e);
     }
 
+    // Map heap for root-task allocator (256KB at 32MB mark)
+    // This enables use of alloc-based collections (Vec, BTreeMap) for IPC broker
+    const HEAP_START: usize = 0x200_0000; // 32MB
+    const HEAP_SIZE: usize = 0x40000;     // 256KB
+    crate::kprintln!("  Mapping heap: {:#x} - {:#x} (256 KB)", HEAP_START, HEAP_START + HEAP_SIZE);
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        HEAP_START,
+        HEAP_SIZE,
+        PageTableFlags::USER_DATA,
+    ) {
+        panic!("[FATAL] Failed to map heap: {:?}", e);
+    }
+
     // UART already mapped with kernel permissions earlier, no need to map again
 
     crate::kprintln!("  Entry point:     {:#x}", entry_addr);
     crate::kprintln!("  Stack:           {:#x} - {:#x} (256 KB)", stack_bottom, stack_top);
+    crate::kprintln!("  Heap:            {:#x} - {:#x} (256 KB)", HEAP_START, HEAP_START + HEAP_SIZE);
     crate::kprintln!("  ✓ Root task ready for EL0 transition");
 
     // Step 2b: Create and map boot info for userspace runtime services

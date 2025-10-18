@@ -1,0 +1,21 @@
+[package]
+name = "kaal-allocator"
+version = "0.1.0"
+edition = "2021"
+authors = ["KaaL Contributors"]
+description = "Shared bump allocator for KaaL runtime components"
+license = "MIT"
+
+[lib]
+name = "kaal_allocator"
+path = "src/lib.rs"
+
+[dependencies]
+# No dependencies - pure no_std allocator
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

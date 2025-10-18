@@ -144,13 +144,13 @@ impl Notification {
     /// # Safety
     ///
     /// Must be called with interrupts disabled to prevent races with scheduler
-    pub unsafe fn wait(&mut self, current_tcb: *mut TCB) -> u64 {
+    pub unsafe fn wait(&mut self, current_tcb: *mut TCB) -> Option<u64> {
         // Check if there are already pending signals
         let signals = self.signal_word.swap(0, Ordering::Acquire);
 
         if signals != 0 {
             // Signals already pending, return immediately
-            return signals;
+            return Some(signals);
         }
 
         // No signals pending, block the thread
@@ -164,11 +164,9 @@ impl Notification {
         // Add to wait queue
         self.wait_queue.enqueue(current_tcb);
 
-        // Yield to scheduler (when we return, we'll have been signaled)
-        crate::scheduler::yield_current();
-
-        // Scheduler will have stored signal bits in x0
-        (*current_tcb).context().x0
+        // Return None to indicate the thread should block
+        // The syscall handler will perform the actual context switch
+        None
     }
 
     /// Poll for notification signals (non-blocking)

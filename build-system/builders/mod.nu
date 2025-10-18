@@ -37,7 +37,7 @@ export def "build roottask" [platform: string, platform_cfg: record, root_task_s
     # Build with linker script
     let rustflags = $"-C link-arg=-T($env.PWD)/runtime/root-task/root-task.ld"
     with-env { KAAL_PLATFORM: $platform, RUSTFLAGS: $rustflags } {
-        cargo build-safe --manifest-path runtime/root-task/Cargo.toml --target aarch64-unknown-none --release --build-std [core]
+        cargo build-safe --manifest-path runtime/root-task/Cargo.toml --target aarch64-unknown-none --release --build-std [core alloc]
     }
 
     let roottask_elf = "runtime/root-task/target/aarch64-unknown-none/release/root-task"

@@ -45,7 +45,7 @@
 name = "system_init"
 binary = "system-init"
 type = "service"
-priority = 200  # Very low priority so root_task (128) can continue
+priority = 50  # High priority - system_init is main entry point
 autostart = true  # Re-enabled now that priorities work
 capabilities = [
     "process:create",      # Can spawn other processes

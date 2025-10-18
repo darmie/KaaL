@@ -11,11 +11,11 @@ name = "kaal_ipc"
 path = "src/lib.rs"
 
 [dependencies]
-# No dependencies - pure userspace library
+kaal_allocator = { package = "kaal-allocator", path = "../kaal-allocator", optional = true }
 
 [features]
 default = []
-alloc = []  # Enable allocator-dependent features like broker
+alloc = ["dep:kaal_allocator"]  # Enable allocator-dependent features like broker
 
 [profile.release]
 opt-level = "z"       # Optimize for size

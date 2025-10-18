@@ -12,6 +12,7 @@ exclude = [
     "runtime/elfloader-builder",
     "runtime/root-task",
     "runtime/ipc",
+    "runtime/kaal-allocator",  # Shared allocator for excluded crates
     "kernel",
 
     # SDK (aarch64-unknown-none target)

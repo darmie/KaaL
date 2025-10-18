@@ -211,7 +211,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
         numbers::SYS_SIGNAL => sys_signal(args[0], args[1]),
-        numbers::SYS_WAIT => sys_wait(args[0]),
+        numbers::SYS_WAIT => sys_wait(tf, args[0]),
         numbers::SYS_POLL => sys_poll(args[0]),
 
         // Chapter 9 Phase 6: Channel management syscalls
@@ -1453,7 +1453,7 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
 /// - notification_cap_slot: Capability slot for notification
 ///
 /// Returns: signal bits (non-zero), or u64::MAX on error
-fn sys_wait(notification_cap_slot: u64) -> u64 {
+fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
     ksyscall_debug!("[syscall] Wait: notification={}", notification_cap_slot);
 
     unsafe {
@@ -1463,6 +1463,10 @@ fn sys_wait(notification_cap_slot: u64) -> u64 {
             ksyscall_debug!("[syscall] Wait -> error: no current thread");
             return u64::MAX;
         }
+
+        // Save current thread's context BEFORE potentially blocking
+        // This is critical - if we block, we need the context saved for when we resume
+        *(*current).context_mut() = *tf;
 
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
@@ -1474,10 +1478,38 @@ fn sys_wait(notification_cap_slot: u64) -> u64 {
         let notification = &mut *notification_ptr;
 
         // Wait for notification (blocks if no signals pending)
-        let signals = notification.wait(current);
+        match notification.wait(current) {
+            Some(signals) => {
+                // Signals were already pending, return immediately
+                ksyscall_debug!("[syscall] Wait -> received signals 0x{:x}", signals);
+                signals
+            }
+            None => {
+                // No signals pending - thread has been blocked
+                // Now we need to schedule the next thread
+                let next = crate::scheduler::schedule();
+                if next.is_null() || next == current {
+                    // No other thread available - this shouldn't happen if we blocked
+                    ksyscall_debug!("[syscall] Wait -> blocked but no other thread!");
+                    return u64::MAX;
+                }
 
-        ksyscall_debug!("[syscall] Wait -> received signals 0x{:x}", signals);
-        signals
+                // Switch to next thread
+                let next_tcb = &mut *next;
+                next_tcb.set_state(crate::objects::ThreadState::Running);
+                crate::scheduler::test_set_current_thread(next);
+
+                // Replace our TrapFrame with the next thread's context
+                // When we return from this syscall, the exception handler will restore
+                // the next thread's context and eret to it
+                *tf = *next_tcb.context();
+
+                // Return 0 - but this won't be seen by current thread
+                // When this thread is signaled and resumed, it will return with
+                // the signal value stored in its context's x0
+                0
+            }
+        }
     }
 }
 
