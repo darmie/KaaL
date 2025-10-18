@@ -769,49 +769,107 @@ pub extern "C" fn _start() -> ! {
         sys_print("  ✓ Initialized with capacity for 32 channels\n");
 
         sys_print("\n[phase5] Step 2: Spawning IPC producer component...\n");
-        match loader.spawn("ipc_producer") {
-            Ok(producer_pid) => {
+        let producer_pid = match loader.spawn("ipc_producer") {
+            Ok(pid) => {
                 sys_print("  ✓ IPC producer spawned (PID: ");
-                print_number(producer_pid);
+                print_number(pid);
                 sys_print(")\n");
-
-                // Channel Broker will handle memory mapping and capability transfer
-                sys_print("    (Channel Broker will establish IPC channel)\n");
-
-                sys_print("\n[phase5] Step 3: Spawning IPC consumer component...\n");
-                match loader.spawn("ipc_consumer") {
-                    Ok(consumer_pid) => {
-                        sys_print("  ✓ IPC consumer spawned (PID: ");
-                        print_number(consumer_pid);
-                        sys_print(")\n");
-
-                        // Channel Broker will handle memory mapping and capability transfer
-                        sys_print("    (Channel Broker will establish IPC channel)\n");
-
-                        sys_print("\n[phase5] Step 4: Components ready for IPC...\n");
-                        sys_print("  (Yielding to let components initialize and communicate)\n");
-                        sys_print("\n");
-
-                        // Yield many times to let components exchange messages
-                        for _ in 0..20 {
-                            sys_yield();
-                        }
-
-                        sys_print("\n");
-                        sys_print("[root_task] Back from IPC components\n");
-                        sys_print("\n");
-                        sys_print("═══════════════════════════════════════════════════════════\n");
-                        sys_print("  Phase 5: IPC Setup Complete ✓\n");
-                        sys_print("═══════════════════════════════════════════════════════════\n");
-                        sys_print("\n");
-                    }
-                    Err(_) => {
-                        sys_print("  ✗ Failed to spawn IPC consumer\n");
-                    }
-                }
+                pid
             }
             Err(_) => {
                 sys_print("  ✗ Failed to spawn IPC producer\n");
+                0 // Error case - skip IPC setup
+            }
+        };
+
+        if producer_pid != 0 {
+            sys_print("\n[phase5] Step 3: Spawning IPC consumer component...\n");
+            let consumer_pid = match loader.spawn("ipc_consumer") {
+                Ok(pid) => {
+                    sys_print("  ✓ IPC consumer spawned (PID: ");
+                    print_number(pid);
+                    sys_print(")\n");
+                    pid
+                }
+                Err(_) => {
+                    sys_print("  ✗ Failed to spawn IPC consumer\n");
+                    0
+                }
+            };
+
+            if consumer_pid != 0 {
+                // Now establish the IPC channel between producer and consumer
+                sys_print("\n[phase5] Step 4: Establishing IPC channel...\n");
+
+                        // Allocate shared memory (4KB for ring buffer)
+                        let shared_mem_size = 0x1000; // 4KB
+                        let shared_mem_phys = sys_memory_allocate(shared_mem_size);
+                        if shared_mem_phys == usize::MAX {
+                            sys_print("  ✗ Failed to allocate shared memory\n");
+                        } else {
+                            sys_print("  → Allocated shared memory: phys=0x");
+                            print_hex(shared_mem_phys);
+                            sys_print("\n");
+
+                            // Map into producer at 0x80000000
+                            let producer_vaddr = 0x80000000;
+                            sys_print("  → Mapping into producer (PID ");
+                            print_number(producer_pid);
+                            sys_print(") at vaddr=0x");
+                            print_hex(producer_vaddr);
+                            sys_print("\n");
+
+                            let map_result = sys_memory_map_into(
+                                producer_pid,
+                                shared_mem_phys,
+                                producer_vaddr,
+                                shared_mem_size,
+                            );
+                            if map_result == 0 {
+                                sys_print("    ✓ Producer memory mapped\n");
+                            } else {
+                                sys_print("    ✗ Failed to map producer memory\n");
+                            }
+
+                            // Map same memory into consumer at 0x80000000
+                            let consumer_vaddr = 0x80000000;
+                            sys_print("  → Mapping into consumer (PID ");
+                            print_number(consumer_pid);
+                            sys_print(") at vaddr=0x");
+                            print_hex(consumer_vaddr);
+                            sys_print("\n");
+
+                            let map_result = sys_memory_map_into(
+                                consumer_pid,
+                                shared_mem_phys,
+                                consumer_vaddr,
+                                shared_mem_size,
+                            );
+                            if map_result == 0 {
+                                sys_print("    ✓ Consumer memory mapped\n");
+                            } else {
+                                sys_print("    ✗ Failed to map consumer memory\n");
+                            }
+
+                            sys_print("  ✓ IPC channel established\n");
+                        }
+
+                sys_print("\n[phase5] Step 5: Components ready for IPC...\n");
+                sys_print("  (Yielding to let components initialize and communicate)\n");
+                sys_print("\n");
+
+                // Yield many times to let components exchange messages
+                for _ in 0..20 {
+                    sys_yield();
+                }
+
+                sys_print("\n");
+                sys_print("[root_task] Back from IPC components\n");
+                sys_print("\n");
+                sys_print("═══════════════════════════════════════════════════════════\n");
+                sys_print("  Phase 5: IPC Setup Complete ✓\n");
+                sys_print("═══════════════════════════════════════════════════════════\n");
+                sys_print("\n");
             }
         }
     }
