@@ -54,11 +54,13 @@ pub enum ComponentCapability {
 /// - Identify child for logging (pid)
 #[derive(Debug, Clone, Copy)]
 pub struct SpawnResult {
-    /// Capability to child's TCB (Thread Control Block)
-    pub tcb_cap: usize,
-    /// Capability to child's VSpace (page table)
+    /// Capability slot number for child's TCB in parent's CSpace
+    pub tcb_cap_slot: usize,
+    /// Physical address of child's TCB (for direct kernel operations)
+    pub tcb_phys: usize,
+    /// Physical address of child's VSpace (page table root)
     pub vspace_cap: usize,
-    /// Capability to child's CSpace (capability space)
+    /// Physical address of child's CSpace (capability space)
     pub cspace_cap: usize,
     /// Process ID (for debugging/logging)
     pub pid: usize,
@@ -329,10 +331,30 @@ impl ComponentLoader {
             return Err(ComponentError::OutOfMemory);
         }
 
+        // Allocate capability slot for TCB in our CSpace
+        // Start at slot 200 to avoid initial capabilities populated during boot
+        static mut NEXT_CAP_SLOT: usize = 200;
+        let tcb_cap_slot = NEXT_CAP_SLOT;
+        NEXT_CAP_SLOT += 1;
+
+        // Insert TCB capability into our CSpace at the allocated slot
+        // CapType::Tcb = 4
+        crate::sys_print("[loader] Inserting TCB cap: slot=");
+        crate::print_number(tcb_cap_slot);
+        crate::sys_print(", tcb_phys=0x");
+        crate::print_hex(result.tcb_phys);
+        crate::sys_print("\n");
+
+        let insert_result = crate::sys_cap_insert_self(tcb_cap_slot, 4, result.tcb_phys);
+        if insert_result != 0 {
+            crate::sys_print("[loader] Warning: Failed to insert TCB capability\n");
+        }
+
         // Convert to SpawnResult with capability information
         Ok(SpawnResult {
-            tcb_cap: result.tcb_phys,      // Physical addresses act as capabilities for now
-            vspace_cap: result.pt_phys,    // Page table root
+            tcb_cap_slot,                   // Slot number for use with syscalls
+            tcb_phys: result.tcb_phys,      // Physical address for reference
+            vspace_cap: result.pt_phys,     // Page table root
             cspace_cap: result.cspace_phys, // CSpace root
             pid: result.pid,
         })

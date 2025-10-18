@@ -103,6 +103,14 @@ pub const SYS_MEMORY_MAP_INTO: u64 = 0x1B;
 /// IPC by passing notification and TCB capabilities to spawned components.
 pub const SYS_CAP_INSERT_INTO: u64 = 0x1C;
 
+/// Insert capability into caller's own CSpace (Phase 6)
+/// Args: cap_slot, cap_type, object_ptr
+/// Returns: 0 on success, -1 on error
+///
+/// Simpler variant of SYS_CAP_INSERT_INTO that inserts into the caller's CSpace.
+/// Used by root-task to register TCB capabilities of spawned children.
+pub const SYS_CAP_INSERT_SELF: u64 = 0x1D;
+
 // Channel management syscalls
 
 /// Channel_Establish - Establish IPC channel between components

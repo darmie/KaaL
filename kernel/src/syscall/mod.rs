@@ -200,6 +200,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_DEVICE_REQUEST => sys_device_request(args[0]),
         numbers::SYS_ENDPOINT_CREATE => sys_endpoint_create(),
         numbers::SYS_PROCESS_CREATE => sys_process_create(
+            tf,  // Pass TrapFrame to set extra return values
             args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
             tf.x9  // Priority passed in x9
         ),
@@ -207,6 +208,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
         numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
+        numbers::SYS_CAP_INSERT_SELF => sys_cap_insert_self(args[0], args[1], args[2]),
 
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
@@ -493,6 +495,7 @@ fn sys_endpoint_create() -> u64 {
 /// - Dedicated stack
 /// - Independent execution context
 fn sys_process_create(
+    tf: &mut TrapFrame,  // TrapFrame to set extra return values
     entry_point: u64,
     stack_pointer: u64,
     page_table_root: u64,
@@ -692,19 +695,16 @@ fn sys_process_create(
     crate::kprintln!("[syscall] process_create: SUCCESS - PID={:#x}", pid);
 
     // Store capability information in TrapFrame for caller
-    // x0 = PID (return value)
+    // x0 = PID (return value - set by dispatcher)
     // x1 = TCB physical address
     // x2 = Page table root
     // x3 = CSpace root
-    unsafe {
-        let current = crate::scheduler::current_thread();
-        if !current.is_null() {
-            let ctx = (*current).context_mut();
-            ctx.x1 = tcb_frame.as_usize() as u64;
-            ctx.x2 = page_table_root;
-            ctx.x3 = cspace_root;
-        }
-    }
+    tf.x1 = tcb_frame.as_usize() as u64;
+    tf.x2 = page_table_root;
+    tf.x3 = cspace_root;
+
+    crate::kprintln!("[syscall] process_create: set TrapFrame - x1={:#x}, x2={:#x}, x3={:#x}",
+                     tf.x1, tf.x2, tf.x3);
 
     pid as u64
 }
@@ -852,7 +852,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
     use crate::objects::{CNode, CapType};
 
-    ksyscall_debug!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
+    crate::kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
               target_tcb_cap, phys_addr, size, permissions);
 
     // Round size up to page boundary
@@ -879,28 +879,31 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
         let cap = match cnode.lookup(target_tcb_cap as usize) {
             Some(c) => c,
             None => {
-                ksyscall_debug!("[syscall] memory_map_into: cap_slot {} not found in CSpace", target_tcb_cap);
+                crate::kprintln!("[syscall] memory_map_into: ✗ cap_slot {} not found in CSpace", target_tcb_cap);
                 return u64::MAX;
             }
         };
 
         // Verify it's a TCB capability
         if cap.cap_type() != CapType::Tcb {
-            ksyscall_debug!("[syscall] memory_map_into: cap_slot {} is not a TCB (type={:?})",
+            crate::kprintln!("[syscall] memory_map_into: ✗ cap_slot {} is not a TCB (type={:?})",
                      target_tcb_cap, cap.cap_type());
             return u64::MAX;
         }
 
+        crate::kprintln!("[syscall] memory_map_into: ✓ found TCB cap at slot {}", target_tcb_cap);
+
         // Get target TCB pointer
         let target_tcb_ptr = cap.object_ptr() as *mut TCB;
+        crate::kprintln!("[syscall] memory_map_into: target_tcb_ptr={:#x}", target_tcb_ptr as usize);
         if target_tcb_ptr.is_null() {
-            ksyscall_debug!("[syscall] memory_map_into: null target TCB pointer");
+            crate::kprintln!("[syscall] memory_map_into: ✗ null target TCB pointer");
             return u64::MAX;
         }
 
         // Get target process's page table (TTBR0)
         let target_ttbr0 = (*target_tcb_ptr).context().saved_ttbr0;
-        ksyscall_debug!("[syscall] memory_map_into: target TTBR0={:#x}", target_ttbr0);
+        crate::kprintln!("[syscall] memory_map_into: target TTBR0={:#x}", target_ttbr0);
 
         let target_page_table = &mut *(target_ttbr0 as *mut PageTable);
 
@@ -1042,6 +1045,72 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
             }
             Err(e) => {
                 ksyscall_debug!("[syscall] cap_insert_into: failed to insert: {:?}", e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+/// Insert capability into caller's own CSpace
+///
+/// Simpler variant of sys_cap_insert_into that operates on the caller's CSpace.
+/// Used by root-task to register TCB capabilities of spawned children.
+///
+/// # Arguments
+/// - cap_slot: Slot number in caller's CSpace
+/// - cap_type: Type of capability (CapType as u64)
+/// - object_ptr: Physical pointer to the capability object
+///
+/// # Returns
+/// 0 on success, u64::MAX on error
+fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
+    use crate::objects::{CNode, Capability, CapType};
+
+    crate::kprintln!("[syscall] cap_insert_self: slot={}, type={}, obj={:#x}",
+              cap_slot, cap_type, object_ptr);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            ksyscall_debug!("[syscall] cap_insert_self: no current thread");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            ksyscall_debug!("[syscall] cap_insert_self: thread has no CSpace root");
+            return u64::MAX;
+        }
+
+        // Convert cap_type from u64 to CapType enum
+        let cap_type_enum = match cap_type {
+            0 => CapType::Null,
+            1 => CapType::UntypedMemory,
+            2 => CapType::Endpoint,
+            3 => CapType::Notification,
+            4 => CapType::Tcb,
+            5 => CapType::CNode,
+            6 => CapType::VSpace,
+            _ => {
+                ksyscall_debug!("[syscall] cap_insert_self: invalid cap_type {}", cap_type);
+                return u64::MAX;
+            }
+        };
+
+        // Create the capability
+        let cap = Capability::new(cap_type_enum, object_ptr as usize);
+
+        // Insert into caller's own CSpace
+        let cnode = &mut *cspace_root;
+        match cnode.insert(cap_slot as usize, cap) {
+            Ok(()) => {
+                crate::kprintln!("[syscall] cap_insert_self: ✓ inserted {:?} cap at slot {} in caller's CSpace",
+                         cap_type_enum, cap_slot);
+                0
+            }
+            Err(e) => {
+                crate::kprintln!("[syscall] cap_insert_self: ✗ failed to insert: {:?}", e);
                 u64::MAX
             }
         }

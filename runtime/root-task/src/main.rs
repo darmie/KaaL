@@ -42,6 +42,7 @@ const SYS_WAIT: usize = 0x19;
 const SYS_POLL: usize = 0x1A;
 const SYS_MEMORY_MAP_INTO: usize = 0x1B;
 const SYS_CAP_INSERT_INTO: usize = 0x1C;
+const SYS_CAP_INSERT_SELF: usize = 0x1D;
 const SYS_YIELD: usize = 0x01;
 
 /// Make a syscall to print a message
@@ -198,18 +199,52 @@ unsafe fn sys_process_create(
     let cspace_phys: usize;
 
     core::arch::asm!(
+        // Set inputs
+        "mov x0, {entry}",
+        "mov x1, {stack}",
+        "mov x2, {pt}",
+        "mov x3, {cspace}",
+        "mov x4, {code_phys}",
+        "mov x5, {code_vaddr}",
+        "mov x6, {code_size}",
+        "mov x7, {stack_phys}",
+        "mov x8, {syscall_num}",
+        "mov x9, {priority}",
+        // Make syscall
         "svc #0",
-        inout("x0") entry_point => pid,
-        inout("x1") stack_pointer => tcb_phys,
-        inout("x2") page_table_root => pt_phys,
-        inout("x3") cspace_root => cspace_phys,
-        in("x4") code_phys,
-        in("x5") code_vaddr,
-        in("x6") code_size,
-        in("x7") stack_phys,
-        in("x8") SYS_PROCESS_CREATE,
-        in("x9") priority as usize,
+        // Read outputs
+        "mov {pid}, x0",
+        "mov {tcb}, x1",
+        "mov {pt_out}, x2",
+        "mov {cs_out}, x3",
+        syscall_num = in(reg) SYS_PROCESS_CREATE,
+        entry = in(reg) entry_point,
+        stack = in(reg) stack_pointer,
+        pt = in(reg) page_table_root,
+        cspace = in(reg) cspace_root,
+        code_phys = in(reg) code_phys,
+        code_vaddr = in(reg) code_vaddr,
+        code_size = in(reg) code_size,
+        stack_phys = in(reg) stack_phys,
+        priority = in(reg) priority as usize,
+        pid = out(reg) pid,
+        tcb = out(reg) tcb_phys,
+        pt_out = out(reg) pt_phys,
+        cs_out = out(reg) cspace_phys,
+        out("x0") _,
+        out("x1") _,
+        out("x2") _,
+        out("x3") _,
+        out("x4") _,
+        out("x5") _,
+        out("x6") _,
+        out("x7") _,
+        out("x8") _,
+        out("x9") _,
     );
+
+    // Debug: Check what we received (avoid sys_print which causes syscalls)
+    // tcb_phys should match what kernel set in x1
 
     ProcessCreateResult {
         pid,
@@ -429,6 +464,19 @@ unsafe fn sys_cap_insert_into(
         obj = in(reg) object_ptr,
         result = out(reg) result,
         out("x8") _,
+    );
+    result
+}
+
+/// Insert capability into caller's own CSpace
+unsafe fn sys_cap_insert_self(cap_slot: usize, cap_type: usize, object_ptr: usize) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "svc #0",
+        inout("x0") cap_slot => result,
+        in("x1") cap_type,
+        in("x2") object_ptr,
+        in("x8") SYS_CAP_INSERT_SELF,
     );
     result
 }
@@ -778,7 +826,8 @@ pub extern "C" fn _start() -> ! {
                 sys_print("  ✗ Failed to spawn IPC producer\n");
                 component_loader::SpawnResult {
                     pid: 0,
-                    tcb_cap: 0,
+                    tcb_cap_slot: 0,
+                    tcb_phys: 0,
                     vspace_cap: 0,
                     cspace_cap: 0,
                 }
@@ -791,8 +840,8 @@ pub extern "C" fn _start() -> ! {
                 Ok(result) => {
                     sys_print("  ✓ IPC consumer spawned (PID: ");
                     print_number(result.pid);
-                    sys_print(", VSpace cap: 0x");
-                    print_hex(result.vspace_cap);
+                    sys_print(", TCB cap slot: ");
+                    print_number(result.tcb_cap_slot);
                     sys_print(")\n");
                     result
                 }
@@ -800,7 +849,8 @@ pub extern "C" fn _start() -> ! {
                     sys_print("  ✗ Failed to spawn IPC consumer\n");
                     component_loader::SpawnResult {
                         pid: 0,
-                        tcb_cap: 0,
+                        tcb_cap_slot: 0,
+                        tcb_phys: 0,
                         vspace_cap: 0,
                         cspace_cap: 0,
                     }
@@ -822,14 +872,12 @@ pub extern "C" fn _start() -> ! {
                             sys_print("\n");
 
                             // Map into producer at 0x80000000
-                            sys_print("  → Mapping into producer (PID ");
-                            print_number(producer.pid);
-                            sys_print(") using VSpace cap 0x");
-                            print_hex(producer.vspace_cap);
-                            sys_print("\n");
+                            sys_print("  → Mapping into producer (TCB cap slot ");
+                            print_number(producer.tcb_cap_slot);
+                            sys_print(")\n");
 
                             let map_result = sys_memory_map_into(
-                                producer.vspace_cap,  // Use VSpace capability
+                                producer.tcb_cap_slot,  // Use TCB capability slot
                                 shared_mem_phys,
                                 shared_mem_size,
                                 0x3,  // USER_DATA permissions (read|write)
@@ -841,14 +889,12 @@ pub extern "C" fn _start() -> ! {
                             }
 
                             // Map same memory into consumer at 0x80000000
-                            sys_print("  → Mapping into consumer (PID ");
-                            print_number(consumer.pid);
-                            sys_print(") using VSpace cap 0x");
-                            print_hex(consumer.vspace_cap);
-                            sys_print("\n");
+                            sys_print("  → Mapping into consumer (TCB cap slot ");
+                            print_number(consumer.tcb_cap_slot);
+                            sys_print(")\n");
 
                             let map_result = sys_memory_map_into(
-                                consumer.vspace_cap,  // Use VSpace capability
+                                consumer.tcb_cap_slot,  // Use TCB capability slot
                                 shared_mem_phys,
                                 shared_mem_size,
                                 0x3,  // USER_DATA permissions (read|write)
