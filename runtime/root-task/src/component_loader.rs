@@ -44,6 +44,26 @@ pub enum ComponentCapability {
     MemoryAllocate,
 }
 
+/// Result of spawning a component
+///
+/// Contains all capabilities needed to manage the spawned component.
+/// This enables the parent to:
+/// - Map memory into child's VSpace (vspace_cap)
+/// - Grant capabilities to child (cspace_cap)
+/// - Control child's execution (tcb_cap)
+/// - Identify child for logging (pid)
+#[derive(Debug, Clone, Copy)]
+pub struct SpawnResult {
+    /// Capability to child's TCB (Thread Control Block)
+    pub tcb_cap: usize,
+    /// Capability to child's VSpace (page table)
+    pub vspace_cap: usize,
+    /// Capability to child's CSpace (capability space)
+    pub cspace_cap: usize,
+    /// Process ID (for debugging/logging)
+    pub pid: usize,
+}
+
 /// Component descriptor from manifest
 #[derive(Debug)]
 pub struct ComponentDescriptor {
@@ -149,8 +169,8 @@ impl ComponentLoader {
 
     /// Spawn a component by name
     ///
-    /// Returns the process ID on success
-    pub unsafe fn spawn(&self, name: &str) -> Result<usize, ComponentError> {
+    /// Returns SpawnResult with capabilities on success
+    pub unsafe fn spawn(&self, name: &str) -> Result<SpawnResult, ComponentError> {
         let descriptor = self.registry
             .find(name)
             .ok_or(ComponentError::NotFound)?;
@@ -162,7 +182,7 @@ impl ComponentLoader {
     pub unsafe fn spawn_autostart(&self) -> Result<(), ComponentError> {
         for component in self.registry.autostart_components() {
             match self.spawn_component(component) {
-                Ok(pid) => {
+                Ok(result) => {
                     crate::sys_print("[component_loader] Spawned: ");
                     crate::sys_print(component.name);
                     crate::sys_print(" (PID ");
@@ -181,7 +201,7 @@ impl ComponentLoader {
     }
 
     /// Internal: Spawn a single component
-    unsafe fn spawn_component(&self, desc: &ComponentDescriptor) -> Result<usize, ComponentError> {
+    unsafe fn spawn_component(&self, desc: &ComponentDescriptor) -> Result<SpawnResult, ComponentError> {
         // 1. Get binary data
         let binary_data = desc.binary_data.ok_or(ComponentError::NoBinary)?;
 
@@ -293,7 +313,7 @@ impl ComponentLoader {
         const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
         let stack_top = STACK_VIRT_TOP;  // Stack pointer at top (will grow down)
 
-        let pid = crate::sys_process_create(
+        let result = crate::sys_process_create(
             elf_info.entry_point,
             stack_top,
             pt_root,
@@ -305,11 +325,17 @@ impl ComponentLoader {
             desc.priority,  // Pass the component priority from manifest
         );
 
-        if pid == usize::MAX {
+        if result.pid == usize::MAX {
             return Err(ComponentError::OutOfMemory);
         }
 
-        Ok(pid)
+        // Convert to SpawnResult with capability information
+        Ok(SpawnResult {
+            tcb_cap: result.tcb_phys,      // Physical addresses act as capabilities for now
+            vspace_cap: result.pt_phys,    // Page table root
+            cspace_cap: result.cspace_phys, // CSpace root
+            pid: result.pid,
+        })
     }
 }
 

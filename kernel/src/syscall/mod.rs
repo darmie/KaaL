@@ -690,6 +690,22 @@ fn sys_process_create(
     }
 
     crate::kprintln!("[syscall] process_create: SUCCESS - PID={:#x}", pid);
+
+    // Store capability information in TrapFrame for caller
+    // x0 = PID (return value)
+    // x1 = TCB physical address
+    // x2 = Page table root
+    // x3 = CSpace root
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if !current.is_null() {
+            let ctx = (*current).context_mut();
+            ctx.x1 = tcb_frame.as_usize() as u64;
+            ctx.x2 = page_table_root;
+            ctx.x3 = cspace_root;
+        }
+    }
+
     pid as u64
 }
 

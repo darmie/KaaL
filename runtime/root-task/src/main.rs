@@ -173,6 +173,14 @@ unsafe fn sys_endpoint_create() -> usize {
 }
 
 /// Create a new process
+/// Result from sys_process_create containing PID and capability information
+struct ProcessCreateResult {
+    pid: usize,
+    tcb_phys: usize,
+    pt_phys: usize,
+    cspace_phys: usize,
+}
+
 unsafe fn sys_process_create(
     entry_point: usize,
     stack_pointer: usize,
@@ -182,45 +190,33 @@ unsafe fn sys_process_create(
     code_vaddr: usize,
     code_size: usize,
     stack_phys: usize,
-    priority: u8,  // Added priority parameter
-) -> usize {
-    let result: usize;
+    priority: u8,
+) -> ProcessCreateResult {
+    let pid: usize;
+    let tcb_phys: usize;
+    let pt_phys: usize;
+    let cspace_phys: usize;
+
     core::arch::asm!(
-        "mov x8, {syscall_num}",
-        "mov x0, {entry}",
-        "mov x1, {stack}",
-        "mov x2, {pt}",
-        "mov x3, {cspace}",
-        "mov x4, {code_phys}",
-        "mov x5, {code_vaddr}",
-        "mov x6, {code_size}",
-        "mov x7, {stack_phys}",
-        "mov x9, {priority}",     // Pass priority in x9
         "svc #0",
-        "mov {result}, x0",
-        syscall_num = in(reg) SYS_PROCESS_CREATE,
-        entry = in(reg) entry_point,
-        stack = in(reg) stack_pointer,
-        pt = in(reg) page_table_root,
-        cspace = in(reg) cspace_root,
-        code_phys = in(reg) code_phys,
-        code_vaddr = in(reg) code_vaddr,
-        code_size = in(reg) code_size,
-        stack_phys = in(reg) stack_phys,
-        priority = in(reg) priority as usize,  // Pass priority
-        result = out(reg) result,
-        out("x8") _,
-        out("x0") _,
-        out("x1") _,
-        out("x2") _,
-        out("x3") _,
-        out("x4") _,
-        out("x5") _,
-        out("x6") _,
-        out("x7") _,
-        out("x9") _,  // Added x9 for priority
+        inout("x0") entry_point => pid,
+        inout("x1") stack_pointer => tcb_phys,
+        inout("x2") page_table_root => pt_phys,
+        inout("x3") cspace_root => cspace_phys,
+        in("x4") code_phys,
+        in("x5") code_vaddr,
+        in("x6") code_size,
+        in("x7") stack_phys,
+        in("x8") SYS_PROCESS_CREATE,
+        in("x9") priority as usize,
     );
-    result
+
+    ProcessCreateResult {
+        pid,
+        tcb_phys,
+        pt_phys,
+        cspace_phys,
+    }
 }
 
 /// Map physical memory into our virtual address space
@@ -702,11 +698,11 @@ pub extern "C" fn _start() -> ! {
             sys_print("...\n");
 
             match loader.spawn(component.name) {
-                Ok(pid) => {
+                Ok(result) => {
                     sys_print("    ✓ ");
                     sys_print(component.name);
                     sys_print(" spawned (PID: ");
-                    print_number(pid);
+                    print_number(result.pid);
                     sys_print(")\n");
                 }
                 Err(e) => {
@@ -769,35 +765,49 @@ pub extern "C" fn _start() -> ! {
         sys_print("  ✓ Initialized with capacity for 32 channels\n");
 
         sys_print("\n[phase5] Step 2: Spawning IPC producer component...\n");
-        let producer_pid = match loader.spawn("ipc_producer") {
-            Ok(pid) => {
+        let producer = match loader.spawn("ipc_producer") {
+            Ok(result) => {
                 sys_print("  ✓ IPC producer spawned (PID: ");
-                print_number(pid);
+                print_number(result.pid);
+                sys_print(", VSpace cap: 0x");
+                print_hex(result.vspace_cap);
                 sys_print(")\n");
-                pid
+                result
             }
             Err(_) => {
                 sys_print("  ✗ Failed to spawn IPC producer\n");
-                0 // Error case - skip IPC setup
+                component_loader::SpawnResult {
+                    pid: 0,
+                    tcb_cap: 0,
+                    vspace_cap: 0,
+                    cspace_cap: 0,
+                }
             }
         };
 
-        if producer_pid != 0 {
+        if producer.pid != 0 {
             sys_print("\n[phase5] Step 3: Spawning IPC consumer component...\n");
-            let consumer_pid = match loader.spawn("ipc_consumer") {
-                Ok(pid) => {
+            let consumer = match loader.spawn("ipc_consumer") {
+                Ok(result) => {
                     sys_print("  ✓ IPC consumer spawned (PID: ");
-                    print_number(pid);
+                    print_number(result.pid);
+                    sys_print(", VSpace cap: 0x");
+                    print_hex(result.vspace_cap);
                     sys_print(")\n");
-                    pid
+                    result
                 }
                 Err(_) => {
                     sys_print("  ✗ Failed to spawn IPC consumer\n");
-                    0
+                    component_loader::SpawnResult {
+                        pid: 0,
+                        tcb_cap: 0,
+                        vspace_cap: 0,
+                        cspace_cap: 0,
+                    }
                 }
             };
 
-            if consumer_pid != 0 {
+            if consumer.pid != 0 {
                 // Now establish the IPC channel between producer and consumer
                 sys_print("\n[phase5] Step 4: Establishing IPC channel...\n");
 
@@ -812,18 +822,17 @@ pub extern "C" fn _start() -> ! {
                             sys_print("\n");
 
                             // Map into producer at 0x80000000
-                            let producer_vaddr = 0x80000000;
                             sys_print("  → Mapping into producer (PID ");
-                            print_number(producer_pid);
-                            sys_print(") at vaddr=0x");
-                            print_hex(producer_vaddr);
+                            print_number(producer.pid);
+                            sys_print(") using VSpace cap 0x");
+                            print_hex(producer.vspace_cap);
                             sys_print("\n");
 
                             let map_result = sys_memory_map_into(
-                                producer_pid,
+                                producer.vspace_cap,  // Use VSpace capability
                                 shared_mem_phys,
-                                producer_vaddr,
                                 shared_mem_size,
+                                0x3,  // USER_DATA permissions (read|write)
                             );
                             if map_result == 0 {
                                 sys_print("    ✓ Producer memory mapped\n");
@@ -832,18 +841,17 @@ pub extern "C" fn _start() -> ! {
                             }
 
                             // Map same memory into consumer at 0x80000000
-                            let consumer_vaddr = 0x80000000;
                             sys_print("  → Mapping into consumer (PID ");
-                            print_number(consumer_pid);
-                            sys_print(") at vaddr=0x");
-                            print_hex(consumer_vaddr);
+                            print_number(consumer.pid);
+                            sys_print(") using VSpace cap 0x");
+                            print_hex(consumer.vspace_cap);
                             sys_print("\n");
 
                             let map_result = sys_memory_map_into(
-                                consumer_pid,
+                                consumer.vspace_cap,  // Use VSpace capability
                                 shared_mem_phys,
-                                consumer_vaddr,
                                 shared_mem_size,
+                                0x3,  // USER_DATA permissions (read|write)
                             );
                             if map_result == 0 {
                                 sys_print("    ✓ Consumer memory mapped\n");
