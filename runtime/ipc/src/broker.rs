@@ -120,14 +120,59 @@ impl ChannelBroker {
         self.shmem_registry.cleanup_process(pid);
     }
 
-    /// Establish a channel between two components
+    /// Establish a channel between two components (broker-orchestrated)
     ///
-    /// This is called by root-task or kernel when components request IPC.
+    /// This is called by root-task when it orchestrates IPC on behalf of components.
     /// It handles all the privileged operations:
     /// 1. Allocates shared memory
     /// 2. Maps it into both components
     /// 3. Creates notification capabilities
     /// 4. Transfers capabilities to components
+    ///
+    /// # Current Status
+    ///
+    /// This method is a **placeholder** for future broker-orchestrated IPC.
+    /// The current working implementation uses **component-driven IPC** where
+    /// components call `sdk::channel_setup::establish_channel()` directly.
+    ///
+    /// ## Component-Driven IPC (Current - Working)
+    ///
+    /// Components manage their own channels:
+    /// 1. Producer: allocates memory, registers with broker via SYS_SHMEM_REGISTER
+    /// 2. Consumer: queries broker via SYS_SHMEM_QUERY, maps same physical memory
+    /// 3. Both create their own notification capabilities
+    ///
+    /// ## Broker-Orchestrated IPC (Future - This Method)
+    ///
+    /// Root-task manages channels on behalf of components:
+    /// ```ignore
+    /// // 1. Allocate shared memory
+    /// let phys_addr = sys_memory_allocate(buffer_size)?;
+    ///
+    /// // 2. Map into producer at chosen vaddr
+    /// let producer_vaddr = 0x90000000; // Or query component's free space
+    /// sys_memory_map_into(producer_tcb, phys_addr, buffer_size,
+    ///                    producer_vaddr, PERMS_RW)?;
+    ///
+    /// // 3. Map into consumer at chosen vaddr
+    /// let consumer_vaddr = 0x90000000;
+    /// sys_memory_map_into(consumer_tcb, phys_addr, buffer_size,
+    ///                    consumer_vaddr, PERMS_RW)?;
+    ///
+    /// // 4. Create notification for producer->consumer signaling
+    /// let notify_cap = sys_notification_create()?;
+    ///
+    /// // 5. Transfer notification to both components
+    /// sys_cap_insert_into(producer_tcb, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)?;
+    /// sys_cap_insert_into(consumer_tcb, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)?;
+    /// ```
+    ///
+    /// ## Why Keep Both Approaches?
+    ///
+    /// - **Component-driven**: Simple, flexible, minimal broker involvement
+    /// - **Broker-orchestrated**: Centralized control, easier security policy, audit trail
+    ///
+    /// The choice depends on use case. Current Phase 6 uses component-driven for simplicity.
     pub fn establish_channel(
         &mut self,
         producer_id: ComponentId,
@@ -148,28 +193,24 @@ impl ChannelBroker {
         // Allocate channel ID
         let channel_id = self.next_channel_id.fetch_add(1, Ordering::SeqCst);
 
-        // Here we would call privileged operations:
-        // 1. Allocate shared memory (sys_memory_allocate)
-        // 2. Map into producer (sys_memory_map_into)
-        // 3. Map into consumer (sys_memory_map_into)
-        // 4. Create notifications (sys_notification_create)
-        // 5. Transfer caps (sys_cap_insert_into)
+        // TODO: Implement broker-orchestrated IPC (see documentation above)
+        // For now, this is a tracking/bookkeeping placeholder.
+        // Components use sdk::channel_setup::establish_channel() for actual IPC.
 
-        // For now, create placeholder channel
         let channel = Channel {
             id: channel_id,
             producer_id,
             consumer_id,
             state: ChannelState::Establishing,
-            shared_memory_phys: 0,  // Would be allocated
+            shared_memory_phys: 0,  // Would be allocated via sys_memory_allocate
             shared_memory_size: buffer_size,
-            producer_vaddr: 0,      // Would be mapped
-            consumer_vaddr: 0,      // Would be mapped
-            producer_notify: 0,     // Would be created
-            consumer_notify: 0,     // Would be created
+            producer_vaddr: 0,      // Would be mapped via sys_memory_map_into
+            consumer_vaddr: 0,      // Would be mapped via sys_memory_map_into
+            producer_notify: 0,     // Would be created via sys_notification_create
+            consumer_notify: 0,     // Would be created via sys_notification_create
         };
 
-        // Register channel
+        // Register channel for tracking
         self.channels.insert(channel_id, channel);
         self.component_channels.insert(key, channel_id);
 
