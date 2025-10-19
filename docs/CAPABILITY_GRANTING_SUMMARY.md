@@ -1,10 +1,17 @@
 # Capability Granting Implementation Summary
 
-## Status: Phase 1 Complete ✅
+## Status: COMPLETE ✅
 
 This document summarizes the capability-based security infrastructure implemented in KaaL.
 
+**Implementation is now complete** - components automatically receive limited capabilities
+parsed from their manifest declarations in components.toml.
+
 ## What Was Implemented
+
+### Phase 1: Infrastructure & Runtime Enforcement
+
+### Phase 2: Capability Parsing & Automatic Bitmask Generation
 
 ### 1. Capability Infrastructure in TCB
 - **File**: `kernel/src/objects/tcb.rs`
@@ -89,25 +96,69 @@ let pid = syscall::process_create(
 )?;
 ```
 
+### 6. Capability Parsing from components.toml (Phase 2)
+
+**File**: `build-system/builders/codegen.nu`
+
+Added automatic capability parsing and bitmask generation:
+
+- `parse_capability()` function converts capability strings to bit values
+- Supports wildcard patterns: `ipc:*`, `memory:*`, `process:*`
+- Supports specific capabilities: `memory:allocate`, `notification:signal`, etc.
+- Silently ignores device-specific capabilities: `interrupt:33`, `memory_map:addr:size`
+- Maps to kernel bits: CAP_MEMORY=1, CAP_PROCESS=2, CAP_IPC=4, CAP_CAPS=8
+- `capabilities_to_bitmask()` reduces capability arrays to single u64 bitmask
+- Generated ComponentDescriptor includes both string array and bitmask
+
+Example capability parsing from components.toml:
+
+```toml
+[[component]]
+name = "system_init"
+capabilities = [
+    "process:create",   # → CAP_PROCESS (bit 1 = 2)
+    "memory:allocate",  # → CAP_MEMORY (bit 0 = 1)
+    "ipc:*",           # → CAP_IPC (bit 2 = 4)
+]
+# Generated bitmask: 1 | 2 | 4 = 7
+```
+
+### 7. Runtime Capability Assignment (Phase 2)
+
+**File**: `runtime/root-task/src/component_loader.rs`
+
+Updated component loader to use parsed capabilities:
+
+- Replaced hardcoded `CAP_ALL` with `desc.capabilities_bitmask`
+- Components now receive only their declared capabilities
+- Root-task still gets CAP_ALL (trusted bootstrap component)
+
 ## Current Behavior
 
-- ✅ Root-task: CAP_ALL (full privileges)
-- ✅ Idle thread: No capabilities
-- ✅ Spawned components: CAP_ALL (temporary - should be limited)
-- ✅ Syscalls enforce capability checks
-- ✅ Processes can be spawned with specific capabilities
+- ✅ Root-task: CAP_ALL (full privileges for bootstrapping)
+- ✅ Idle thread: No capabilities (can't call syscalls)
+- ✅ system_init: Limited capabilities (CAP_MEMORY | CAP_PROCESS | CAP_IPC = 7)
+- ✅ ipc_producer/consumer: Limited capabilities (CAP_MEMORY | CAP_IPC = 5)
+- ✅ test_minimal: No capabilities (bitmask = 0)
+- ✅ Syscalls enforce capability checks at runtime
+- ✅ Components automatically receive parsed capabilities from manifest
 
 ## Testing Results
 
-Running the system in QEMU shows:
-- ✅ System boots successfully
-- ✅ Root-task has full syscall access
-- ✅ system_init spawns and runs
-- ✅ Memory allocation syscalls work
-- ✅ Process creation syscalls work
-- ✅ No permission denied errors (all components have CAP_ALL)
+Running the system in QEMU with limited capabilities:
 
-## Remaining Work (Phase 2)
+- ✅ System boots successfully with capability enforcement
+- ✅ Root-task has full syscall access (CAP_ALL)
+- ✅ system_init spawns with capabilities=7 (MEMORY|PROCESS|IPC)
+- ✅ Memory allocation syscalls work (components have CAP_MEMORY)
+- ✅ Process creation syscalls work (system_init has CAP_PROCESS)
+- ✅ IPC syscalls work (components have CAP_IPC)
+- ✅ No capability parsing warnings
+- ✅ All capability checks enforced correctly
+
+## Implementation Complete
+
+All planned work has been completed:
 
 ### 1. Capability Parsing from components.toml
 **File**: `build-system/builders/codegen.nu`
