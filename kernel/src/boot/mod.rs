@@ -302,6 +302,13 @@ pub fn kernel_entry() -> ! {
         // Initialize scheduler with idle thread
         crate::scheduler::init(idle_tcb_ptr);
         crate::kprintln!("[scheduler] Initialized with idle thread at {:#x}", idle_tcb_ptr as usize);
+
+        // Initialize timer for preemption
+        crate::scheduler::timer::init();
+
+        // Enable IRQs for timer interrupts
+        core::arch::asm!("msr daifclr, #2"); // Clear IRQ mask (bit 1)
+        crate::kprintln!("[timer] IRQs enabled for preemption");
     }
     crate::kprintln!("");
 
