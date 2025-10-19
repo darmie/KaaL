@@ -108,7 +108,7 @@ capabilities = [
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
-priority = 60  # High priority to run early
+priority = 60  # Same priority as consumer for round-robin scheduling
 autostart = false  # Spawned on-demand for IPC testing
 capabilities = [
     "memory:map",
@@ -120,7 +120,7 @@ capabilities = [
 name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
-priority = 70  # Slightly lower priority than producer
+priority = 60  # Run first to initialize and wait for producer
 autostart = false  # Spawned on-demand for IPC testing
 capabilities = [
     "memory:map",

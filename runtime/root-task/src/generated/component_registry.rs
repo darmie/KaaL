@@ -89,7 +89,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "ipc_consumer",
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
-        priority: 70,
+        priority: 60,
         autostart: false,
         capabilities:     &[
         "memory:map",

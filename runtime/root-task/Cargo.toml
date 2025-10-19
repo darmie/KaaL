@@ -27,8 +27,8 @@ default = ["runtime"]
 runtime = []
 
 [profile.release]
-opt-level = "z"       # Optimize for size
-lto = true            # Enable link-time optimization
+opt-level = 1         # Reduce optimization for better debugging
+lto = false           # Disable LTO for faster builds and better debugging
 codegen-units = 1     # Better optimization
 panic = "abort"       # Smaller binary
-strip = true          # Strip debug symbols
+strip = false         # Keep debug symbols for better debugging

@@ -86,12 +86,12 @@ pub const SYS_WAIT: u64 = 0x19;
 pub const SYS_POLL: u64 = 0x1A;
 
 /// Map physical memory into target process's virtual address space (Phase 5)
-/// Args: target_process_cap, physical_addr, size, permissions (read=1, write=2, exec=4)
-/// Returns: virtual address in target's address space, or -1 on error
+/// Args: target_tcb_cap, phys_addr, size, virt_addr, permissions (read=1, write=2, exec=4)
+/// Returns: 0 on success, -1 on error
 ///
-/// This allows one process (e.g., root-task) to map shared memory into another
-/// process's address space, enabling inter-process IPC via shared memory.
-/// Requires appropriate capabilities to the target process.
+/// Maps physical memory at a specific virtual address in target process.
+/// The caller specifies the target virt_addr to avoid hardcoded addresses.
+/// Requires TCB capability for the target process.
 pub const SYS_MEMORY_MAP_INTO: u64 = 0x1B;
 
 /// Insert capability into target process's CSpace (Phase 5)

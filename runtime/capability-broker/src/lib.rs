@@ -58,6 +58,7 @@ pub mod boot_info;
 pub mod device_manager;
 pub mod endpoint_manager;
 pub mod memory_manager;
+pub mod service_registry;
 
 pub use device_manager::{DeviceId, DeviceResource};
 pub use endpoint_manager::Endpoint;
@@ -128,6 +129,8 @@ pub struct CapabilityBroker {
     memory_manager: memory_manager::MemoryManager,
     /// Endpoint manager
     endpoint_manager: endpoint_manager::EndpointManager,
+    /// Service registry for IPC discovery
+    service_registry: service_registry::ServiceRegistry,
 }
 
 impl CapabilityBroker {
@@ -168,6 +171,7 @@ impl CapabilityBroker {
             device_manager: device_manager::DeviceManager::new_from_boot_info(boot_info),
             memory_manager: memory_manager::MemoryManager::new_from_boot_info(boot_info),
             endpoint_manager: endpoint_manager::EndpointManager::new(),
+            service_registry: service_registry::ServiceRegistry::new(),
         })
     }
 
@@ -303,6 +307,82 @@ impl CapabilityBroker {
     pub fn create_endpoint(&mut self) -> Result<Endpoint> {
         let cap_slot = self.allocate_cap_slot(CapabilityType::Endpoint)?;
         self.endpoint_manager.create_endpoint(cap_slot)
+    }
+
+    /// Register a service with the broker
+    ///
+    /// Allows a service provider (server) to register itself by name,
+    /// so consumers (clients) can discover it.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Service name (must be unique, max 32 characters)
+    /// * `endpoint` - IPC endpoint for this service
+    /// * `owner_pid` - Process ID of the service provider
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) on success, or an error if:
+    /// - Service name already registered
+    /// - Service name too long
+    /// - Registry full
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use capability_broker::CapabilityBroker;
+    ///
+    /// let mut broker = CapabilityBroker::init()?;
+    /// let endpoint = broker.create_endpoint()?;
+    /// broker.register_service("printer", endpoint, 42)?;
+    /// ```
+    pub fn register_service(&mut self, name: &str, endpoint: Endpoint, owner_pid: usize) -> Result<()> {
+        self.service_registry.register_service(name, endpoint, owner_pid)
+    }
+
+    /// Lookup a service by name
+    ///
+    /// Allows a consumer (client) to discover a service provider by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Service name to lookup
+    ///
+    /// # Returns
+    ///
+    /// The service's endpoint on success, or an error if not found.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use capability_broker::CapabilityBroker;
+    ///
+    /// let broker = CapabilityBroker::init()?;
+    /// let printer_endpoint = broker.lookup_service("printer")?;
+    /// // Use endpoint to communicate with printer service
+    /// ```
+    pub fn lookup_service(&self, name: &str) -> Result<Endpoint> {
+        self.service_registry.lookup_service(name)
+    }
+
+    /// Unregister a service
+    ///
+    /// Removes a service from the registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Service name to unregister
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) on success, or an error if service not found.
+    pub fn unregister_service(&mut self, name: &str) -> Result<()> {
+        self.service_registry.unregister_service(name)
+    }
+
+    /// Get number of registered services
+    pub fn num_services(&self) -> usize {
+        self.service_registry.num_services()
     }
 }
 

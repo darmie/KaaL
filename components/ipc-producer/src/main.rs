@@ -28,79 +28,75 @@ kaal_sdk::component! {
 }
 
 /// IPC Producer Service
-pub struct IpcProducer;
+pub struct IpcProducer {
+    instance_id: u32,
+}
+
+// Static counter to track instances
+static mut INSTANCE_COUNTER: u32 = 0;
 
 impl Component for IpcProducer {
     fn init() -> kaal_sdk::Result<Self> {
+        let instance_id = unsafe {
+            INSTANCE_COUNTER += 1;
+            INSTANCE_COUNTER
+        };
+
         unsafe {
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  IPC Producer v0.1.0\n");
+            syscall::print("  IPC Producer v0.1.0 [INSTANCE #");
+            // Print instance number
+            let mut n = instance_id;
+            if n == 0 {
+                syscall::print("0");
+            } else {
+                let mut digits = [0u8; 10];
+                let mut i = 0;
+                while n > 0 {
+                    digits[i] = b'0' + (n % 10) as u8;
+                    n /= 10;
+                    i += 1;
+                }
+                while i > 0 {
+                    i -= 1;
+                    let digit_str = core::str::from_utf8_unchecked(&digits[i..i+1]);
+                    syscall::print(digit_str);
+                }
+            }
+            syscall::print("]\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
             syscall::print("[producer] Initializing...\n");
             syscall::print("[producer] Using semantic message-passing API\n");
         }
 
-        Ok(IpcProducer)
+        Ok(IpcProducer { instance_id })
     }
 
     fn run(&mut self) -> ! {
         unsafe {
             syscall::print("[producer] Starting message production\n");
 
-            // Step 1: Establish channel with consumer
-            // For demo, we'll use a hardcoded consumer PID (would be discovered in real system)
-            let consumer_pid = 10; // Assuming consumer is PID 10
+            // Step 1: Establish channel using architecture-driven approach
+            // The establish_channel function uses syscalls to dynamically allocate resources
+            let consumer_pid = 0; // TODO: Discover via nameserver/broker
             let buffer_size = 0x1000; // 4KB buffer
 
-            syscall::print("[producer] Establishing channel with consumer...\n");
-            syscall::print("  - Target PID: 10 (assumed)\n");
+            syscall::print("[producer] Establishing channel via syscalls...\n");
             syscall::print("  - Buffer size: 4KB\n");
             syscall::print("  - Role: Producer\n");
 
             let channel_config = match establish_channel(consumer_pid, buffer_size, ChannelRole::Producer) {
                 Ok(config) => {
-                    syscall::print("  ✓ Channel established!\n");
-                    syscall::print("    - Buffer at: 0x");
-                    // Print buffer address in hex (simplified)
-                    if config.buffer_addr != 0 {
-                        syscall::print("MAPPED\n");
-                    } else {
-                        syscall::print("NULL\n");
-                    }
-                    syscall::print("    - Channel ID: ");
-                    syscall::print("X\n");
-                    syscall::print("    - Notification cap: ");
-                    syscall::print("X\n");
+                    syscall::print("  ✓ Channel established with dynamic allocation\n");
                     config
                 }
                 Err(e) => {
                     syscall::print("  ✗ Failed to establish channel: ");
                     syscall::print(e);
                     syscall::print("\n");
-
-                    // Fall back to direct memory access for demo
-                    syscall::print("[producer] Falling back to direct memory access...\n");
-
-                    // Create our own notification
-                    let producer_notify = match syscall::notification_create() {
-                        Ok(slot) => slot,
-                        Err(_) => {
-                            syscall::print("  ✗ Failed to create notification\n");
-                            loop { syscall::yield_now(); }
-                        }
-                    };
-
-                    // Use hardcoded shared memory
-                    kaal_sdk::channel_setup::ChannelConfig {
-                        buffer_addr: 0x80000000,
-                        buffer_size: 0x1000,
-                        notification_cap: producer_notify,
-                        memory_cap: None,
-                        channel_id: 0,
-                        role: ChannelRole::Producer,
-                    }
+                    loop { syscall::yield_now(); }
                 }
             };
 

@@ -48,8 +48,11 @@ pub struct ChannelConfig {
 
 /// Establish an IPC channel with another component
 ///
+/// Uses syscalls to dynamically allocate and map shared memory.
+/// This is the architecture-driven approach - no hardcoded addresses.
+///
 /// # Arguments
-/// * `target_pid` - Process ID of the target component
+/// * `_target_pid` - Process ID of the target component (unused for now - TODO: implement proper discovery)
 /// * `buffer_size` - Size of the shared memory buffer (must be page-aligned)
 /// * `role` - This component's role in the channel
 ///
@@ -57,7 +60,7 @@ pub struct ChannelConfig {
 /// * `Ok(ChannelConfig)` - Channel configuration on success
 /// * `Err(&str)` - Error message on failure
 pub fn establish_channel(
-    target_pid: usize,
+    _target_pid: usize,
     buffer_size: usize,
     role: ChannelRole,
 ) -> Result<ChannelConfig, &'static str> {
@@ -66,37 +69,35 @@ pub fn establish_channel(
         return Err("Buffer size must be non-zero and page-aligned");
     }
 
-    // Convert role to syscall parameter
-    let role_param = match role {
-        ChannelRole::Producer => 0,
-        ChannelRole::Consumer => 1,
+    // Step 1: Allocate physical memory for the shared buffer
+    let phys_addr = match syscall::memory_allocate(buffer_size) {
+        Ok(addr) => addr,
+        Err(_) => return Err("Failed to allocate physical memory"),
     };
 
-    // Call kernel to establish channel
-    let result = crate::syscall!(
-        syscall::numbers::SYS_CHANNEL_ESTABLISH,
-        target_pid,
-        buffer_size,
-        role_param
-    );
+    // Step 2: Map into our address space
+    let virt_addr = match syscall::memory_map(phys_addr, buffer_size, 0x3) {
+        Ok(addr) => addr,
+        Err(_) => return Err("Failed to map memory into address space"),
+    };
 
-    // Check for error
-    if result == 0 {
-        return Err("Failed to establish channel");
-    }
+    // Step 3: Create notification for signaling
+    let notification_cap = match syscall::notification_create() {
+        Ok(cap) => cap,
+        Err(_) => return Err("Failed to create notification"),
+    };
 
-    // Unpack the result
-    // Format: buffer_addr in high 32 bits, notification_cap in low 16 bits, channel_id in next 16 bits
-    let buffer_addr = (result >> 32) as usize;
-    let notification_cap = (result & 0xFFFF) as usize;
-    let channel_id = ((result >> 16) & 0xFFFF) as usize;
+    // TODO: For proper IPC, we need to:
+    // - Share the physical address with the other component
+    // - Exchange notification capabilities
+    // This would typically go through a broker/nameserver
 
     Ok(ChannelConfig {
-        buffer_addr,
+        buffer_addr: virt_addr,
         buffer_size,
         notification_cap,
-        memory_cap: None, // TODO: Return memory cap from kernel
-        channel_id,
+        memory_cap: None,
+        channel_id: 0, // TODO: Get from broker
         role,
     })
 }

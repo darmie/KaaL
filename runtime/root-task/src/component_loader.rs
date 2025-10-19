@@ -207,6 +207,27 @@ impl ComponentLoader {
         // 1. Get binary data
         let binary_data = desc.binary_data.ok_or(ComponentError::NoBinary)?;
 
+        // Debug: Check what binary we got
+        crate::sys_print("[loader] Spawning component: ");
+        crate::sys_print(desc.name);
+        crate::sys_print(", binary_data len=");
+        crate::print_number(binary_data.len());
+        crate::sys_print(", contains: ");
+        // Search for distinctive strings to identify the binary
+        let has_producer = binary_data.windows(18).any(|w| w == b"IPC Producer v0.1.");
+        let has_consumer = binary_data.windows(20).any(|w| w == b"THIS IS THE CONSUMER");
+
+        if has_producer {
+            crate::sys_print("PRODUCER ");
+        }
+        if has_consumer {
+            crate::sys_print("CONSUMER ");
+        }
+        if !has_producer && !has_consumer {
+            crate::sys_print("UNKNOWN");
+        }
+        crate::sys_print("\n");
+
         // 2. Parse ELF
         let elf_info = crate::elf::parse_elf(binary_data)
             .map_err(|_| ComponentError::InvalidElf)?;
@@ -269,13 +290,34 @@ impl ComponentLoader {
 
         // 7. Map the allocated physical memory so we can copy the ELF segments
         const RW_PERMS: usize = 0x3; // Read + Write
+        crate::sys_print("[loader] Mapping phys 0x");
+        crate::print_hex(process_mem);
+        crate::sys_print(" size=0x");
+        crate::print_hex(process_size);
+        crate::sys_print(" for copying\n");
+
         let virt_mem = crate::sys_memory_map(process_mem, process_size, RW_PERMS);
         if virt_mem == usize::MAX {
             return Err(ComponentError::OutOfMemory);
         }
 
+        crate::sys_print("[loader] Mapped to virt 0x");
+        crate::print_hex(virt_mem);
+        crate::sys_print(", will copy ");
+        crate::print_number(binary_data.len());
+        crate::sys_print(" bytes from binary_data\n");
+
         // 8. Copy each LOAD segment to the mapped memory
         let base_vaddr = elf_info.min_vaddr;
+
+        // Debug: Show first few bytes of source binary
+        if binary_data.len() >= 4 {
+            crate::sys_print("[loader] Binary data first 4 bytes: ");
+            let word = u32::from_le_bytes([binary_data[0], binary_data[1], binary_data[2], binary_data[3]]);
+            crate::print_hex(word as usize);
+            crate::sys_print("\n");
+        }
+
         for i in 0..elf_info.num_segments {
             let (vaddr, filesz, memsz, offset) = elf_info.segments[i];
 
@@ -286,6 +328,15 @@ impl ComponentLoader {
 
             // Copy file data
             if filesz > 0 {
+                crate::sys_print("[loader] Copying segment ");
+                crate::print_number(i);
+                crate::sys_print(": ");
+                crate::print_number(filesz);
+                crate::sys_print(" bytes from src=0x");
+                crate::print_hex(src_ptr as usize);
+                crate::sys_print(" to dest=0x");
+                crate::print_hex(dest_ptr as usize);
+                crate::sys_print("\n");
                 core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, filesz);
             }
 
@@ -308,12 +359,22 @@ impl ComponentLoader {
         crate::sys_print("\n");
 
         // 9. Unmap the memory (we're done writing to it)
+        crate::sys_print("[loader] Unmapping virt 0x");
+        crate::print_hex(virt_mem);
+        crate::sys_print("\n");
         crate::sys_memory_unmap(virt_mem, process_size);
+        crate::sys_print("[loader] Unmap complete\n");
 
         // 10. Create the process
         // Stack grows down from top of userspace memory
         const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
         let stack_top = STACK_VIRT_TOP;  // Stack pointer at top (will grow down)
+
+        crate::sys_print("[loader] Calling sys_process_create with code_phys=0x");
+        crate::print_hex(process_mem);
+        crate::sys_print(", code_size=0x");
+        crate::print_hex(process_size);
+        crate::sys_print("\n");
 
         let result = crate::sys_process_create(
             elf_info.entry_point,

@@ -419,6 +419,7 @@ unsafe fn sys_memory_map_into(
     target_tcb_cap: usize,
     phys_addr: usize,
     size: usize,
+    virt_addr: usize,
     permissions: usize,
 ) -> usize {
     let result: usize;
@@ -427,13 +428,15 @@ unsafe fn sys_memory_map_into(
         "mov x0, {target_tcb}",
         "mov x1, {phys}",
         "mov x2, {size}",
-        "mov x3, {perms}",
+        "mov x3, {virt}",
+        "mov x4, {perms}",
         "svc #0",
         "mov {result}, x0",
         syscall_num = in(reg) SYS_MEMORY_MAP_INTO,
         target_tcb = in(reg) target_tcb_cap,
         phys = in(reg) phys_addr,
         size = in(reg) size,
+        virt = in(reg) virt_addr,
         perms = in(reg) permissions,
         result = out(reg) result,
         out("x8") _,
@@ -858,74 +861,18 @@ pub extern "C" fn _start() -> ! {
             };
 
             if consumer.pid != 0 {
-                // Now establish the IPC channel between producer and consumer
-                sys_print("\n[phase5] Step 4: Establishing IPC channel...\n");
-
-                        // Allocate shared memory (4KB for ring buffer)
-                        let shared_mem_size = 0x1000; // 4KB
-                        let shared_mem_phys = sys_memory_allocate(shared_mem_size);
-                        if shared_mem_phys == usize::MAX {
-                            sys_print("  ✗ Failed to allocate shared memory\n");
-                        } else {
-                            sys_print("  → Allocated shared memory: phys=0x");
-                            print_hex(shared_mem_phys);
-                            sys_print("\n");
-
-                            // Map into producer at 0x80000000
-                            sys_print("  → Mapping into producer (TCB cap slot ");
-                            print_number(producer.tcb_cap_slot);
-                            sys_print(")\n");
-
-                            let map_result = sys_memory_map_into(
-                                producer.tcb_cap_slot,  // Use TCB capability slot
-                                shared_mem_phys,
-                                shared_mem_size,
-                                0x3,  // USER_DATA permissions (read|write)
-                            );
-                            if map_result != usize::MAX {
-                                sys_print("    ✓ Producer memory mapped at 0x");
-                                print_hex(map_result);
-                                sys_print("\n");
-                            } else {
-                                sys_print("    ✗ Failed to map producer memory\n");
-                            }
-
-                            // Map same memory into consumer at 0x80000000
-                            sys_print("  → Mapping into consumer (TCB cap slot ");
-                            print_number(consumer.tcb_cap_slot);
-                            sys_print(")\n");
-
-                            let map_result = sys_memory_map_into(
-                                consumer.tcb_cap_slot,  // Use TCB capability slot
-                                shared_mem_phys,
-                                shared_mem_size,
-                                0x3,  // USER_DATA permissions (read|write)
-                            );
-                            if map_result != usize::MAX {
-                                sys_print("    ✓ Consumer memory mapped at 0x");
-                                print_hex(map_result);
-                                sys_print("\n");
-                            } else {
-                                sys_print("    ✗ Failed to map consumer memory\n");
-                            }
-
-                            sys_print("  ✓ IPC channel established\n");
-                        }
-
-                sys_print("\n[phase5] Step 5: Components ready for IPC...\n");
-                sys_print("  (Yielding to let components initialize and communicate)\n");
+                sys_print("\n[phase5] Step 4: Components spawned - architecture will handle IPC\n");
+                sys_print("  Components will use syscalls to establish their own channels\n");
                 sys_print("\n");
 
-                // Yield many times to let components exchange messages
+                // Yield a few times to let components run and establish their channel
                 for _ in 0..20 {
                     sys_yield();
                 }
 
                 sys_print("\n");
-                sys_print("[root_task] Back from IPC components\n");
-                sys_print("\n");
                 sys_print("═══════════════════════════════════════════════════════════\n");
-                sys_print("  Phase 5: IPC Setup Complete ✓\n");
+                sys_print("  Phase 5: Architecture-Driven IPC ✓\n");
                 sys_print("═══════════════════════════════════════════════════════════\n");
                 sys_print("\n");
             }

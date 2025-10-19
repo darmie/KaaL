@@ -153,7 +153,7 @@ pub unsafe fn enqueue(tcb: *mut TCB) {
         return; // Silently skip if not initialized
     }
 
-    crate::kprintln!("[sched] enqueue: adding TCB at {:#x} to scheduler", tcb as usize);
+    // crate::kprintln!("[sched] enqueue: adding TCB at {:#x} to scheduler", tcb as usize);
     scheduler().enqueue(tcb);
 }
 

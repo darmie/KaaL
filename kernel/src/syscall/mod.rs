@@ -206,7 +206,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
-        numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3]),
+        numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_INSERT_SELF => sys_cap_insert_self(args[0], args[1], args[2]),
 
@@ -281,10 +281,30 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
                      next_context.elr_el1, next_context.sp_el0);
         }
 
+        // Debug: Show page table switch (commented out to reduce noise)
+        // kprintln!("[syscall] sys_yield: switching from {:#x} to {:#x}, TTBR0: {:#x} -> {:#x}",
+        //          current as usize, next as usize,
+        //          tf.saved_ttbr0, next_context.saved_ttbr0);
+
         // Replace our TrapFrame with the next thread's context
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
         *tf = *next_context;
+
+        // CRITICAL: Switch TTBR0 NOW to the next thread's page table
+        // The exception handler will restore this same value when we eret,
+        // but we need to switch now so any kernel operations use the correct
+        // page table (e.g., when kernel reads from user memory).
+        unsafe {
+            core::arch::asm!(
+                "msr ttbr0_el1, {ttbr0}",    // Switch to next thread's page table
+                "dsb ish",                     // Ensure page table switch completes
+                "tlbi vmalle1is",              // Invalidate all TLB entries
+                "dsb ish",                     // Ensure TLB invalidation completes
+                "isb",                         // Synchronize instruction fetch
+                ttbr0 = in(reg) next_context.saved_ttbr0,
+            );
+        }
     }
     0 // Success
 }
@@ -304,9 +324,9 @@ fn sys_debug_putchar(ch: u64) -> u64 {
 /// Uses copy_from_user to safely access userspace memory by temporarily
 /// switching to the calling process's TTBR0 page table.
 fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
-    // Debug: log the syscall (always show for debugging)
-    crate::kprintln!("[syscall] sys_debug_print: ptr={:#x}, len={}, ttbr0={:#x}",
-                    ptr, len, tf.saved_ttbr0);
+    // Debug: log the syscall (commented out to reduce noise)
+    // crate::kprintln!("[syscall] sys_debug_print: ptr={:#x}, len={}, ttbr0={:#x}",
+    //                 ptr, len, tf.saved_ttbr0);
 
     // Validate length (prevent abuse)
     if len > 4096 {
@@ -513,6 +533,8 @@ fn sys_process_create(
     // Debug output (always show for debugging spawned components)
     crate::kprintln!("[syscall] sys_process_create: entry={:#x}, stack={:#x}, pt={:#x}, priority={}",
                      entry_point, stack_pointer, page_table_root, priority);
+    crate::kprintln!("[syscall] sys_process_create: code_phys={:#x}, code_vaddr={:#x}, code_size={:#x}, stack_phys={:#x}",
+                     code_phys, code_vaddr, code_size, stack_phys);
 
     // Allocate frame for TCB
     let tcb_frame = match alloc_frame() {
@@ -599,6 +621,7 @@ fn sys_process_create(
     for i in 0..code_pages {
         let virt = VA::new(code_virt_base + (i * PAGE_SIZE));
         let phys = PA::new(code_phys as usize + (i * PAGE_SIZE));
+        crate::kprintln!("[syscall] Mapping page {}: virt={:#x} -> phys={:#x}", i, virt.as_usize(), phys.as_usize());
         if let Err(e) = mapper.map(virt, phys, PageTableFlags::USER_RWX, PageSize::Size4KB) {
             kprintln!("  ERROR: Failed to map code page {}: {:?}", i, e);
             return u64::MAX;
@@ -741,7 +764,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
 
-    ksyscall_debug!("[syscall] memory_map: phys={:#x}, size={}, perms={:#x}", phys_addr, size, permissions);
+    crate::kprintln!("[syscall] memory_map: phys={:#x}, size={:#x}, perms={:#x}", phys_addr, size, permissions);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
@@ -762,8 +785,8 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
         addr
     };
 
-    ksyscall_debug!("[syscall] memory_map: allocated virt range {:#x} - {:#x}",
-              virt_addr, virt_addr + aligned_size);
+    crate::kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}, mapping {} pages",
+              virt_addr, virt_addr + aligned_size, num_pages);
 
     // Use USER_DATA preset for userspace read-write data
     // This includes: VALID, TABLE_OR_PAGE, AP_RW_ALL, ACCESSED, INNER_SHARE,
@@ -804,7 +827,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     // For new mappings, the TLB won't have stale entries since these addresses weren't mapped before
     // So we don't need explicit TLB invalidation here
 
-    ksyscall_debug!("[syscall] memory_map -> virt={:#x} ({} pages mapped)", virt_addr, num_pages);
+    crate::kprintln!("[syscall] memory_map: SUCCESS - returning virt={:#x}", virt_addr);
     virt_addr
 }
 
@@ -816,20 +839,47 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 ///
 /// Returns: 0 on success, u64::MAX on error
 fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
-    use crate::memory::PAGE_SIZE;
+    use crate::memory::{PAGE_SIZE, VirtAddr as VA, PageSize, PageMapper};
+    use crate::arch::aarch64::page_table::PageTable;
 
     ksyscall_debug!("[syscall] memory_unmap: virt={:#x}, size={}", virt_addr, size);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
-    let num_pages = (size + page_size - 1) / page_size;
+    let num_pages = ((size + page_size - 1) / page_size) as usize;
 
-    // A full implementation would:
-    // 1. Get caller's page table from current TCB
-    // 2. Remove page table entries for this range
-    // 3. Flush TLB
+    // Get caller's page table from current TCB
+    let current_tcb = unsafe { crate::scheduler::current_thread() };
+    if current_tcb.is_null() {
+        ksyscall_debug!("[syscall] memory_unmap: no current thread");
+        return u64::MAX;
+    }
 
-    // For now, this is a no-op (simplified)
+    let page_table_phys = unsafe { (*current_tcb).vspace_root() };
+    let page_table = page_table_phys as *mut PageTable;
+
+    // Create mapper for caller's page table
+    let mut mapper = unsafe { PageMapper::new(&mut *page_table) };
+
+    // Unmap each page in the range
+    for i in 0..num_pages {
+        let virt = VA::new(virt_addr as usize + (i * PAGE_SIZE));
+        if let Err(e) = mapper.unmap(virt, PageSize::Size4KB) {
+            ksyscall_debug!("[syscall] memory_unmap: failed to unmap page {}: {:?}", i, e);
+            // Continue unmapping other pages even if one fails
+        }
+    }
+
+    // Flush TLB to ensure unmapped pages are not cached
+    unsafe {
+        core::arch::asm!(
+            "dsb ishst",           // Ensure page table writes complete
+            "tlbi vmalle1is",      // Invalidate all TLB entries for EL1
+            "dsb ish",             // Ensure TLB invalidation completes
+            "isb",                 // Synchronize context
+        );
+    }
+
     ksyscall_debug!("[syscall] memory_unmap -> success ({} pages)", num_pages);
     0
 }
@@ -840,20 +890,21 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 /// - target_tcb_cap: Capability slot for target process's TCB
 /// - phys_addr: Physical address to map
 /// - size: Size in bytes
+/// - virt_addr: Target virtual address in target process (caller specifies)
 /// - permissions: Permission bits (read=1, write=2, exec=4)
 ///
-/// Returns: Virtual address in target's address space, or u64::MAX on error
+/// Returns: 0 on success, u64::MAX on error
 ///
 /// This allows one process (e.g., root-task) to map shared memory into another
-/// process's address space, enabling inter-process IPC via shared memory.
-/// The caller must have a TCB capability for the target process.
-fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissions: u64) -> u64 {
+/// process's address space at a specific virtual address, enabling inter-process
+/// IPC via shared memory. The caller must have a TCB capability for the target.
+fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr: u64, permissions: u64) -> u64 {
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
     use crate::objects::{CNode, CapType};
 
-    crate::kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, perms={:#x}",
-              target_tcb_cap, phys_addr, size, permissions);
+    crate::kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, virt={:#x}, perms={:#x}",
+              target_tcb_cap, phys_addr, size, virt_addr, permissions);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
@@ -907,14 +958,9 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
 
         let target_page_table = &mut *(target_ttbr0 as *mut PageTable);
 
-        // Allocate virtual address from high memory region
-        let virt_addr = {
-            let addr = NEXT_VIRT_ADDR;
-            NEXT_VIRT_ADDR += aligned_size;
-            addr
-        };
-
-        crate::kprintln!("[syscall] memory_map_into: allocated virt range {:#x} - {:#x} in target process",
+        // Use caller-provided virtual address
+        // Caller is responsible for choosing non-conflicting addresses
+        crate::kprintln!("[syscall] memory_map_into: mapping to virt range {:#x} - {:#x} in target process",
                   virt_addr, virt_addr + aligned_size);
 
         // Use USER_DATA preset for userspace read-write data
@@ -948,8 +994,8 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, permissio
             "dsb ishst",  // Ensure all page table writes complete
         );
 
-        crate::kprintln!("[syscall] memory_map_into: ✓ SUCCESS -> virt={:#x} ({} pages)", virt_addr, num_pages);
-        virt_addr
+        crate::kprintln!("[syscall] memory_map_into: ✓ SUCCESS ({} pages mapped)", num_pages);
+        0  // Success
     }
 }
 
