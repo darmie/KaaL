@@ -232,6 +232,8 @@ global_asm!(
     "    msr elr_el1, x11",
     "    msr spsr_el1, x12",
     "    msr ttbr0_el1, x13",
+    "    tlbi vmalle1is",              // Invalidate all TLB entries after PT switch
+    "    dsb ish",                     // Ensure TLB invalidation completes
     "    isb",                         // Synchronize context for page table switch
     // Now restore GPRs (including x0-x3 with potentially modified syscall returns)
     "    ldp x0, x1, [sp, #0]",

@@ -9,16 +9,16 @@ Memory region: 0x40000000 - 0x48000000 (128 MB)
 
 Loading images...
 Loading embedded images from ELF sections...
-  Kernel: 0x40205000 - 0x4022bac8 (154 KB)
+  Kernel: 0x40205000 - 0x4022bd18 (155 KB)
   User:   0x4022c000 - 0x402bcb28 (578 KB)
 ELF: entry=0x40400000, 4 program headers at offset 0x40
-  LOAD segment 0: vaddr=0x40400000, filesz=0x82c4, memsz=0x82c4
-  LOAD segment 1: vaddr=0x40409000, filesz=0x4908, memsz=0x4908
+  LOAD segment 0: vaddr=0x40400000, filesz=0x856c, memsz=0x856c
+  LOAD segment 1: vaddr=0x40409000, filesz=0x4a50, memsz=0x4a50
   LOAD segment 2: vaddr=0x4040e000, filesz=0x10, memsz=0x2e000
 Kernel loaded at entry point: 0x40400000
 ELF: entry=0x40100000, 4 program headers at offset 0x40
-  LOAD segment 0: vaddr=0x40100000, filesz=0x476c, memsz=0x476c
-  LOAD segment 1: vaddr=0x40105000, filesz=0x780e0, memsz=0x780e0
+  LOAD segment 0: vaddr=0x40100000, filesz=0x4764, memsz=0x4764
+  LOAD segment 1: vaddr=0x40105000, filesz=0x78c78, memsz=0x78c78
   LOAD segment 2: vaddr=0x4017e000, filesz=0x8, memsz=0x1000
 Root task loaded at entry point: 0x40100000
 Images loaded successfully!
@@ -184,8 +184,8 @@ Kernel initialization complete!
   LOAD segment 0:
     vaddr:  0x40100000
     offset: 0x10000
-    filesz: 0x476c (18284 bytes)
-    memsz:  0x476c (18284 bytes)
+    filesz: 0x4764 (18276 bytes)
+    memsz:  0x4764 (18276 bytes)
     flags:  0x5 (R-X)
     Mapping virt 0x40100000 → phys 0x4023c000 (end: 0x40105000)
       Mapping page 0 at virt=0x40100000 phys=0x4023c000
@@ -197,8 +197,8 @@ Kernel initialization complete!
   LOAD segment 1:
     vaddr:  0x40105000
     offset: 0x15000
-    filesz: 0x780e0 (491744 bytes)
-    memsz:  0x780e0 (491744 bytes)
+    filesz: 0x78c78 (494712 bytes)
+    memsz:  0x78c78 (494712 bytes)
     flags:  0x4 (R--)
     Mapping virt 0x40105000 → phys 0x40241000 (end: 0x4017e000)
       Mapping page 0 at virt=0x40105000 phys=0x40241000
@@ -518,28 +518,28 @@ Kernel initialization complete!
 
 [root_task] Spawning autostart components...
   → Spawning system_init...
-[loader] Spawning component: system_init, binary_data len=278576, contains: PRODUCER CONSUMER 
+[loader] Spawning component: system_init, binary_data len=281544, contains: PRODUCER CONSUMER 
 [loader] ELF for system_init:
   Entry: 0x0000000000200000
   Segments:
-    [0] vaddr=0x0000000000200000 filesz=0x000000000000192c memsz=0x000000000000192c
-    [1] vaddr=0x0000000000201930 filesz=0x00000000000325a0 memsz=0x00000000000325a0
-    [2] vaddr=0x0000000000233ed0 filesz=0x0000000000000000 memsz=0x0000000000000820
-  Total range: 0x0000000000200000 - 0x00000000002346f0
-[loader] Mapping phys 0x0000000040455000 size=0x0000000000036000 for copying
-[syscall] memory_map: phys=0x40455000, size=0x36000, perms=0x15
-[syscall] memory_map: allocated virt range 0x80000000 - 0x80036000, mapping 54 pages
+    [0] vaddr=0x0000000000200000 filesz=0x0000000000002074 memsz=0x0000000000002074
+    [1] vaddr=0x0000000000202078 filesz=0x00000000000329f0 memsz=0x00000000000329f0
+    [2] vaddr=0x0000000000234a68 filesz=0x0000000000000000 memsz=0x0000000000001040
+  Total range: 0x0000000000200000 - 0x0000000000235aa8
+[loader] Mapping phys 0x0000000040455000 size=0x0000000000037000 for copying
+[syscall] memory_map: phys=0x40455000, size=0x37000, perms=0x15
+[syscall] memory_map: allocated virt range 0x80000000 - 0x80037000, mapping 55 pages
 [syscall] memory_map: SUCCESS - returning virt=0x80000000
-[loader] Mapped to virt 0x0000000080000000, will copy 278576 bytes from binary_data
+[loader] Mapped to virt 0x0000000080000000, will copy 281544 bytes from binary_data
 [loader] Binary data first 4 bytes: 00000000464c457f
-[loader] Copying segment 0: 6444 bytes from src=0x00000000401165d5 to dest=0x0000000080000000
-[loader] Copying segment 1: 206240 bytes from src=0x0000000040117f05 to dest=0x0000000080001930
-[loader] Entry point 0x0000000000200000: first instruction = 0x000000009400041e
+[loader] Copying segment 0: 8308 bytes from src=0x00000000401165d5 to dest=0x0000000080000000
+[loader] Copying segment 1: 207344 bytes from src=0x000000004011864d to dest=0x0000000080002078
+[loader] Entry point 0x0000000000200000: first instruction = 0x00000000940004e3
 [loader] Unmapping virt 0x0000000080000000
 [loader] Unmap complete
-[loader] Calling sys_process_create with code_phys=0x0000000040455000, code_size=0x0000000000036000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4048c000, priority=50
-[syscall] sys_process_create: code_phys=0x40455000, code_vaddr=0x200000, code_size=0x36000, stack_phys=0x4048b000
+[loader] Calling sys_process_create with code_phys=0x0000000040455000, code_size=0x0000000000037000
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4048d000, priority=50
+[syscall] sys_process_create: code_phys=0x40455000, code_vaddr=0x200000, code_size=0x37000, stack_phys=0x4048c000
 [syscall] Mapping page 0: virt=0x200000 -> phys=0x40455000
 [syscall] Mapping page 1: virt=0x201000 -> phys=0x40456000
 [syscall] Mapping page 2: virt=0x202000 -> phys=0x40457000
@@ -594,14 +594,16 @@ Kernel initialization complete!
 [syscall] Mapping page 51: virt=0x233000 -> phys=0x40488000
 [syscall] Mapping page 52: virt=0x234000 -> phys=0x40489000
 [syscall] Mapping page 53: virt=0x235000 -> phys=0x4048a000
+[syscall] Mapping page 54: virt=0x236000 -> phys=0x4048b000
+[syscall] process_create: set saved_ttbr0=0x4048d000 for TCB=0x40491000
 [syscall] process_create: set priority 50 for component
-[syscall] process_create: enqueuing TCB at 0x40490000
-[syscall] process_create: SUCCESS - PID=0x40490000
-[syscall] process_create: set TrapFrame - x1=0x40490000, x2=0x4048c000, x3=0x4048d000
-[loader] Inserting TCB cap: slot=200, tcb_phys=0x0000000040490000
-[syscall] cap_insert_self: slot=200, type=4, obj=0x40490000
+[syscall] process_create: enqueuing TCB at 0x40491000
+[syscall] process_create: SUCCESS - PID=0x40491000
+[syscall] process_create: set TrapFrame - x1=0x40491000, x2=0x4048d000, x3=0x4048e000
+[loader] Inserting TCB cap: slot=200, tcb_phys=0x0000000040491000
+[syscall] cap_insert_self: slot=200, type=4, obj=0x40491000
 [syscall] cap_insert_self: ✓ inserted Tcb cap at slot 200 in caller's CSpace
-    ✓ system_init spawned (PID: 1078525952)
+    ✓ system_init spawned (PID: 1078530048)
   → Spawning serial_driver...
     ✗ Failed to spawn serial_driver: no binary
   → Spawning timer_driver...
@@ -616,30 +618,31 @@ Kernel initialization complete!
     [0] vaddr=0x0000000000200000 filesz=0x0000000000000270 memsz=0x0000000000000270
     [1] vaddr=0x0000000000200270 filesz=0x00000000000002cd memsz=0x00000000000002cd
   Total range: 0x0000000000200000 - 0x000000000020053d
-[loader] Mapping phys 0x0000000040498000 size=0x0000000000002000 for copying
-[syscall] memory_map: phys=0x40498000, size=0x2000, perms=0x15
-[syscall] memory_map: allocated virt range 0x80036000 - 0x80038000, mapping 2 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80036000
-[loader] Mapped to virt 0x0000000080036000, will copy 67160 bytes from binary_data
+[loader] Mapping phys 0x0000000040499000 size=0x0000000000002000 for copying
+[syscall] memory_map: phys=0x40499000, size=0x2000, perms=0x15
+[syscall] memory_map: allocated virt range 0x80037000 - 0x80039000, mapping 2 pages
+[syscall] memory_map: SUCCESS - returning virt=0x80037000
+[loader] Mapped to virt 0x0000000080037000, will copy 67160 bytes from binary_data
 [loader] Binary data first 4 bytes: 00000000464c457f
-[loader] Copying segment 0: 624 bytes from src=0x000000004017c0e0 to dest=0x0000000080036000
-[loader] Copying segment 1: 717 bytes from src=0x000000004017c350 to dest=0x0000000080036270
+[loader] Copying segment 0: 624 bytes from src=0x000000004017cc78 to dest=0x0000000080037000
+[loader] Copying segment 1: 717 bytes from src=0x000000004017cee8 to dest=0x0000000080037270
 [loader] Entry point 0x0000000000200000: first instruction = 0x00000000d503201f
-[loader] Unmapping virt 0x0000000080036000
+[loader] Unmapping virt 0x0000000080037000
 [loader] Unmap complete
-[loader] Calling sys_process_create with code_phys=0x0000000040498000, code_size=0x0000000000002000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4049b000, priority=55
-[syscall] sys_process_create: code_phys=0x40498000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x4049a000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x40498000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x40499000
+[loader] Calling sys_process_create with code_phys=0x0000000040499000, code_size=0x0000000000002000
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4049c000, priority=55
+[syscall] sys_process_create: code_phys=0x40499000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x4049b000
+[syscall] Mapping page 0: virt=0x200000 -> phys=0x40499000
+[syscall] Mapping page 1: virt=0x201000 -> phys=0x4049a000
+[syscall] process_create: set saved_ttbr0=0x4049c000 for TCB=0x4049f000
 [syscall] process_create: set priority 55 for component
-[syscall] process_create: enqueuing TCB at 0x4049e000
-[syscall] process_create: SUCCESS - PID=0x4049e000
-[syscall] process_create: set TrapFrame - x1=0x4049e000, x2=0x4049b000, x3=0x4049c000
-[loader] Inserting TCB cap: slot=201, tcb_phys=0x000000004049e000
-[syscall] cap_insert_self: slot=201, type=4, obj=0x4049e000
+[syscall] process_create: enqueuing TCB at 0x4049f000
+[syscall] process_create: SUCCESS - PID=0x4049f000
+[syscall] process_create: set TrapFrame - x1=0x4049f000, x2=0x4049c000, x3=0x4049d000
+[loader] Inserting TCB cap: slot=201, tcb_phys=0x000000004049f000
+[syscall] cap_insert_self: slot=201, type=4, obj=0x4049f000
 [syscall] cap_insert_self: ✓ inserted Tcb cap at slot 201 in caller's CSpace
-    ✓ test_minimal spawned (PID: 1078583296)
+    ✓ test_minimal spawned (PID: 1078587392)
 
 ═══════════════════════════════════════════════════════════
   Component Spawning: COMPLETE ✓
@@ -647,62 +650,6 @@ Kernel initialization complete!
 
 [root_task] Yielding to spawned components...
   Will jump to ELR=0x200000 with SP=0x80000000
-
-═══════════════════════════════════════════════════════════
-  System Init Component v0.1.0
-═══════════════════════════════════════════════════════════
-
-[system_init] Initializing...
-[system_init] Component spawned successfully!
-[system_init] Running in userspace (EL0)
-
-[system_init] Starting initialization
-[system_init] Creating notification for event handling...
-[system_init] Notification created successfully
-
-═══════════════════════════════════════════════════════════
-  Spawning Delegated Components
-═══════════════════════════════════════════════════════════
-
-[system_init] Registry: 3 components
-[system_init] Spawning: ipc_producer
-[syscall] memory_map: phys=0x404a7000, size=0x3000, perms=0x3
-[syscall] memory_map: allocated virt range 0x80038000 - 0x8003b000, mapping 3 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80038000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x404ae000, priority=60
-[syscall] sys_process_create: code_phys=0x404a7000, code_vaddr=0x200000, code_size=0x3000, stack_phys=0x404aa000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x404a7000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x404a8000
-[syscall] Mapping page 2: virt=0x202000 -> phys=0x404a9000
-[syscall] process_create: set priority 60 for component
-[syscall] process_create: enqueuing TCB at 0x404b2000
-[syscall] process_create: SUCCESS - PID=0x404b2000
-[syscall] process_create: set TrapFrame - x1=0x404b2000, x2=0x404ae000, x3=0x404af000
-[syscall] cap_insert_self: slot=105, type=4, obj=0x404b2000
-[syscall] cap_insert_self: ✓ inserted Tcb cap at slot 105 in caller's CSpace
-  ✓ Spawned ipc_producer (PID: 1078665216)
-[system_init] Spawning: ipc_consumer
-[syscall] memory_map: phys=0x404ba000, size=0x3000, perms=0x3
-[syscall] memory_map: allocated virt range 0x8003b000 - 0x8003e000, mapping 3 pages
-[syscall] memory_map: SUCCESS - returning virt=0x8003b000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x404c1000, priority=60
-[syscall] sys_process_create: code_phys=0x404ba000, code_vaddr=0x200000, code_size=0x3000, stack_phys=0x404bd000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x404ba000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x404bb000
-[syscall] Mapping page 2: virt=0x202000 -> phys=0x404bc000
-[syscall] process_create: set priority 60 for component
-[syscall] process_create: enqueuing TCB at 0x404c4000
-[syscall] process_create: SUCCESS - PID=0x404c4000
-[syscall] process_create: set TrapFrame - x1=0x404c4000, x2=0x404c1000, x3=0x404c2000
-[syscall] cap_insert_self: slot=106, type=4, obj=0x404c4000
-[syscall] cap_insert_self: ✓ inserted Tcb cap at slot 106 in caller's CSpace
-  ✓ Spawned ipc_consumer (PID: 1078738944)
-
-═══════════════════════════════════════════════════════════
-  System Init: Ready
-═══════════════════════════════════════════════════════════
-
-[system_init] Entering event loop (waiting for signals)
 
 ═══════════════════════════════════════════════════════════
   System Init Component v0.1.0

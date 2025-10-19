@@ -285,6 +285,11 @@ impl ComponentLoader {
         if pt_root == usize::MAX {
             return Err(ComponentError::OutOfMemory);
         }
+        crate::sys_print("[loader] Allocated PT for ");
+        crate::sys_print(desc.name);
+        crate::sys_print(" at 0x");
+        crate::print_hex(pt_root);
+        crate::sys_print("\n");
 
         // 6. Allocate CNode for capability space (4KB)
         let cspace_root = crate::sys_memory_allocate(4096);
@@ -378,6 +383,8 @@ impl ComponentLoader {
         crate::print_hex(process_mem);
         crate::sys_print(", code_size=0x");
         crate::print_hex(process_size);
+        crate::sys_print(", pt_root=0x");
+        crate::print_hex(pt_root);
         crate::sys_print("\n");
 
         // Use capabilities from component descriptor
