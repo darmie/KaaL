@@ -29,6 +29,7 @@ pub struct SpawnResult {
 /// # Arguments
 /// * `binary_data` - ELF binary data
 /// * `priority` - Scheduling priority (0-255)
+/// * `capabilities` - Capability bitmask for the new process
 ///
 /// # Returns
 /// * `Ok(SpawnResult)` with TCB capability and PID
@@ -37,10 +38,12 @@ pub struct SpawnResult {
 /// # Example
 /// ```no_run
 /// let binary_data = include_bytes!("../path/to/component");
-/// let result = spawn_from_elf(binary_data, 10)?;
+/// // Grant IPC capabilities only (bit 2)
+/// let caps = 1 << 2;
+/// let result = spawn_from_elf(binary_data, 10, caps)?;
 /// println!("Spawned with PID: {}", result.pid);
 /// ```
-pub fn spawn_from_elf(binary_data: &[u8], priority: u8) -> Result<SpawnResult> {
+pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Result<SpawnResult> {
     unsafe {
         // 1. Parse ELF
         let elf_info = elf::parse_elf(binary_data)
@@ -92,6 +95,7 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8) -> Result<SpawnResult> {
             process_size,
             stack_phys,
             priority,
+            capabilities,  // Pass capabilities to new process
         )?;
 
         // 7. Get TCB capability

@@ -376,6 +376,10 @@ impl ComponentLoader {
         crate::print_hex(process_size);
         crate::sys_print("\n");
 
+        // TODO: Parse capabilities from component descriptor and pass actual bitmask
+        // For now, grant all capabilities to spawned components
+        const CAP_ALL: u64 = 0xFFFFFFFFFFFFFFFF;
+
         let result = crate::sys_process_create(
             elf_info.entry_point,
             stack_top,
@@ -386,6 +390,7 @@ impl ComponentLoader {
             process_size,
             stack_mem,
             desc.priority,  // Pass the component priority from manifest
+            CAP_ALL,  // Grant all capabilities (temporary - should parse from manifest)
         );
 
         if result.pid == usize::MAX {

@@ -192,6 +192,7 @@ unsafe fn sys_process_create(
     code_size: usize,
     stack_phys: usize,
     priority: u8,
+    capabilities: u64,
 ) -> ProcessCreateResult {
     let pid: usize;
     let tcb_phys: usize;
@@ -210,6 +211,7 @@ unsafe fn sys_process_create(
         "mov x7, {stack_phys}",
         "mov x8, {syscall_num}",
         "mov x9, {priority}",
+        "mov x10, {caps}",
         // Make syscall
         "svc #0",
         // Read outputs
@@ -227,6 +229,7 @@ unsafe fn sys_process_create(
         code_size = in(reg) code_size,
         stack_phys = in(reg) stack_phys,
         priority = in(reg) priority as usize,
+        caps = in(reg) capabilities as usize,
         pid = out(reg) pid,
         tcb = out(reg) tcb_phys,
         pt_out = out(reg) pt_phys,

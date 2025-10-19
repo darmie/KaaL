@@ -245,7 +245,8 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_PROCESS_CREATE => sys_process_create(
             tf,  // Pass TrapFrame to set extra return values
             args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
-            tf.x9  // Priority passed in x9
+            tf.x9,  // Priority passed in x9
+            tf.x10  // Capabilities passed in x10
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
@@ -597,7 +598,8 @@ fn sys_process_create(
     code_vaddr: u64,
     code_size: u64,
     stack_phys: u64,
-    priority: u64,  // Added priority parameter from x9
+    priority: u64,  // Priority parameter from x9
+    capabilities: u64,  // Capabilities parameter from x10
 ) -> u64 {
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
@@ -773,8 +775,7 @@ fn sys_process_create(
     // Create TCB
     let tcb_ptr = tcb_frame.as_usize() as *mut TCB;
     unsafe {
-        // TODO: Accept capabilities parameter from caller and pass here
-        // For now, grant all capabilities (same as root-task)
+        // Use capabilities specified by caller
         let tcb = TCB::new(
             pid,
             cspace_ptr,
@@ -782,7 +783,7 @@ fn sys_process_create(
             ipc_buffer,
             entry_point,
             stack_pointer,
-            TCB::CAP_ALL,  // TODO: Pass actual capabilities from spawn request
+            capabilities,  // Capabilities passed from caller
         );
         core::ptr::write(tcb_ptr, tcb);
 

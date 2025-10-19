@@ -551,9 +551,9 @@ macro_rules! syscall {
         }
     }};
 
-    // 9 arguments (8 in x0-x7, priority in x9)
+    // 10 arguments (8 in x0-x7, priority in x9, capabilities in x10)
     // Special case for SYS_PROCESS_CREATE
-    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $priority:expr) => {{
+    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $priority:expr, $capabilities:expr) => {{
         let result: usize;
         unsafe {
             core::arch::asm!(
@@ -567,6 +567,7 @@ macro_rules! syscall {
                 "mov x7, {arg7}",
                 "mov x8, {num}",
                 "mov x9, {priority}",
+                "mov x10, {capabilities}",
                 "svc #0",
                 "mov {result}, x0",
                 arg0 = in(reg) $arg0 as usize,
@@ -579,6 +580,7 @@ macro_rules! syscall {
                 arg7 = in(reg) $arg7 as usize,
                 num = in(reg) $num,
                 priority = in(reg) $priority as usize,
+                capabilities = in(reg) $capabilities as usize,
                 result = out(reg) result,
                 out("x0") _,
                 out("x1") _,
@@ -590,6 +592,7 @@ macro_rules! syscall {
                 out("x7") _,
                 out("x8") _,
                 out("x9") _,
+                out("x10") _,
             );
             result
         }
@@ -720,6 +723,7 @@ pub unsafe fn cap_insert_into(
 /// * `code_size` - Size of code region in bytes
 /// * `stack_phys` - Physical address where stack is located
 /// * `priority` - Scheduling priority (0-255)
+/// * `capabilities` - Capability bitmask for the new process
 ///
 /// # Returns
 ///
@@ -738,6 +742,7 @@ pub unsafe fn process_create(
     code_size: usize,
     stack_phys: usize,
     priority: u8,
+    capabilities: u64,
 ) -> crate::Result<usize> {
     let result = crate::syscall!(
         numbers::SYS_PROCESS_CREATE,
@@ -749,7 +754,8 @@ pub unsafe fn process_create(
         code_vaddr,
         code_size,
         stack_phys,
-        priority
+        priority,
+        capabilities
     );
 
     if result == usize::MAX {
