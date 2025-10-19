@@ -127,6 +127,112 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 ---
 
+## 💡 Example: Building a Custom Component
+
+Here's how you'd build a custom service using KaaL's composable APIs:
+
+```rust
+// components/my-service/src/main.rs
+#![no_std]
+#![no_main]
+
+use kaal_sdk::{
+    component::{Component, ComponentType, ComponentMetadata},
+    capability::Notification,
+    ipc::Channel,
+    syscall,
+};
+
+// Define component metadata
+component_metadata! {
+    name: "my_service",
+    type: Service,
+    version: "0.1.0",
+}
+
+struct MyService {
+    notification: Notification,
+    ipc_channel: Option<Channel<MyMessage>>,
+}
+
+#[derive(Debug)]
+struct MyMessage {
+    data: u64,
+    flags: u32,
+}
+
+impl Component for MyService {
+    fn init() -> kaal_sdk::Result<Self> {
+        syscall::print("[my_service] Initializing...\n");
+
+        // Allocate notification for events
+        let notification = Notification::create()?;
+
+        Ok(Self {
+            notification,
+            ipc_channel: None,
+        })
+    }
+
+    fn run(&mut self) -> ! {
+        syscall::print("[my_service] Running event loop\n");
+
+        loop {
+            // Wait for notification
+            match self.notification.wait() {
+                Ok(signals) => {
+                    self.handle_event(signals);
+                }
+                Err(_) => {
+                    syscall::print("[my_service] Error waiting for event\n");
+                }
+            }
+        }
+    }
+}
+
+impl MyService {
+    fn handle_event(&mut self, signals: u64) {
+        syscall::print("[my_service] Received event: ");
+        // Process event...
+    }
+}
+
+// Entry point
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    MyService::start()
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    syscall::print("[my_service] PANIC!\n");
+    loop { unsafe { core::arch::asm!("wfi") } }
+}
+```
+
+Add to `components.toml`:
+
+```toml
+[component.my_service]
+name = "my_service"
+binary = "my-service"
+type = "service"
+priority = 100
+autostart = true
+capabilities = ["ipc:*", "memory:allocate"]
+```
+
+Build and run:
+
+```bash
+nu build.nu --run
+```
+
+Your component will be discovered, built, added to the registry, and spawned automatically by system_init!
+
+---
+
 ## 🎨 Design Principles
 
 1. **Composability**: Mix and match components
