@@ -109,7 +109,7 @@ name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
 priority = 60  # Same priority as consumer for round-robin scheduling
-autostart = false  # Spawned on-demand for IPC testing
+autostart = true  # Auto-spawned by system_init for IPC demo
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -121,7 +121,7 @@ name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
 priority = 60  # Run first to initialize and wait for producer
-autostart = false  # Spawned on-demand for IPC testing
+autostart = true  # Auto-spawned by system_init for IPC demo
 capabilities = [
     "memory:map",
     "notification:signal",

@@ -787,91 +787,13 @@ pub extern "C" fn _start() -> ! {
     // Component spawning complete - system continues running
     unsafe {
         sys_print("[root_task] Component switching working! ✓\n");
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // IPC Demo - TEMPORARY: Should move to system_init
-    // ═══════════════════════════════════════════════════════════
-    //
-    // TODO: Move this to system_init once we implement SYS_COMPONENT_SPAWN
-    //
-    // Currently root-task spawns IPC producer/consumer to demonstrate
-    // inter-component communication. This works but violates separation:
-    // - Root-task should only initialize runtime
-    // - Application logic belongs in system_init
-    //
-    // Next step: Implement SYS_COMPONENT_SPAWN syscall so system_init
-    // can spawn components from userspace.
-    //
-    unsafe {
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  IPC Demo (runs from root-task temporarily)\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-
-        sys_print("[root_task] Spawning IPC producer...\n");
-        let producer = match loader.spawn("ipc_producer") {
-            Ok(result) => {
-                sys_print("  ✓ IPC producer spawned (PID: ");
-                print_number(result.pid);
-                sys_print(")\n");
-                result
-            }
-            Err(_) => {
-                sys_print("  ✗ Failed to spawn IPC producer\n");
-                component_loader::SpawnResult {
-                    pid: 0,
-                    tcb_cap_slot: 0,
-                    tcb_phys: 0,
-                    vspace_cap: 0,
-                    cspace_cap: 0,
-                }
-            }
-        };
-
-        if producer.pid != 0 {
-            sys_print("[root_task] Spawning IPC consumer...\n");
-            let consumer = match loader.spawn("ipc_consumer") {
-                Ok(result) => {
-                    sys_print("  ✓ IPC consumer spawned (PID: ");
-                    print_number(result.pid);
-                    sys_print(")\n");
-                    result
-                }
-                Err(_) => {
-                    sys_print("  ✗ Failed to spawn IPC consumer\n");
-                    component_loader::SpawnResult {
-                        pid: 0,
-                        tcb_cap_slot: 0,
-                        tcb_phys: 0,
-                        vspace_cap: 0,
-                        cspace_cap: 0,
-                    }
-                }
-            };
-
-            if consumer.pid != 0 {
-                sys_print("\n[root_task] IPC demo components spawned\n");
-                sys_print("  → Components establish channel via syscalls\n");
-                sys_print("  → Using decentralized self-service pattern\n");
-                sys_print("  → Shared memory registry for discovery\n");
-                sys_print("\n");
-
-                // Yield to let components run
-                for _ in 0..20 {
-                    sys_yield();
-                }
-            }
-        }
-
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("  Root Task: Complete ✓\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
         sys_print("[root_task] Handing off to system_init\n");
-        sys_print("[root_task] system_init is the developer playground\n");
+        sys_print("[root_task] IPC demo now runs via system_init autostart\n");
         sys_print("\n");
     }
 
