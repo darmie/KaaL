@@ -81,6 +81,9 @@ pub struct ComponentDescriptor {
     pub autostart: bool,
     /// Required capabilities (as strings)
     pub capabilities: &'static [&'static str],
+    /// Required capabilities (as bitmask)
+    /// Bit 0: CAP_MEMORY, Bit 1: CAP_PROCESS, Bit 2: CAP_IPC, Bit 3: CAP_CAPS
+    pub capabilities_bitmask: u64,
     /// Embedded binary data (set at compile time)
     pub binary_data: Option<&'static [u8]>,
 }
@@ -99,6 +102,7 @@ impl ComponentDescriptor {
             priority: 100,
             autostart: false,
             capabilities: &[],
+            capabilities_bitmask: 0,
             binary_data: None,
         }
     }
@@ -376,9 +380,8 @@ impl ComponentLoader {
         crate::print_hex(process_size);
         crate::sys_print("\n");
 
-        // TODO: Parse capabilities from component descriptor and pass actual bitmask
-        // For now, grant all capabilities to spawned components
-        const CAP_ALL: u64 = 0xFFFFFFFFFFFFFFFF;
+        // Use capabilities from component descriptor
+        let capabilities = desc.capabilities_bitmask;
 
         let result = crate::sys_process_create(
             elf_info.entry_point,
@@ -390,7 +393,7 @@ impl ComponentLoader {
             process_size,
             stack_mem,
             desc.priority,  // Pass the component priority from manifest
-            CAP_ALL,  // Grant all capabilities (temporary - should parse from manifest)
+            capabilities,  // Pass parsed capabilities from manifest
         );
 
         if result.pid == usize::MAX {

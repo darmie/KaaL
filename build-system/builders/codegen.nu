@@ -492,6 +492,69 @@ export def "codegen component-linkers" [
     }
 }
 
+# Parse capability string to bitmask
+# Returns u64 bitmask based on capability name
+def parse_capability [cap: string]: nothing -> int {
+    let cap_lower = ($cap | str downcase)
+
+    # Check for wildcard patterns first
+    if ($cap_lower | str starts-with "ipc:") or ($cap_lower == "ipc" or $cap_lower == "ipc:*") {
+        return 4
+    }
+    if ($cap_lower | str starts-with "memory:") or ($cap_lower == "memory") {
+        return 1
+    }
+    if ($cap_lower | str starts-with "process:") or ($cap_lower == "process") {
+        return 2
+    }
+    if ($cap_lower | str starts-with "caps:") or ($cap_lower == "caps") {
+        return 8
+    }
+    if ($cap_lower | str starts-with "notification:") or ($cap_lower == "notification") {
+        return 4
+    }
+    if ($cap_lower | str starts-with "endpoint:") or ($cap_lower == "endpoint") {
+        return 4
+    }
+    if ($cap_lower | str starts-with "interrupt:") {
+        # Interrupts are not part of core capabilities yet - ignore
+        return 0
+    }
+
+    # Exact matches
+    match $cap_lower {
+        # Memory capabilities
+        "memory" => 1
+
+        # Process capabilities
+        "process" => 2
+
+        # IPC capabilities
+        "ipc" => 4
+        "notification" => 4
+        "endpoint" => 4
+
+        # Capability management
+        "caps" => 8
+
+        _ => {
+            # Only warn for unknown patterns that don't look like device-specific
+            if not ($cap_lower | str contains ":") {
+                print $"Warning: Unknown capability '($cap)', defaulting to 0"
+            }
+            0
+        }
+    }
+}
+
+# Convert capability array to bitmask
+def capabilities_to_bitmask [caps: list<string>]: nothing -> int {
+    if ($caps | is-empty) {
+        return 0
+    }
+    $caps | each { |cap| parse_capability $cap } | reduce --fold 0 { |it, acc| $acc | bits or $it }
+}
+
 # Generate component registry from components.toml
 export def "codegen component-registry" [] {
     print "Generating component registry..."
@@ -505,6 +568,9 @@ export def "codegen component-registry" [] {
     let descriptors = ($components | each { |comp|
         let caps = ($comp.capabilities | each { |cap| $"        \"($cap)\"" } | str join ",\n")
         let caps_array = if ($caps | is-empty) { "    &[]" } else { $"    &[\n($caps)\n    ]" }
+
+        # Parse capabilities to bitmask
+        let caps_bitmask = (capabilities_to_bitmask $comp.capabilities)
 
         # Only include binary if it exists
         let binary_path = $"components/($comp.binary)/target/aarch64-unknown-none/release/($comp.binary)"
@@ -523,6 +589,7 @@ export def "codegen component-registry" [] {
         priority: ($comp.priority),
         autostart: ($comp.autostart),
         capabilities: ($caps_array),
+        capabilities_bitmask: ($caps_bitmask),
         binary_data: ($binary_data),
     }"
     } | str join ",\n")

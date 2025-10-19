@@ -18,6 +18,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "memory:allocate",
         "ipc:*"
     ],
+        capabilities_bitmask: 7,
         binary_data: Some(include_bytes!("../../../../components/system-init/target/aarch64-unknown-none/release/system-init")),
     },
     ComponentDescriptor {
@@ -31,6 +32,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "interrupt:33",
         "ipc:serial"
     ],
+        capabilities_bitmask: 4,
         binary_data: None,
     },
     ComponentDescriptor {
@@ -44,6 +46,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "interrupt:27",
         "ipc:timer"
     ],
+        capabilities_bitmask: 4,
         binary_data: None,
     },
     ComponentDescriptor {
@@ -58,6 +61,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "memory:allocate",
         "ipc:procmgr"
     ],
+        capabilities_bitmask: 7,
         binary_data: None,
     },
     ComponentDescriptor {
@@ -70,6 +74,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "ipc:vfs",
         "ipc:serial"
     ],
+        capabilities_bitmask: 4,
         binary_data: None,
     },
     ComponentDescriptor {
@@ -83,6 +88,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "notification:signal",
         "notification:wait"
     ],
+        capabilities_bitmask: 5,
         binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
     },
     ComponentDescriptor {
@@ -96,6 +102,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "notification:signal",
         "notification:wait"
     ],
+        capabilities_bitmask: 5,
         binary_data: Some(include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer")),
     },
     ComponentDescriptor {
@@ -105,6 +112,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         priority: 50,
         autostart: false,
         capabilities:     &[],
+        capabilities_bitmask: 0,
         binary_data: Some(include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal")),
     },
     ComponentDescriptor {
@@ -118,6 +126,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "ipc:vfs",
         "ipc:procmgr"
     ],
+        capabilities_bitmask: 4,
         binary_data: None,
     }
 ];
