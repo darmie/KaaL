@@ -1582,13 +1582,11 @@ fn sys_notification_create() -> u64 {
     };
 
     let notification_phys = notification_frame.phys_addr();
-    ksyscall_debug!("[syscall] notification_create: allocated frame at phys 0x{:x}", notification_phys.as_u64());
 
     // Create the Notification object
     let notification_ptr = notification_phys.as_u64() as *mut Notification;
     unsafe {
         ptr::write(notification_ptr, Notification::new());
-        ksyscall_debug!("[syscall] notification_create: created Notification at 0x{:x}", notification_ptr as u64);
     }
 
     // Allocate capability slot for the notification
@@ -1597,12 +1595,12 @@ fn sys_notification_create() -> u64 {
     // Insert notification capability into current thread's CSpace
     unsafe {
         if !insert_notification_capability(slot as usize, notification_ptr) {
-            ksyscall_debug!("[syscall] notification_create: failed to insert capability into CSpace");
+            ksyscall_debug!("[syscall] notification_create: failed to insert capability");
             return u64::MAX;
         }
     }
 
-    ksyscall_debug!("[syscall] notification_create -> cap_slot={}, notification capability inserted into CSpace", slot);
+    ksyscall_debug!("[syscall] notification_create: SUCCESS -> cap_slot={}", slot);
     slot
 }
 
