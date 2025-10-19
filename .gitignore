@@ -92,6 +92,9 @@ temp/
 *.simple
 *.old
 
+# Archive directory (old code snapshots)
+archive/
+
 # Test artifacts
 test-results/
 *.test
