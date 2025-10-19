@@ -88,6 +88,19 @@ def main [
                 print $"  Cleaned ($runtime_dir | path basename)"
             }
         }
+        # Clean generated files
+        if ("runtime/root-task/src/generated" | path exists) {
+            rm -rf runtime/root-task/src/generated
+            print "  Cleaned root-task generated files"
+        }
+        if ("components/system-init/src/generated" | path exists) {
+            rm -rf components/system-init/src/generated
+            print "  Cleaned system-init generated files"
+        }
+        if ("kernel/src/generated" | path exists) {
+            rm -rf kernel/src/generated
+            print "  Cleaned kernel generated files"
+        }
         print ""
     }
 
