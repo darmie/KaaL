@@ -200,40 +200,18 @@ unsafe fn sys_process_create(
     let cspace_phys: usize;
 
     core::arch::asm!(
-        // Set inputs
-        "mov x0, {0}",
-        "mov x1, {1}",
-        "mov x2, {2}",
-        "mov x3, {3}",
-        "mov x4, {4}",
-        "mov x5, {5}",
-        "mov x6, {6}",
-        "mov x7, {7}",
-        "mov x8, {8}",
-        "mov x9, {9}",
-        "mov x10, {10}",
-        // Make syscall
         "svc #0",
-        // Read outputs into different registers
-        "mov {11}, x0",
-        "mov {12}, x1",
-        "mov {13}, x2",
-        "mov {14}, x3",
-        in(reg) entry_point,          // {0}
-        in(reg) stack_pointer,         // {1}
-        in(reg) page_table_root,       // {2}
-        in(reg) cspace_root,           // {3}
-        in(reg) code_phys,             // {4}
-        in(reg) code_vaddr,            // {5}
-        in(reg) code_size,             // {6}
-        in(reg) stack_phys,            // {7}
-        in(reg) SYS_PROCESS_CREATE,    // {8}
-        in(reg) priority as usize,     // {9}
-        in(reg) capabilities as usize, // {10}
-        out(reg) pid,                  // {11}
-        out(reg) tcb_phys,             // {12}
-        out(reg) pt_phys,              // {13}
-        out(reg) cspace_phys,          // {14}
+        inout("x0") entry_point => pid,
+        inout("x1") stack_pointer => tcb_phys,
+        inout("x2") page_table_root => pt_phys,
+        inout("x3") cspace_root => cspace_phys,
+        in("x4") code_phys,
+        in("x5") code_vaddr,
+        in("x6") code_size,
+        in("x7") stack_phys,
+        in("x8") SYS_PROCESS_CREATE,
+        in("x9") priority as usize,
+        in("x10") capabilities as usize,
     );
 
     // Debug: Check what we received (avoid sys_print which causes syscalls)
