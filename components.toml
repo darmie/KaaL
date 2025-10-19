@@ -130,14 +130,14 @@ capabilities = [
     "notification:wait",
 ]
 
-# Test component - Minimal for debugging
+# Test component - Capability enforcement test
 [[component]]
 name = "test_minimal"
 binary = "test-minimal"
 type = "service"
-priority = 50  # High priority to run before system_init (lower = higher priority)
-autostart = false  # Disabled so root_task can continue to Phase 5
-capabilities = []
+priority = 45  # Run before system_init to test capabilities early
+autostart = true  # Enable to test capability enforcement
+capabilities = []  # NO capabilities - tests that syscalls are properly denied
 
 # Applications - User-facing programs
 [[component]]

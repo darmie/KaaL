@@ -27,7 +27,7 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     },
     ComponentDescriptor {
         name: "test_minimal",
-        priority: 50,
+        priority: 45,
         autostart: false,
         binary_data: include_bytes!("../../../test-minimal/target/aarch64-unknown-none/release/test-minimal"),
     },
