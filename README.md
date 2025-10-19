@@ -94,24 +94,36 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 ## 📦 What KaaL Provides
 
-### Core Framework (The Skeleton)
-- **`kaal-kernel`**: Native Rust microkernel (capability-based)
-- **`cap-broker`**: Capability management (bring your policies)
-- **`kaal-ipc`**: Typed message passing
-- **`kaal-allocator`**: Memory primitives
-- **`dddk`**: Driver development kit
+### Core Kernel
 
-### Optional Components (Composable)
-- **`kaal-vfs`**: Virtual filesystem (optional)
-- **`kaal-network`**: Network stack (optional)  
-- **`kaal-posix`**: POSIX layer (optional)
-- **`kaal-drivers`**: Hardware drivers (optional)
+- **Microkernel**: seL4-style capability-based security model
+- **Memory Management**: Physical allocator, virtual memory, page tables
+- **Process Isolation**: Separate address spaces (VSpace) and capability spaces (CSpace)
+- **IPC**: Shared memory + notifications for inter-component communication
+- **Scheduling**: Priority-based preemptive scheduler
+- **Exception Handling**: EL1 exception vectors, syscall interface
 
-### Tools
-- **Build system**: Config-driven multi-platform build
-- **Platform support**: QEMU, Raspberry Pi, custom boards
+### Runtime
 
-**Pick what you need. Leave what you don't.**
+- **Root-Task**: Minimal bootstrap runtime, initializes kernel objects
+- **Elfloader**: Multi-stage bootloader, loads kernel + root-task
+- **Component Spawning**: Userspace ELF loading without kernel bloat
+
+### SDK
+
+- **kaal-sdk**: Syscall wrappers, component patterns, spawning helpers
+- **Capability API**: Allocate, transfer, manage capabilities
+- **Memory API**: Allocate, map, unmap physical memory
+- **IPC API**: Shared memory channels, notifications, typed messaging
+- **Component Spawning**: `spawn_from_elf()` - no new syscalls needed!
+
+### Build System
+
+- **Nushell-based**: Type-safe, modern build orchestration
+- **Component Discovery**: Auto-discovery from `components.toml`
+- **Registry Generation**: Automatic component registry for boot orchestration
+- **Multi-Platform**: QEMU virt, Raspberry Pi 4, custom boards
+- **Code Generation**: Linker scripts, platform configs, component registries
 
 ---
 
