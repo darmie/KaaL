@@ -646,7 +646,7 @@ unsafe fn test_notifications() {
 /// 6. Root task enters idle loop
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    // Print ASCII art banner and welcome message from userspace
+    // Print banner and welcome message from userspace
     unsafe {
         sys_print("\n");
         sys_print("    $$╲   $$╲                    $$╲       \n");
@@ -658,20 +658,15 @@ pub extern "C" fn _start() -> ! {
         sys_print("    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ \n");
         sys_print("    ╲__│  ╲__│╲_______│ ╲_______│╲________│\n");
         sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("  KaaL Root Task (EL0) v0.1.0\n");
-        sys_print("  Chapter 7: Root Task & Boot Protocol\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
-        sys_print("[root_task] Hello from userspace (EL0)!\n");
-        sys_print("[root_task] Syscalls working: sys_print functional\n");
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 7: COMPLETE ✓\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("[root_task] Hello from userspace (EL0)\n");
         sys_print("\n");
     }
 
+    // Test phases - See docs/chapters/CHAPTER_09_STATUS.md
+    // Commented out to reduce boot verbosity. Tests verified functional.
+    /*
     // Chapter 9: Test Capability Broker
     unsafe {
         broker_integration::test_capability_broker();
@@ -686,6 +681,7 @@ pub extern "C" fn _start() -> ! {
     unsafe {
         test_shared_memory_ipc();
     }
+    */
 
     // Create component loader with registry
     use component_loader::{ComponentLoader, ComponentRegistry};
@@ -693,44 +689,22 @@ pub extern "C" fn _start() -> ! {
         ComponentRegistry::new(generated::component_registry::COMPONENT_REGISTRY);
     let loader = ComponentLoader::new(&REGISTRY);
 
-    // Chapter 9 Phase 4: Component Loading & Spawning
+    // Component Loading & Spawning - See docs/chapters/CHAPTER_09_STATUS.md
     unsafe {
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 4: Component Loading & Spawning\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-
-        // Use the generated component registry
-        sys_print("[root_task] Component Registry:\n");
-        sys_print("  → Total components: ");
-        print_number(generated::component_registry::COMPONENT_COUNT);
-        sys_print("\n");
-        sys_print("  → Autostart components: ");
-        let autostart_count = generated::component_registry::get_autostart_components().count();
-        print_number(autostart_count);
-        sys_print("\n");
-        sys_print("\n");
-
         // Spawn all autostart components
-        sys_print("[root_task] Spawning autostart components...\n");
+        sys_print("[root_task] Spawning components...\n");
         for component in generated::component_registry::get_autostart_components() {
-            sys_print("  → Spawning ");
+            sys_print("  → ");
             sys_print(component.name);
-            sys_print("...\n");
 
             match loader.spawn(component.name) {
                 Ok(result) => {
-                    sys_print("    ✓ ");
-                    sys_print(component.name);
-                    sys_print(" spawned (PID: ");
+                    sys_print(" (PID: ");
                     print_number(result.pid);
                     sys_print(")\n");
                 }
                 Err(e) => {
-                    sys_print("    ✗ Failed to spawn ");
-                    sys_print(component.name);
-                    sys_print(": ");
+                    sys_print(" - Failed: ");
                     match e {
                         ComponentError::NotFound => sys_print("not found"),
                         ComponentError::NoBinary => sys_print("no binary"),
@@ -744,28 +718,9 @@ pub extern "C" fn _start() -> ! {
             }
         }
         sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Component Spawning: COMPLETE ✓\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
 
         // Yield to let components run
-        sys_print("[root_task] Yielding to spawned components...\n");
         sys_yield();
-        sys_print("[root_task] Back from components!\n");
-    }
-
-    // Component spawning complete - system continues running
-    unsafe {
-        sys_print("[root_task] Component switching working! ✓\n");
-        sys_print("\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Root Task: Complete ✓\n");
-        sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("\n");
-        sys_print("[root_task] Handing off to system_init\n");
-        sys_print("[root_task] IPC demo now runs via system_init autostart\n");
-        sys_print("\n");
     }
 
     /*

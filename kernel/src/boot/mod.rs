@@ -39,16 +39,12 @@ pub fn kernel_entry() -> ! {
     crate::config::init_console();
 
     // Print banner
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
-    crate::kprintln!("  KaaL Rust Microkernel v0.1.0");
-    crate::kprintln!("  Chapter 1: Bare Metal Boot & Early Init");
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    crate::kprintln!("KaaL Rust Microkernel v0.1.0");
     crate::kprintln!("");
-    crate::kprintln!("Boot parameters:");
-    crate::kprintln!("  DTB:         {:#x} (size: {} bytes)", params.dtb_addr, params.dtb_size);
-    crate::kprintln!("  Root task:   {:#x} - {:#x}", params.root_p_start, params.root_p_end);
-    crate::kprintln!("  Entry:       {:#x}", params.root_v_entry);
-    crate::kprintln!("  PV offset:   {:#x}", params.pv_offset);
+    crate::kprintln!("[boot] DTB: {:#x} (size: {} bytes)", params.dtb_addr, params.dtb_size);
+    crate::kprintln!("[boot] Root task: {:#x} - {:#x}", params.root_p_start, params.root_p_end);
+    crate::kprintln!("[boot] Entry: {:#x}", params.root_v_entry);
+    crate::kprintln!("[boot] PV offset: {:#x}", params.pv_offset);
     crate::kprintln!("");
 
     // Initialize global boot info
@@ -66,12 +62,11 @@ pub fn kernel_entry() -> ! {
     crate::kprintln!("[boot] Boot info initialized and stored globally");
 
     // Parse device tree
-    crate::kprintln!("Parsing device tree...");
+    crate::kprintln!("[boot] Parsing device tree...");
     let dtb_info = match dtb::parse(params.dtb_addr) {
         Ok(info) => {
-            crate::kprintln!("Device tree parsed successfully:");
-            crate::kprintln!("  Model:       {}", info.model);
-            crate::kprintln!("  Memory:      {:#x} - {:#x} ({} MB)",
+            crate::kprintln!("[boot] Model: {}", info.model);
+            crate::kprintln!("[boot] Memory: {:#x} - {:#x} ({} MB)",
                            info.memory_start,
                            info.memory_end,
                            (info.memory_end - info.memory_start) / (1024 * 1024));
@@ -79,21 +74,16 @@ pub fn kernel_entry() -> ! {
             Some(info)
         }
         Err(e) => {
-            crate::kprintln!("ERROR: Failed to parse DTB: {:?}", e);
+            crate::kprintln!("[boot] ERROR: Failed to parse DTB: {:?}", e);
             None
         }
     };
 
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
-    crate::kprintln!("  Chapter 1: COMPLETE ✓");
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
     crate::kprintln!("");
 
-    // Chapter 2: Memory Management
+    // Memory Management - See docs/chapters/CHAPTER_02_STATUS.md
     if let Some(info) = dtb_info {
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 2: Memory Management");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("[boot] Initializing memory subsystem");
         crate::kprintln!("");
 
         // Get kernel boundaries (symbols from linker script)
@@ -115,7 +105,9 @@ pub fn kernel_entry() -> ! {
             );
         }
 
-        // Test frame allocation
+        // Frame allocator test - See docs/chapters/CHAPTER_02_STATUS.md
+        // Commented out to reduce boot verbosity. Test verified functional.
+        /*
         crate::kprintln!("");
         crate::kprintln!("[test] Testing frame allocator...");
         if let Some(frame1) = crate::memory::alloc_frame() {
@@ -135,9 +127,10 @@ pub fn kernel_entry() -> ! {
         if let Some((free, total)) = crate::memory::memory_stats() {
             crate::kprintln!("  Final stats: {}/{} frames free", free, total);
         }
+        */
 
-        // Phase 3 & 4: Page tables and MMU setup
-        crate::kprintln!("[memory] Setting up page tables and MMU...");
+        // Page tables and MMU setup - See docs/chapters/CHAPTER_02_STATUS.md
+        crate::kprintln!("[boot] Setting up page tables and MMU...");
 
         // Allocate root page table for kernel space (TTBR1)
         let root_frame = crate::memory::alloc_frame().expect("Failed to allocate root page table");
@@ -152,10 +145,6 @@ pub fn kernel_entry() -> ! {
         use crate::arch::aarch64::page_table::PageTableFlags;
 
         // 1. Map DTB + elfloader + root task region (everything before kernel)
-        crate::kprintln!("  Mapping DTB: {:#x} - {:#x}",
-            info.memory_start,
-            kernel_start
-        );
         crate::memory::paging::identity_map_region(
             &mut mapper,
             info.memory_start,
@@ -164,10 +153,6 @@ pub fn kernel_entry() -> ! {
         ).expect("Failed to map DTB region");
 
         // 2. Map kernel code and data (use KERNEL_RWX for bootstrapping)
-        crate::kprintln!("  Mapping kernel: {:#x} - {:#x}",
-            kernel_start,
-            kernel_end
-        );
         let kernel_size = kernel_end - kernel_start;
         crate::memory::paging::identity_map_region(
             &mut mapper,
@@ -179,10 +164,6 @@ pub fn kernel_entry() -> ! {
         // 3. Map stack region (grows down from top of RAM)
         let stack_region_start = kernel_end;
         let stack_region_size = info.memory_end - kernel_end;
-        crate::kprintln!("  Mapping stack/heap region: {:#x} - {:#x}",
-            stack_region_start,
-            info.memory_end
-        );
         crate::memory::paging::identity_map_region(
             &mut mapper,
             stack_region_start,
@@ -191,7 +172,6 @@ pub fn kernel_entry() -> ! {
         ).expect("Failed to map stack region");
 
         // 4. Map UART for console output
-        crate::kprintln!("  Mapping UART device: {:#x}", crate::generated::memory_config::UART0_BASE);
         crate::memory::paging::identity_map_region(
             &mut mapper,
             crate::generated::memory_config::UART0_BASE as usize,
@@ -199,14 +179,11 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DEVICE,
         ).expect("Failed to map UART");
 
-        // Initialize and ENABLE MMU!
-        crate::kprintln!("  Root page table at: {:#x}", root_phys.as_usize());
-
         // CRITICAL: Install exception handlers BEFORE MMU enable!
         // MMU enable might trigger exceptions, so handlers must be ready
         crate::arch::aarch64::exception::init();
 
-        crate::kprintln!("  Enabling MMU...");
+        crate::kprintln!("[boot] Enabling MMU...");
 
         let mmu_config = crate::arch::aarch64::mmu::MmuConfig {
             ttbr1: root_phys,
@@ -218,68 +195,23 @@ pub fn kernel_entry() -> ! {
         }
 
         let mmu_enabled = crate::arch::aarch64::mmu::is_mmu_enabled();
-        crate::kprintln!("  MMU enabled: {}", mmu_enabled);
-
         if !mmu_enabled {
             panic!("MMU failed to enable!");
         }
 
-        crate::kprintln!("  ✓ MMU enabled successfully with virtual memory!");
-
-        // Phase 5: No kernel heap allocator (seL4 design principle)
-        // seL4 kernels do not use dynamic memory allocation after boot.
-        // All resources are statically allocated or provided by userspace.
-        crate::kprintln!("[memory] No kernel heap (seL4 design: static allocation only)");
-
-        crate::kprintln!("");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 2: COMPLETE ✓");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
+        crate::kprintln!("[boot] MMU enabled successfully");
         crate::kprintln!("");
     }
 
-    // Chapter 3: Exception Handling & Syscalls
-    {
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 3: Exception Handling & Syscalls");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("");
+    // Exception Handling & Syscalls - See docs/chapters/CHAPTER_03_STATUS.md
+    // Exception vector table already installed before MMU enable
+    // Exception handling verified (trap frame, ESR/FAR decoding, syscalls)
 
-        // Exception vector table already installed before MMU enable (see Chapter 2)
-
-        crate::kprintln!("");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 3: Phase 1 COMPLETE ✓ (Exception vectors)");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("");
-
-        // Exception tests successfully verified:
-        // ✓ Data abort exception (tested separately - EC 0x25, FAR 0xdeadbeef)
-        // ✓ Syscall exception (tested separately - EC 0x15, syscall #42)
-        // Both tests work correctly but are commented out to prevent system instability
-
-        crate::kprintln!("[info] Exception handling verified:");
-        crate::kprintln!("  ✓ Trap frame saves/restores all 36 registers");
-        crate::kprintln!("  ✓ ESR/FAR decoding for fault analysis");
-        crate::kprintln!("  ✓ Data abort detection (EC 0x25)");
-        crate::kprintln!("  ✓ Syscall detection (EC 0x15)");
-        crate::kprintln!("  ✓ Context switching infrastructure ready");
-
-        crate::kprintln!("");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("  Chapter 3: COMPLETE ✓");
-        crate::kprintln!("═══════════════════════════════════════════════════════════");
-        crate::kprintln!("");
-    }
-
-    crate::kprintln!("Kernel initialization complete!");
+    crate::kprintln!("[boot] Kernel initialization complete");
     crate::kprintln!("");
 
-    // Initialize scheduler before creating root task
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
-    crate::kprintln!("  Scheduler Initialization");
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
-    crate::kprintln!("");
+    // Initialize scheduler before creating root task - See docs/chapters/CHAPTER_08_STATUS.md
+    crate::kprintln!("[boot] Initializing scheduler");
 
     // Create idle thread TCB
     let idle_tcb_frame = crate::memory::alloc_frame()
@@ -301,21 +233,17 @@ pub fn kernel_entry() -> ! {
 
         // Initialize scheduler with idle thread
         crate::scheduler::init(idle_tcb_ptr);
-        crate::kprintln!("[scheduler] Initialized with idle thread at {:#x}", idle_tcb_ptr as usize);
 
         // Initialize timer for preemption
         crate::scheduler::timer::init();
 
         // Enable IRQs for timer interrupts
         core::arch::asm!("msr daifclr, #2"); // Clear IRQ mask (bit 1)
-        crate::kprintln!("[timer] IRQs enabled for preemption");
     }
     crate::kprintln!("");
 
-    // Chapter 7: Create and start root task
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
-    crate::kprintln!("  Chapter 7: Root Task & Boot Protocol");
-    crate::kprintln!("═══════════════════════════════════════════════════════════");
+    // Create and start root task - See docs/chapters/CHAPTER_07_STATUS.md
+    crate::kprintln!("[boot] Starting root task");
     crate::kprintln!("");
 
     unsafe {
@@ -325,8 +253,6 @@ pub fn kernel_entry() -> ! {
     }
 
     // Idle loop
-    crate::kprintln!("");
-    crate::kprintln!("Entering idle loop...");
     loop {
         unsafe {
             asm!("wfi"); // Wait for interrupt

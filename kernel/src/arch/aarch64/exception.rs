@@ -517,6 +517,7 @@ fn print_exception_info() {
 ///
 /// Sets VBAR_EL1 to point to our exception vector table.
 /// Must be called during kernel initialization before enabling MMU.
+/// See docs/chapters/CHAPTER_03_STATUS.md for exception handling details.
 pub fn init() {
     use crate::arch::aarch64::registers::VBAR_EL1;
 
@@ -526,8 +527,6 @@ pub fn init() {
 
     let vector_table_addr = unsafe { &exception_vector_table as *const _ as u64 };
 
-    kprintln!("[exception] Installing exception vector table at 0x{:016x}", vector_table_addr);
-
     // Verify alignment (must be 2KB aligned)
     if vector_table_addr & 0x7FF != 0 {
         panic!("Exception vector table not 2KB aligned!");
@@ -536,6 +535,4 @@ pub fn init() {
     unsafe {
         VBAR_EL1::write(vector_table_addr);
     }
-
-    kprintln!("[exception] Exception handlers installed");
 }
