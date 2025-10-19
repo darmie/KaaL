@@ -81,9 +81,8 @@ impl Component for SystemInit {
             if comp.autostart {
                 printf!("[system_init] Spawning: {}\n", comp.name);
 
-                // TODO: Parse capabilities from comp descriptor and pass them
-                // For now, give spawned components IPC capabilities (CAP_MEMORY | CAP_IPC = 5)
-                let capabilities = (1 << 0) | (1 << 2);  // CAP_MEMORY | CAP_IPC
+                // Use capabilities from component descriptor
+                let capabilities = comp.capabilities_bitmask;
 
                 match kaal_sdk::component::spawn_from_elf(comp.binary_data, comp.priority, capabilities) {
                     Ok(result) => {

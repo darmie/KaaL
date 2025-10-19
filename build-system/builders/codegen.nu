@@ -147,12 +147,16 @@ export def "codegen system-init-registry" [] {
             # Check if this component should be spawned by system_init
             let spawned_by_system_init = ($comp.spawned_by? | default "") == "system_init"
 
+            # Parse capabilities to bitmask
+            let caps_bitmask = (capabilities_to_bitmask $comp.capabilities)
+
             {
                 name: $comp.name,
                 type: $comp.type,
                 priority: $comp.priority,
                 # Components with spawned_by="system_init" are autostart for system_init
                 autostart: $spawned_by_system_init,
+                capabilities_bitmask: $caps_bitmask,
                 # Path is relative to components/system-init/src/generated/registry.rs
                 # Need to go up 4 levels to project root, then into components/
                 binary_path: $"../../../../components/($comp.binary)/target/aarch64-unknown-none/release/($comp.binary)"
@@ -168,6 +172,7 @@ export def "codegen system-init-registry" [] {
             $'        name: "($comp.name)",'
             $'        priority: ($comp.priority),'
             $'        autostart: ($comp.autostart),'
+            $'        capabilities_bitmask: ($comp.capabilities_bitmask),'
             $'        binary_data: ($macro_call),'
             "    },"
         ] | str join "\n"
@@ -185,6 +190,7 @@ export def "codegen system-init-registry" [] {
         "    pub name: &'static str,"
         "    pub priority: u8,"
         "    pub autostart: bool,"
+        "    pub capabilities_bitmask: u64,"
         "    pub binary_data: &'static [u8],"
         "}"
         ""
