@@ -227,14 +227,24 @@ global_asm!(
     "    ldr x10, [sp, #248]",         // sp_el0
     "    ldr x11, [sp, #256]",         // elr_el1
     "    ldr x12, [sp, #264]",         // spsr_el1
-    "    ldr x13, [sp, #288]",         // ttbr0_el1
+    "    ldr x13, [sp, #288]",         // ttbr0_el1 (saved)
     "    msr sp_el0, x10",
     "    msr elr_el1, x11",
     "    msr spsr_el1, x12",
-    "    msr ttbr0_el1, x13",
-    "    tlbi vmalle1is",              // Invalidate all TLB entries after PT switch
+    // Conditional TLB invalidation: Only flush if TTBR0 changed
+    // This is critical - unconditional flush breaks kernel memory access!
+    "    mrs x14, ttbr0_el1",          // Read current TTBR0
+    "    cmp x13, x14",                // Compare saved vs current
+    "    b.eq 1f",                     // Skip TLB flush if unchanged
+    // TTBR0 changed - must flush TLB per ARM architecture requirements
+    "    msr ttbr0_el1, x13",          // Restore new TTBR0
+    "    tlbi vmalle1is",              // Invalidate all TLB entries
     "    dsb ish",                     // Ensure TLB invalidation completes
-    "    isb",                         // Synchronize context for page table switch
+    "    b 2f",
+    "1:",                              // TTBR0 unchanged - no TLB flush needed
+    "    msr ttbr0_el1, x13",          // Restore TTBR0 anyway (cheap)
+    "2:",
+    "    isb",                         // Synchronize context
     // Now restore GPRs (including x0-x3 with potentially modified syscall returns)
     "    ldp x0, x1, [sp, #0]",
     "    ldp x2, x3, [sp, #16]",
