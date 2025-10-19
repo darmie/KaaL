@@ -51,6 +51,7 @@ capabilities = [
     "process:create",      # Can spawn other processes
     "memory:allocate",     # Can allocate memory
     "ipc:*",              # Full IPC access
+    "caps:allocate",      # Can allocate capability slots
 ]
 
 # Device Drivers - Low-level hardware access
@@ -109,8 +110,8 @@ name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
 priority = 60  # Same priority as consumer for round-robin scheduling
-autostart = true  # Spawned by root-task (system_init can't spawn yet - caps not granted)
-# spawned_by = "system_init"  # TODO: Enable when capability granting is implemented
+autostart = false  # Spawned by system_init
+spawned_by = "system_init"  # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -122,8 +123,8 @@ name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
 priority = 60  # Run first to initialize and wait for producer
-autostart = true  # Spawned by root-task (system_init can't spawn yet - caps not granted)
-# spawned_by = "system_init"  # TODO: Enable when capability granting is implemented
+autostart = false  # Spawned by system_init
+spawned_by = "system_init"  # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -135,7 +136,7 @@ capabilities = [
 name = "test_minimal"
 binary = "test-minimal"
 type = "service"
-priority = 45  # Run before system_init to test capabilities early
+priority = 55  # Run after system_init (system_init is 50)
 autostart = true  # Enable to test capability enforcement
 capabilities = []  # NO capabilities - tests that syscalls are properly denied
 

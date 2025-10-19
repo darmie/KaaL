@@ -45,9 +45,17 @@ pub struct SpawnResult {
 /// ```
 pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Result<SpawnResult> {
     unsafe {
+        // Debug: log binary size
+        use crate::printf;
+        printf!("[spawn_from_elf] binary_data.len() = {} bytes\n", binary_data.len());
+
         // 1. Parse ELF
         let elf_info = elf::parse_elf(binary_data)
             .map_err(|_| Error::InvalidElf)?;
+
+        // Debug: log parsed ELF info
+        printf!("[spawn_from_elf] Parsed ELF: entry={:#x}, num_segments={}, memory_size={:#x}\n",
+                elf_info.entry_point, elf_info.num_segments, elf_info.memory_size());
 
         // 2. Allocate memory
         // Process image (with extra page for safety)
@@ -75,6 +83,17 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
             let segment_offset = vaddr - elf_info.min_vaddr;
             let dest_ptr = (virt_mem + segment_offset) as *mut u8;
             let src_ptr = binary_data.as_ptr().add(file_offset);
+
+            // Debug: show what we're copying
+            printf!("[spawn_from_elf] Segment {}: vaddr={:#x}, filesz={:#x}, file_offset={:#x}\n",
+                    i, vaddr, filesz, file_offset);
+
+            // Show first 16 bytes of source
+            printf!("  Source bytes: ");
+            for j in 0..16.min(filesz) {
+                printf!("{:02x} ", *src_ptr.add(j));
+            }
+            printf!("\n");
 
             // Copy segment data
             core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, filesz);

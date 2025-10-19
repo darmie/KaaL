@@ -153,8 +153,9 @@ export def "codegen system-init-registry" [] {
                 priority: $comp.priority,
                 # Components with spawned_by="system_init" are autostart for system_init
                 autostart: $spawned_by_system_init,
-                # Path is relative to src/generated/registry.rs, so need ../../../
-                binary_path: $"../../../($comp.binary)/target/aarch64-unknown-none/release/($comp.binary)"
+                # Path is relative to components/system-init/src/generated/registry.rs
+                # Need to go up 4 levels to project root, then into components/
+                binary_path: $"../../../../components/($comp.binary)/target/aarch64-unknown-none/release/($comp.binary)"
             }
         }
     } | compact  # Remove nulls from non-Rust components and system_init

@@ -61,6 +61,48 @@ pub fn print(msg: &str) {
     }
 }
 
+/// Print formatted text to the debug console
+///
+/// # Example
+/// ```no_run
+/// use kaal_sdk::printf;
+/// printf!("Hello {}\n", "world");
+/// printf!("Value: {}\n", 42);
+/// ```
+#[macro_export]
+macro_rules! printf {
+    ($fmt:literal) => {
+        $crate::syscall::print($fmt)
+    };
+    ($fmt:literal, $($arg:expr),* $(,)?) => {{
+        use core::fmt::Write;
+
+        static mut BUF: [u8; 512] = [0; 512];
+        static mut LEN: usize = 0;
+
+        struct Writer;
+        impl Write for Writer {
+            fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                unsafe {
+                    let bytes = s.as_bytes();
+                    if LEN + bytes.len() > BUF.len() {
+                        return Err(core::fmt::Error);
+                    }
+                    BUF[LEN..LEN + bytes.len()].copy_from_slice(bytes);
+                    LEN += bytes.len();
+                    Ok(())
+                }
+            }
+        }
+
+        unsafe {
+            LEN = 0;
+            let _ = core::write!(&mut Writer, $fmt, $($arg),*);
+            $crate::syscall::print(core::str::from_utf8_unchecked(&BUF[..LEN]));
+        }
+    }};
+}
+
 /// Yield the current thread to the scheduler
 ///
 /// # Example
