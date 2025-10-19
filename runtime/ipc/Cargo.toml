@@ -12,10 +12,11 @@ path = "src/lib.rs"
 
 [dependencies]
 kaal_allocator = { package = "kaal-allocator", path = "../kaal-allocator", optional = true }
+capability_broker = { package = "kaal-capability-broker", path = "../capability-broker", optional = true }
 
 [features]
 default = []
-alloc = ["dep:kaal_allocator"]  # Enable allocator-dependent features like broker
+alloc = ["dep:kaal_allocator", "dep:capability_broker"]  # Enable allocator-dependent features like broker
 
 [profile.release]
 opt-level = "z"       # Optimize for size

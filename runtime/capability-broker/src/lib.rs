@@ -53,6 +53,8 @@
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+extern crate alloc;
+
 pub mod boot_info;
 
 pub mod device_manager;

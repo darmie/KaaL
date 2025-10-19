@@ -1,3 +1,95 @@
+══════════════════════════════════════════════════════════
+  KaaL Build System (Modular Nushell)
+══════════════════════════════════════════════════════════
+Platform: QEMU virt (ARM64)
+Target:   aarch64
+
+🔍 Discovered 9 components from components.toml:
+  [✓] system_init
+      Type: service, Priority: 50, Caps: 3
+  [✓] serial_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] timer_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] process_manager
+      Type: service, Priority: 150, Caps: 4
+  [ ] vfs_service
+      Type: service, Priority: 100, Caps: 2
+  [ ] ipc_producer
+      Type: service, Priority: 60, Caps: 3
+  [ ] ipc_consumer
+      Type: service, Priority: 60, Caps: 3
+  [ ] test_minimal
+      Type: service, Priority: 50, Caps: 0
+  [ ] shell
+      Type: application, Priority: 50, Caps: 3
+
+✓ Component manifest validation passed
+
+Generating component linker scripts...
+  Skipping serial_driver - not a Rust component
+  Skipping timer_driver - not a Rust component
+  Skipping process_manager - not a Rust component
+  Skipping vfs_service - not a Rust component
+  Skipping shell - not a Rust component
+
+Building components...
+  → Building system_init...
+  → Building ipc_producer...
+  → Building ipc_consumer...
+  → Building test_minimal...
+✓ Components built
+
+Generating component registry...
+✓ Generated registry with 9 components
+Generating kernel memory configuration...
+
+[1/4] Building kernel...
+Generating kernel linker script...
+     Removed 113 files, 112.1MiB total
+✓ Kernel: 158.3 kB
+
+[2/4] Building root-task...
+Generating root-task memory configuration...
+Generating root-task linker script...
+✓ Root-task: 389.2 kB
+
+[3/4] Creating embeddable objects...
+✓ kernel.o: 158.9 kB
+✓ roottask.o: 389.9 kB
+
+[4/4] Building elfloader...
+     Removed 291 files, 152.3MiB total
+
+══════════════════════════════════════════════════════════
+  ✓ BUILD COMPLETE
+══════════════════════════════════════════════════════════
+
+Platform:  QEMU virt (ARM64)
+Bootimage: runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+✓ Final Image: 638.4 kB
+
+Run in QEMU:
+  qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+📦 Autostart Components: 4
+  • system_init (service, priority: 50)
+  • serial_driver (driver, priority: 200)
+  • timer_driver (driver, priority: 200)
+  • process_manager (service, priority: 150)
+
+══════════════════════════════════════════════════════════
+  🚀 LAUNCHING QEMU
+══════════════════════════════════════════════════════════
+
+Machine: virt
+CPU:     cortex-a53
+Memory:  128M
+Image:   runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+[33mPress Ctrl+A then X to exit QEMU[0m
+
 !@═══════════════════════════════════════════════════════════
   KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader
 ═══════════════════════════════════════════════════════════
@@ -9,30 +101,30 @@ Memory region: 0x40000000 - 0x48000000 (128 MB)
 
 Loading images...
 Loading embedded images from ELF sections...
-  Kernel: 0x40205000 - 0x4022a548 (149 KB)
-  User:   0x4022b000 - 0x40289b50 (378 KB)
+  Kernel: 0x40205000 - 0x4022ba80 (154 KB)
+  User:   0x4022c000 - 0x4028b090 (380 KB)
 ELF: entry=0x40400000, 4 program headers at offset 0x40
-  LOAD segment 0: vaddr=0x40400000, filesz=0x7e10, memsz=0x7e10
-  LOAD segment 1: vaddr=0x40408000, filesz=0x46c0, memsz=0x46c0
-  LOAD segment 2: vaddr=0x4040d000, filesz=0x10, memsz=0x2e000
+  LOAD segment 0: vaddr=0x40400000, filesz=0x81fc, memsz=0x81fc
+  LOAD segment 1: vaddr=0x40409000, filesz=0x4908, memsz=0x4908
+  LOAD segment 2: vaddr=0x4040e000, filesz=0x10, memsz=0x2e000
 Kernel loaded at entry point: 0x40400000
 ELF: entry=0x40100000, 4 program headers at offset 0x40
-  LOAD segment 0: vaddr=0x40100000, filesz=0x5388, memsz=0x5388
-  LOAD segment 1: vaddr=0x40106000, filesz=0x445d0, memsz=0x445d0
-  LOAD segment 2: vaddr=0x4014b000, filesz=0x20, memsz=0x1048
+  LOAD segment 0: vaddr=0x40100000, filesz=0x5960, memsz=0x5960
+  LOAD segment 1: vaddr=0x40106000, filesz=0x44818, memsz=0x44818
+  LOAD segment 2: vaddr=0x4014b000, filesz=0x20, memsz=0x1088
 Root task loaded at entry point: 0x40100000
 Images loaded successfully!
 Kernel entry: 0x40400000
-Root task:  0x4022b000 - 0x40289b50
+Root task:  0x4022c000 - 0x4028b090
 Root entry: 0x40100000
 DTB info will be passed to kernel via function parameters
   DTB: 0x40000000 (size: 1048576)
 Kernel entry: 0x40400000
-User image: 0x4022b000 - 0x40289b50
+User image: 0x4022c000 - 0x4028b090
 User entry: 0x40100000
 
 Setting up page tables...
-Setting up identity map: 0x10000000 - 0x4028a548
+Setting up identity map: 0x10000000 - 0x4028ba88
 Page tables configured
 TTBR0: 0x47ffc000
 
@@ -40,7 +132,7 @@ Skipping MMU setup - kernel will handle it
 
 Jumping to KaaL kernel at 0x40400000...
   Passing root task info:
-    user_img: 0x4022b000 - 0x40289b50
+    user_img: 0x4022c000 - 0x4028b090
     user_entry: 0x40100000
     pv_offset: 0x0
     dtb: 0x40000000 (size: 1048576)
@@ -53,7 +145,7 @@ Jumping to KaaL kernel at 0x40400000...
 
 Boot parameters:
   DTB:         0x40000000 (size: 1048576 bytes)
-  Root task:   0x4022b000 - 0x40289b50
+  Root task:   0x4022c000 - 0x4028b090
   Entry:       0x40100000
   PV offset:   0x0
 
@@ -114,20 +206,20 @@ Device tree parsed successfully:
 
 [memory] Initializing memory subsystem
   RAM:    0x40000000 - 0x48000000 (128MB)
-  Kernel: 0x40400000 - 0x4043b000 (236KB)
-  Frames: 31685/32768 free (123MB usable)
+  Kernel: 0x40400000 - 0x4043c000 (240KB)
+  Frames: 31684/32768 free (123MB usable)
 
 [test] Testing frame allocator...
-  Allocated frame: PFN(263227) @ 0x4043b000
   Allocated frame: PFN(263228) @ 0x4043c000
+  Allocated frame: PFN(263229) @ 0x4043d000
   Deallocated both frames
-  Final stats: 31685/32768 frames free
+  Final stats: 31684/32768 frames free
 [memory] Setting up page tables and MMU...
   Mapping DTB: 0x40000000 - 0x40400000
-  Mapping kernel: 0x40400000 - 0x4043b000
-  Mapping stack/heap region: 0x4043b000 - 0x48000000
+  Mapping kernel: 0x40400000 - 0x4043c000
+  Mapping stack/heap region: 0x4043c000 - 0x48000000
   Mapping UART device: 0x9000000
-  Root page table at: 0x4043b000
+  Root page table at: 0x4043c000
 [exception] Installing exception vector table at 0x0000000040400800
 [exception] Exception handlers installed
   Enabling MMU...
@@ -165,122 +257,122 @@ Kernel initialization complete!
   Scheduler Initialization
 ═══════════════════════════════════════════════════════════
 
-[scheduler] Initialized with idle thread at 0x40441000
+[scheduler] Initialized with idle thread at 0x40442000
 
 ═══════════════════════════════════════════════════════════
   Chapter 7: Root Task & Boot Protocol
 ═══════════════════════════════════════════════════════════
 
 [root_task] Creating root task:
-  Root task image: 0x4022b000 - 0x40289b50 (378 KB)
+  Root task image: 0x4022c000 - 0x4028b090 (380 KB)
   Entry point:     0x40100000
-  User page table: 0x40442000
+  User page table: 0x40443000
   Mapping kernel regions into user PT (EL1-only):
-    Kernel: 0x40400000 - 0x4043b000
-    Kernel data: 0x4043b000 - 0x48000000
+    Kernel: 0x40400000 - 0x4043c000
+    Kernel data: 0x4043c000 - 0x48000000
     UART: 0x9000000
   ✓ Kernel regions mapped
   ELF header: 4 program headers at offset 0x40
   LOAD segment 0:
     vaddr:  0x40100000
     offset: 0x10000
-    filesz: 0x5388 (21384 bytes)
-    memsz:  0x5388 (21384 bytes)
+    filesz: 0x5960 (22880 bytes)
+    memsz:  0x5960 (22880 bytes)
     flags:  0x5 (R-X)
-    Mapping virt 0x40100000 → phys 0x4023b000 (end: 0x40106000)
-      Mapping page 0 at virt=0x40100000 phys=0x4023b000
-      Mapping page 1 at virt=0x40101000 phys=0x4023c000
-      Mapping page 2 at virt=0x40102000 phys=0x4023d000
-      Mapping page 3 at virt=0x40103000 phys=0x4023e000
-      Mapping page 4 at virt=0x40104000 phys=0x4023f000
-      Mapping page 5 at virt=0x40105000 phys=0x40240000
+    Mapping virt 0x40100000 → phys 0x4023c000 (end: 0x40106000)
+      Mapping page 0 at virt=0x40100000 phys=0x4023c000
+      Mapping page 1 at virt=0x40101000 phys=0x4023d000
+      Mapping page 2 at virt=0x40102000 phys=0x4023e000
+      Mapping page 3 at virt=0x40103000 phys=0x4023f000
+      Mapping page 4 at virt=0x40104000 phys=0x40240000
+      Mapping page 5 at virt=0x40105000 phys=0x40241000
     Mapped 6 pages (24 KB)
   LOAD segment 1:
     vaddr:  0x40106000
     offset: 0x16000
-    filesz: 0x445d0 (280016 bytes)
-    memsz:  0x445d0 (280016 bytes)
+    filesz: 0x44818 (280600 bytes)
+    memsz:  0x44818 (280600 bytes)
     flags:  0x4 (R--)
-    Mapping virt 0x40106000 → phys 0x40241000 (end: 0x4014b000)
-      Mapping page 0 at virt=0x40106000 phys=0x40241000
-      Mapping page 1 at virt=0x40107000 phys=0x40242000
-      Mapping page 2 at virt=0x40108000 phys=0x40243000
-      Mapping page 3 at virt=0x40109000 phys=0x40244000
-      Mapping page 4 at virt=0x4010a000 phys=0x40245000
-      Mapping page 5 at virt=0x4010b000 phys=0x40246000
-      Mapping page 6 at virt=0x4010c000 phys=0x40247000
-      Mapping page 7 at virt=0x4010d000 phys=0x40248000
-      Mapping page 8 at virt=0x4010e000 phys=0x40249000
-      Mapping page 9 at virt=0x4010f000 phys=0x4024a000
-      Mapping page 10 at virt=0x40110000 phys=0x4024b000
-      Mapping page 11 at virt=0x40111000 phys=0x4024c000
-      Mapping page 12 at virt=0x40112000 phys=0x4024d000
-      Mapping page 13 at virt=0x40113000 phys=0x4024e000
-      Mapping page 14 at virt=0x40114000 phys=0x4024f000
-      Mapping page 15 at virt=0x40115000 phys=0x40250000
-      Mapping page 16 at virt=0x40116000 phys=0x40251000
-      Mapping page 17 at virt=0x40117000 phys=0x40252000
-      Mapping page 18 at virt=0x40118000 phys=0x40253000
-      Mapping page 19 at virt=0x40119000 phys=0x40254000
-      Mapping page 20 at virt=0x4011a000 phys=0x40255000
-      Mapping page 21 at virt=0x4011b000 phys=0x40256000
-      Mapping page 22 at virt=0x4011c000 phys=0x40257000
-      Mapping page 23 at virt=0x4011d000 phys=0x40258000
-      Mapping page 24 at virt=0x4011e000 phys=0x40259000
-      Mapping page 25 at virt=0x4011f000 phys=0x4025a000
-      Mapping page 26 at virt=0x40120000 phys=0x4025b000
-      Mapping page 27 at virt=0x40121000 phys=0x4025c000
-      Mapping page 28 at virt=0x40122000 phys=0x4025d000
-      Mapping page 29 at virt=0x40123000 phys=0x4025e000
-      Mapping page 30 at virt=0x40124000 phys=0x4025f000
-      Mapping page 31 at virt=0x40125000 phys=0x40260000
-      Mapping page 32 at virt=0x40126000 phys=0x40261000
-      Mapping page 33 at virt=0x40127000 phys=0x40262000
-      Mapping page 34 at virt=0x40128000 phys=0x40263000
-      Mapping page 35 at virt=0x40129000 phys=0x40264000
-      Mapping page 36 at virt=0x4012a000 phys=0x40265000
-      Mapping page 37 at virt=0x4012b000 phys=0x40266000
-      Mapping page 38 at virt=0x4012c000 phys=0x40267000
-      Mapping page 39 at virt=0x4012d000 phys=0x40268000
-      Mapping page 40 at virt=0x4012e000 phys=0x40269000
-      Mapping page 41 at virt=0x4012f000 phys=0x4026a000
-      Mapping page 42 at virt=0x40130000 phys=0x4026b000
-      Mapping page 43 at virt=0x40131000 phys=0x4026c000
-      Mapping page 44 at virt=0x40132000 phys=0x4026d000
-      Mapping page 45 at virt=0x40133000 phys=0x4026e000
-      Mapping page 46 at virt=0x40134000 phys=0x4026f000
-      Mapping page 47 at virt=0x40135000 phys=0x40270000
-      Mapping page 48 at virt=0x40136000 phys=0x40271000
-      Mapping page 49 at virt=0x40137000 phys=0x40272000
-      Mapping page 50 at virt=0x40138000 phys=0x40273000
-      Mapping page 51 at virt=0x40139000 phys=0x40274000
-      Mapping page 52 at virt=0x4013a000 phys=0x40275000
-      Mapping page 53 at virt=0x4013b000 phys=0x40276000
-      Mapping page 54 at virt=0x4013c000 phys=0x40277000
-      Mapping page 55 at virt=0x4013d000 phys=0x40278000
-      Mapping page 56 at virt=0x4013e000 phys=0x40279000
-      Mapping page 57 at virt=0x4013f000 phys=0x4027a000
-      Mapping page 58 at virt=0x40140000 phys=0x4027b000
-      Mapping page 59 at virt=0x40141000 phys=0x4027c000
-      Mapping page 60 at virt=0x40142000 phys=0x4027d000
-      Mapping page 61 at virt=0x40143000 phys=0x4027e000
-      Mapping page 62 at virt=0x40144000 phys=0x4027f000
-      Mapping page 63 at virt=0x40145000 phys=0x40280000
-      Mapping page 64 at virt=0x40146000 phys=0x40281000
-      Mapping page 65 at virt=0x40147000 phys=0x40282000
-      Mapping page 66 at virt=0x40148000 phys=0x40283000
-      Mapping page 67 at virt=0x40149000 phys=0x40284000
-      Mapping page 68 at virt=0x4014a000 phys=0x40285000
+    Mapping virt 0x40106000 → phys 0x40242000 (end: 0x4014b000)
+      Mapping page 0 at virt=0x40106000 phys=0x40242000
+      Mapping page 1 at virt=0x40107000 phys=0x40243000
+      Mapping page 2 at virt=0x40108000 phys=0x40244000
+      Mapping page 3 at virt=0x40109000 phys=0x40245000
+      Mapping page 4 at virt=0x4010a000 phys=0x40246000
+      Mapping page 5 at virt=0x4010b000 phys=0x40247000
+      Mapping page 6 at virt=0x4010c000 phys=0x40248000
+      Mapping page 7 at virt=0x4010d000 phys=0x40249000
+      Mapping page 8 at virt=0x4010e000 phys=0x4024a000
+      Mapping page 9 at virt=0x4010f000 phys=0x4024b000
+      Mapping page 10 at virt=0x40110000 phys=0x4024c000
+      Mapping page 11 at virt=0x40111000 phys=0x4024d000
+      Mapping page 12 at virt=0x40112000 phys=0x4024e000
+      Mapping page 13 at virt=0x40113000 phys=0x4024f000
+      Mapping page 14 at virt=0x40114000 phys=0x40250000
+      Mapping page 15 at virt=0x40115000 phys=0x40251000
+      Mapping page 16 at virt=0x40116000 phys=0x40252000
+      Mapping page 17 at virt=0x40117000 phys=0x40253000
+      Mapping page 18 at virt=0x40118000 phys=0x40254000
+      Mapping page 19 at virt=0x40119000 phys=0x40255000
+      Mapping page 20 at virt=0x4011a000 phys=0x40256000
+      Mapping page 21 at virt=0x4011b000 phys=0x40257000
+      Mapping page 22 at virt=0x4011c000 phys=0x40258000
+      Mapping page 23 at virt=0x4011d000 phys=0x40259000
+      Mapping page 24 at virt=0x4011e000 phys=0x4025a000
+      Mapping page 25 at virt=0x4011f000 phys=0x4025b000
+      Mapping page 26 at virt=0x40120000 phys=0x4025c000
+      Mapping page 27 at virt=0x40121000 phys=0x4025d000
+      Mapping page 28 at virt=0x40122000 phys=0x4025e000
+      Mapping page 29 at virt=0x40123000 phys=0x4025f000
+      Mapping page 30 at virt=0x40124000 phys=0x40260000
+      Mapping page 31 at virt=0x40125000 phys=0x40261000
+      Mapping page 32 at virt=0x40126000 phys=0x40262000
+      Mapping page 33 at virt=0x40127000 phys=0x40263000
+      Mapping page 34 at virt=0x40128000 phys=0x40264000
+      Mapping page 35 at virt=0x40129000 phys=0x40265000
+      Mapping page 36 at virt=0x4012a000 phys=0x40266000
+      Mapping page 37 at virt=0x4012b000 phys=0x40267000
+      Mapping page 38 at virt=0x4012c000 phys=0x40268000
+      Mapping page 39 at virt=0x4012d000 phys=0x40269000
+      Mapping page 40 at virt=0x4012e000 phys=0x4026a000
+      Mapping page 41 at virt=0x4012f000 phys=0x4026b000
+      Mapping page 42 at virt=0x40130000 phys=0x4026c000
+      Mapping page 43 at virt=0x40131000 phys=0x4026d000
+      Mapping page 44 at virt=0x40132000 phys=0x4026e000
+      Mapping page 45 at virt=0x40133000 phys=0x4026f000
+      Mapping page 46 at virt=0x40134000 phys=0x40270000
+      Mapping page 47 at virt=0x40135000 phys=0x40271000
+      Mapping page 48 at virt=0x40136000 phys=0x40272000
+      Mapping page 49 at virt=0x40137000 phys=0x40273000
+      Mapping page 50 at virt=0x40138000 phys=0x40274000
+      Mapping page 51 at virt=0x40139000 phys=0x40275000
+      Mapping page 52 at virt=0x4013a000 phys=0x40276000
+      Mapping page 53 at virt=0x4013b000 phys=0x40277000
+      Mapping page 54 at virt=0x4013c000 phys=0x40278000
+      Mapping page 55 at virt=0x4013d000 phys=0x40279000
+      Mapping page 56 at virt=0x4013e000 phys=0x4027a000
+      Mapping page 57 at virt=0x4013f000 phys=0x4027b000
+      Mapping page 58 at virt=0x40140000 phys=0x4027c000
+      Mapping page 59 at virt=0x40141000 phys=0x4027d000
+      Mapping page 60 at virt=0x40142000 phys=0x4027e000
+      Mapping page 61 at virt=0x40143000 phys=0x4027f000
+      Mapping page 62 at virt=0x40144000 phys=0x40280000
+      Mapping page 63 at virt=0x40145000 phys=0x40281000
+      Mapping page 64 at virt=0x40146000 phys=0x40282000
+      Mapping page 65 at virt=0x40147000 phys=0x40283000
+      Mapping page 66 at virt=0x40148000 phys=0x40284000
+      Mapping page 67 at virt=0x40149000 phys=0x40285000
+      Mapping page 68 at virt=0x4014a000 phys=0x40286000
     Mapped 69 pages (276 KB)
   LOAD segment 2:
     vaddr:  0x4014b000
     offset: 0x5b000
     filesz: 0x20 (32 bytes)
-    memsz:  0x1048 (4168 bytes)
+    memsz:  0x1088 (4232 bytes)
     flags:  0x6 (RW-)
-    Mapping virt 0x4014b000 → phys 0x40286000 (end: 0x4014d000)
-      Mapping page 0 at virt=0x4014b000 phys=0x40286000
-      Mapping page 1 at virt=0x4014c000 phys=0x40287000
+    Mapping virt 0x4014b000 → phys 0x40287000 (end: 0x4014d000)
+      Mapping page 0 at virt=0x4014b000 phys=0x40287000
+      Mapping page 1 at virt=0x4014c000 phys=0x40288000
     Mapped 2 pages (8 KB)
   Total: 77 pages mapped for all LOAD segments
   Mapping stack: 0x400bf000 - 0x400ff000
@@ -295,32 +387,32 @@ Kernel initialization complete!
   Devices:  4 regions
   Untyped:  1 regions
   RAM size: 128 MB
-  Boot info phys:  0x4044a000
+  Boot info phys:  0x4044b000
   Boot info virt:  0x7ffff000
   Boot info size:  11088 bytes
   ✓ Boot info mapped for userspace
   Creating CNode for capability space...
-  CNode:           0x4044c000 (256 slots)
+  CNode:           0x4044d000 (256 slots)
   Creating root TCB...
-  Root TCB frame:  0x4044d000
+  Root TCB frame:  0x4044e000
   Initializing TCB...
   Writing TCB...
   Setting state to Running...
   Setting saved_ttbr0...
   Registering with scheduler...
-  Root TCB:        0x4044d000 ✓
+  Root TCB:        0x4044e000 ✓
 
 [root_task] Transitioning to EL0...
   Entry:    0x40100000
   Stack:    0x400ff000
-  TTBR0:    0x40442000
+  TTBR0:    0x40443000
   About to call transition_to_el0...
   VBAR_EL1: 0x40400800
   CurrentEL before: 0x4
   Cache flushed
-  First instruction at phys 0x4023b000: 0xa9ba7bfd
+  First instruction at phys 0x4023c000: 0xa9ba7bfd
   Expected: 0xa9ba7bfd (stp x29, x30, [sp, #-0x60]!)
-  User PT is at phys 0x40442000
+  User PT is at phys 0x40443000
 
     $$╲   $$╲                    $$╲       
     $$ │ $$  │                   $$ │      
@@ -351,7 +443,7 @@ Kernel initialization complete!
   ✓ Capability Broker initialized
 
 [root_task] Test 1: Allocating memory via broker...
-  ✓ Allocated 4096 bytes at: 0x000000004044e000
+  ✓ Allocated 4096 bytes at: 0x000000004044f000
     Cap slot: 100
 
 [root_task] Test 2: Requesting UART0 device via broker...
@@ -429,7 +521,7 @@ Kernel initialization complete!
 ═══════════════════════════════════════════════════════════
 
 [ipc] Test 1: Allocating shared memory for ring buffer...
-  ✓ Shared memory allocated at phys: 0x0000000040451000
+  ✓ Shared memory allocated at phys: 0x0000000040452000
 [ipc] Test 2: Creating notification objects for signaling...
   ✓ Consumer notification: cap_slot 102
   ✓ Producer notification: cap_slot 103
@@ -475,8 +567,8 @@ Kernel initialization complete!
     [0] vaddr=0x0000000000200000 filesz=0x00000000000002cc memsz=0x00000000000002cc
     [1] vaddr=0x00000000002002d0 filesz=0x0000000000000337 memsz=0x0000000000000337
   Total range: 0x0000000000200000 - 0x0000000000200607
-[loader] Mapping phys 0x0000000040454000 size=0x0000000000002000 for copying
-[syscall] memory_map: phys=0x40454000, size=0x2000, perms=0x3
+[loader] Mapping phys 0x0000000040455000 size=0x0000000000002000 for copying
+[syscall] memory_map: phys=0x40455000, size=0x2000, perms=0x3
 [syscall] memory_map: allocated virt range 0x80000000 - 0x80002000, mapping 2 pages
 [syscall] memory_map: SUCCESS - returning virt=0x80000000
 [loader] Mapped to virt 0x0000000080000000, will copy 67360 bytes from binary_data
@@ -486,19 +578,19 @@ Kernel initialization complete!
 [loader] Entry point 0x0000000000200000: first instruction = 0x00000000940000b0
 [loader] Unmapping virt 0x0000000080000000
 [loader] Unmap complete
-[loader] Calling sys_process_create with code_phys=0x0000000040454000, code_size=0x0000000000002000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4045a000, priority=50
-[syscall] sys_process_create: code_phys=0x40454000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x40456000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x40454000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x40455000
+[loader] Calling sys_process_create with code_phys=0x0000000040455000, code_size=0x0000000000002000
+[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4045b000, priority=50
+[syscall] sys_process_create: code_phys=0x40455000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x40457000
+[syscall] Mapping page 0: virt=0x200000 -> phys=0x40455000
+[syscall] Mapping page 1: virt=0x201000 -> phys=0x40456000
 [syscall] process_create: set priority 50 for component
-[syscall] process_create: enqueuing TCB at 0x4045e000
-[syscall] process_create: SUCCESS - PID=0x4045e000
-[syscall] process_create: set TrapFrame - x1=0x4045e000, x2=0x4045a000, x3=0x4045b000
-[loader] Inserting TCB cap: slot=200, tcb_phys=0x000000004045e000
-[syscall] cap_insert_self: slot=200, type=4, obj=0x4045e000
+[syscall] process_create: enqueuing TCB at 0x4045f000
+[syscall] process_create: SUCCESS - PID=0x4045f000
+[syscall] process_create: set TrapFrame - x1=0x4045f000, x2=0x4045b000, x3=0x4045c000
+[loader] Inserting TCB cap: slot=200, tcb_phys=0x000000004045f000
+[syscall] cap_insert_self: slot=200, type=4, obj=0x4045f000
 [syscall] cap_insert_self: ✓ inserted Tcb cap at slot 200 in caller's CSpace
-    ✓ system_init spawned (PID: 1078321152)
+    ✓ system_init spawned (PID: 1078325248)
   → Spawning serial_driver...
     ✗ Failed to spawn serial_driver: no binary
   → Spawning timer_driver...
@@ -543,143 +635,18 @@ Kernel initialization complete!
 [phase5] Step 1: Initializing IPC Channel Broker...
   → Broker is part of runtime IPC subsystem
   → Manages channel establishment with kernel privileges
-  ✓ Initialized with capacity for 32 channels
+  → Calling init_broker with IPC region...
+[exception] Unhandled EL0 exception:
+  EC: 0x24, ESR: 0x92000004
+  ELR: 0x40104154, FAR: 0x6e55205d7265667b
+Error: nu::shell::terminated_by_signal
 
-[phase5] Step 2: Spawning IPC producer component...
-[loader] Spawning component: ipc_producer, binary_data len=68416, contains: PRODUCER 
-[loader] ELF for ipc_producer:
-  Entry: 0x0000000000200000
-  Segments:
-    [0] vaddr=0x0000000000200000 filesz=0x00000000000005c8 memsz=0x00000000000005c8
-    [1] vaddr=0x00000000002005c8 filesz=0x0000000000000415 memsz=0x0000000000000415
-    [2] vaddr=0x00000000002009e0 filesz=0x0000000000000000 memsz=0x0000000000000004
-  Total range: 0x0000000000200000 - 0x00000000002009e4
-[loader] Mapping phys 0x0000000040467000 size=0x0000000000002000 for copying
-[syscall] memory_map: phys=0x40467000, size=0x2000, perms=0x3
-[syscall] memory_map: allocated virt range 0x80002000 - 0x80004000, mapping 2 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80002000
-[loader] Mapped to virt 0x0000000080002000, will copy 68416 bytes from binary_data
-[loader] Binary data first 4 bytes: 00000000464c457f
-[loader] Copying segment 0: 1480 bytes from src=0x00000000401280a0 to dest=0x0000000080002000
-[loader] Copying segment 1: 1045 bytes from src=0x0000000040128668 to dest=0x00000000800025c8
-[loader] Entry point 0x0000000000200000: first instruction = 0x0000000094000107
-[loader] Unmapping virt 0x0000000080002000
-[loader] Unmap complete
-[loader] Calling sys_process_create with code_phys=0x0000000040467000, code_size=0x0000000000002000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4046d000, priority=60
-[syscall] sys_process_create: code_phys=0x40467000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x40469000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x40467000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x40468000
-[syscall] process_create: set priority 60 for component
-[syscall] process_create: enqueuing TCB at 0x40470000
-[syscall] process_create: SUCCESS - PID=0x40470000
-[syscall] process_create: set TrapFrame - x1=0x40470000, x2=0x4046d000, x3=0x4046e000
-[loader] Inserting TCB cap: slot=201, tcb_phys=0x0000000040470000
-[syscall] cap_insert_self: slot=201, type=4, obj=0x40470000
-[syscall] cap_insert_self: ✓ inserted Tcb cap at slot 201 in caller's CSpace
-  ✓ IPC producer spawned (PID: 1078394880, VSpace cap: 0x000000004046d000)
-
-[phase5] Step 3: Spawning IPC consumer component...
-[loader] Spawning component: ipc_consumer, binary_data len=68472, contains: CONSUMER 
-[loader] ELF for ipc_consumer:
-  Entry: 0x0000000000200000
-  Segments:
-    [0] vaddr=0x0000000000200000 filesz=0x0000000000000578 memsz=0x0000000000000578
-    [1] vaddr=0x0000000000200578 filesz=0x00000000000004e0 memsz=0x00000000000004e0
-  Total range: 0x0000000000200000 - 0x0000000000200a58
-[loader] Mapping phys 0x0000000040478000 size=0x0000000000002000 for copying
-[syscall] memory_map: phys=0x40478000, size=0x2000, perms=0x3
-[syscall] memory_map: allocated virt range 0x80004000 - 0x80006000, mapping 2 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80004000
-[loader] Mapped to virt 0x0000000080004000, will copy 68472 bytes from binary_data
-[loader] Binary data first 4 bytes: 00000000464c457f
-[loader] Copying segment 0: 1400 bytes from src=0x0000000040138c58 to dest=0x0000000080004000
-[loader] Copying segment 1: 1248 bytes from src=0x00000000401391d0 to dest=0x0000000080004578
-[loader] Entry point 0x0000000000200000: first instruction = 0x000000009400015b
-[loader] Unmapping virt 0x0000000080004000
-[loader] Unmap complete
-[loader] Calling sys_process_create with code_phys=0x0000000040478000, code_size=0x0000000000002000
-[syscall] sys_process_create: entry=0x200000, stack=0x80000000, pt=0x4047e000, priority=60
-[syscall] sys_process_create: code_phys=0x40478000, code_vaddr=0x200000, code_size=0x2000, stack_phys=0x4047a000
-[syscall] Mapping page 0: virt=0x200000 -> phys=0x40478000
-[syscall] Mapping page 1: virt=0x201000 -> phys=0x40479000
-[syscall] process_create: set priority 60 for component
-[syscall] process_create: enqueuing TCB at 0x40480000
-[syscall] process_create: SUCCESS - PID=0x40480000
-[syscall] process_create: set TrapFrame - x1=0x40480000, x2=0x4047e000, x3=0x4047f000
-[loader] Inserting TCB cap: slot=202, tcb_phys=0x0000000040480000
-[syscall] cap_insert_self: slot=202, type=4, obj=0x40480000
-[syscall] cap_insert_self: ✓ inserted Tcb cap at slot 202 in caller's CSpace
-  ✓ IPC consumer spawned (PID: 1078460416, TCB cap slot: 202)
-
-[phase5] Step 4: Components spawned - architecture will handle IPC
-  Components will use syscalls to establish their own channels
-
-  Will jump to ELR=0x200000 with SP=0x80000000
-
-═══════════════════════════════════════════════════════════
-  IPC Producer v0.1.0 [INSTANCE #1]
-═══════════════════════════════════════════════════════════
-
-[producer] Initializing...
-[producer] Using semantic message-passing API
-[producer] Starting message production
-[producer] Establishing channel via syscalls...
-  - Buffer size: 4KB
-  - Role: Producer
-[syscall] memory_map: phys=0x40488000, size=0x1000, perms=0x3
-[syscall] memory_map: allocated virt range 0x80006000 - 0x80007000, mapping 1 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80006000
-  ✓ Channel established with dynamic allocation
-
-[producer] Configuration complete:
-  - Shared memory ready
-  - Notification capability ready
-
-[producer] Initializing SharedRing buffer...
-[producer] Wrote magic value 0xDEADBEEF to shared memory
-[producer] Writing test data to shared memory...
-  → Wrote test message X
-  Will jump to ELR=0x200000 with SP=0x80000000
-
-═══════════════════════════════════════════════════════════
-  *** THIS IS THE CONSUMER *** IPC Consumer v0.1.0
-═══════════════════════════════════════════════════════════
-
-[CONSUMER-CONSUMER-CONSUMER] Initializing...
-[CONSUMER-CONSUMER-CONSUMER] Using semantic message-passing API
-[CONSUMER-CONSUMER-CONSUMER] I am definitely the consumer!
-[consumer] Starting message reception
-[consumer] Establishing channel via syscalls...
-  - Buffer size: 4KB
-  - Role: Consumer
-[syscall] memory_map: phys=0x4048c000, size=0x1000, perms=0x3
-[syscall] memory_map: allocated virt range 0x80007000 - 0x80008000, mapping 1 pages
-[syscall] memory_map: SUCCESS - returning virt=0x80007000
-  ✓ Channel established with dynamic allocation
-
-[consumer] Configuration complete:
-  - Shared memory ready
-  - Notification capability ready
-
-  → Wrote test message X
-[consumer] Checking shared memory...
-  ✗ Magic value mismatch - shared memory not working
-
-[consumer] Reading test messages from shared memory...
-  → Wrote test message X
-  → Wrote test message X
-  ← Read message (unexpected value)
-  ← Read message (unexpected value)
-  ← Read message (unexpected value)
-  ← Read message (unexpected value)
-  ← Read message (unexpected value)
-[consumer] All messages received!
-
-═══════════════════════════════════════════════════════════
-  IPC COMMUNICATION SUCCESSFUL! ✓
-═══════════════════════════════════════════════════════════
-
-  → Wrote test message X
-[producer] All test data written!
+  x External command was terminated by a signal
+     ,-[/Users/amaterasu/Vibranium/kaal/build.nu:183:10]
+ 182 |         # Launch QEMU
+ 183 |         ^qemu-system-aarch64 -machine $platform_cfg.qemu_machine -cpu $platform_cfg.qemu_cpu -m $platform_cfg.qemu_memory -nographic -kernel $bootimage
+     :          ^^^^^^^^^|^^^^^^^^^
+     :                   `-- terminated by SIGKILL (9)
+ 184 |     }
+     `----
 

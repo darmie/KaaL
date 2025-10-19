@@ -31,6 +31,9 @@ export def "build kernel" [config: record, kernel_addr: string] {
 export def "build roottask" [platform: string, platform_cfg: record, root_task_stack_size: string] {
     print step 2 4 "Building root-task"
 
+    # Generate root-task memory configuration
+    codegen roottask-memory-config $platform_cfg
+
     # Generate root-task linker script
     codegen roottask-linker $platform_cfg $root_task_stack_size
 

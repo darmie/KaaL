@@ -53,6 +53,10 @@ kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
 user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
+# IPC shared memory region (reserved in each component's address space)
+ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
+ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
+
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB
 large_page_size = "0x200000"  # 2MB
@@ -96,6 +100,10 @@ kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
 user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
+# IPC shared memory region (reserved in each component's address space)
+ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
+ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
+
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB
 large_page_size = "0x200000"  # 2MB
@@ -133,6 +141,10 @@ stack_top_offset = "0x1000000" # Stack top at 16MB
 kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
 user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
+
+# IPC shared memory region (reserved in each component's address space)
+ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
+ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
 
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB

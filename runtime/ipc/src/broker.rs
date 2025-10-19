@@ -67,6 +67,89 @@ pub struct Channel {
     pub consumer_notify: usize,  // Notification capability slot
 }
 
+/// Per-component virtual address space allocator
+///
+/// Tracks allocated IPC buffer regions in each component's address space
+/// to prevent overlapping mappings.
+#[derive(Debug, Clone)]
+struct VSpaceAllocator {
+    /// Component ID this allocator tracks
+    component_id: ComponentId,
+    /// Next free address in the IPC region
+    next_free: usize,
+    /// IPC region start (from build-config.toml: ipc_virt_start)
+    region_start: usize,
+    /// IPC region end (from build-config.toml: ipc_virt_end)
+    region_end: usize,
+}
+
+impl VSpaceAllocator {
+    /// Create a new VSpace allocator for a component
+    fn new(component_id: ComponentId, region_start: usize, region_end: usize) -> Self {
+        Self {
+            component_id,
+            next_free: region_start,
+            region_start,
+            region_end,
+        }
+    }
+
+    /// Allocate a virtual address range for IPC buffer
+    ///
+    /// # Arguments
+    /// * `size` - Size in bytes (must be page-aligned)
+    ///
+    /// # Returns
+    /// * `Some(virt_addr)` - Allocated virtual address
+    /// * `None` - Out of IPC region space
+    fn allocate(&mut self, size: usize) -> Option<usize> {
+        // Align size to page boundary
+        let aligned_size = (size + 0xFFF) & !0xFFF;
+
+        // Check if we have space
+        if self.next_free + aligned_size > self.region_end {
+            return None;
+        }
+
+        let addr = self.next_free;
+        self.next_free += aligned_size;
+        Some(addr)
+    }
+
+    /// Free a virtual address range (for future deallocation support)
+    #[allow(dead_code)]
+    fn free(&mut self, _addr: usize, _size: usize) {
+        // TODO: Implement proper deallocation with free list
+        // For now, we use a simple bump allocator
+    }
+}
+
+/// Callback functions for the broker to access privileged kernel operations
+///
+/// Since the ChannelBroker runs in userspace (root-task), it needs the
+/// root-task to provide these privileged operations as callbacks.
+pub struct ChannelSetupCallbacks {
+    /// Allocate physical memory
+    /// Arguments: size
+    /// Returns: Ok(physical_address) or Err(())
+    pub memory_allocate: fn(usize) -> Result<usize, ()>,
+
+    /// Map physical memory into a component's address space
+    /// Arguments: tcb_cap, phys_addr, size, virt_addr, permissions
+    /// Returns: Ok(()) or Err(())
+    pub memory_map_into: fn(usize, usize, usize, usize, usize) -> Result<(), ()>,
+
+    /// Create a notification capability
+    /// Arguments: none
+    /// Returns: Ok(capability_slot) or Err(())
+    pub notification_create: fn() -> Result<usize, ()>,
+
+    /// Insert a capability into a component's CSpace
+    /// Arguments: tcb_cap, slot, cap_type, obj_ref
+    /// Returns: Ok(()) or Err(())
+    pub cap_insert_into: fn(usize, usize, usize, usize) -> Result<(), ()>,
+}
+
 /// Channel Broker - manages IPC channels
 pub struct ChannelBroker {
     /// All active channels
@@ -79,17 +162,31 @@ pub struct ChannelBroker {
     max_channels: usize,
     /// Shared memory registry for dynamic discovery
     shmem_registry: capability_broker::ShmemRegistry,
+    /// Per-component VSpace allocators for IPC region management
+    vspace_allocators: BTreeMap<ComponentId, VSpaceAllocator>,
+    /// IPC region start (from build-config.toml)
+    ipc_region_start: usize,
+    /// IPC region end (from build-config.toml)
+    ipc_region_end: usize,
 }
 
 impl ChannelBroker {
     /// Create a new channel broker
-    pub fn new(max_channels: usize) -> Self {
+    ///
+    /// # Arguments
+    /// * `max_channels` - Maximum number of concurrent channels
+    /// * `ipc_region_start` - Start of IPC virtual address region (from build-config.toml)
+    /// * `ipc_region_end` - End of IPC virtual address region (from build-config.toml)
+    pub fn new(max_channels: usize, ipc_region_start: usize, ipc_region_end: usize) -> Self {
         Self {
             channels: BTreeMap::new(),
             component_channels: BTreeMap::new(),
             next_channel_id: AtomicUsize::new(1),
             max_channels,
             shmem_registry: capability_broker::ShmemRegistry::new(),
+            vspace_allocators: BTreeMap::new(),
+            ipc_region_start,
+            ipc_region_end,
         }
     }
 
@@ -244,6 +341,122 @@ impl ChannelBroker {
         Ok(channel_id)
     }
 
+    /// Establish a channel with centralized orchestration
+    ///
+    /// This is the full implementation where the broker manages all privileged operations.
+    /// The broker allocates shared memory, maps it into both components, creates
+    /// notification capabilities, and transfers them.
+    ///
+    /// # Arguments
+    ///
+    /// * `producer_tcb_cap` - TCB capability for producer component
+    /// * `consumer_tcb_cap` - TCB capability for consumer component
+    /// * `producer_id` - Producer component ID
+    /// * `consumer_id` - Consumer component ID
+    /// * `buffer_size` - Size of shared memory buffer (must be page-aligned)
+    /// * `callbacks` - Privileged operations provided by root-task
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ChannelId)` - Channel established successfully
+    /// * `Err(BrokerError)` - Setup failed
+    pub fn establish_channel_centralized(
+        &mut self,
+        producer_tcb_cap: usize,
+        consumer_tcb_cap: usize,
+        producer_id: ComponentId,
+        consumer_id: ComponentId,
+        buffer_size: usize,
+        callbacks: &ChannelSetupCallbacks,
+    ) -> Result<ChannelId, BrokerError> {
+        // Check if channel already exists
+        let key = self.component_key(producer_id, consumer_id);
+        if self.component_channels.contains_key(&key) {
+            return Err(BrokerError::ChannelExists);
+        }
+
+        // Check capacity
+        if self.channels.len() >= self.max_channels {
+            return Err(BrokerError::NoFreeChannels);
+        }
+
+        // Step 1: Allocate shared memory
+        let phys_addr = (callbacks.memory_allocate)(buffer_size)
+            .map_err(|_| BrokerError::AllocationFailed)?;
+
+        // Step 2: Allocate virtual addresses from IPC region for both components
+        let producer_vaddr = {
+            let allocator = self.vspace_allocators
+                .entry(producer_id)
+                .or_insert_with(|| VSpaceAllocator::new(
+                    producer_id,
+                    self.ipc_region_start,
+                    self.ipc_region_end
+                ));
+            allocator.allocate(buffer_size)
+                .ok_or(BrokerError::AllocationFailed)?
+        };
+
+        let consumer_vaddr = {
+            let allocator = self.vspace_allocators
+                .entry(consumer_id)
+                .or_insert_with(|| VSpaceAllocator::new(
+                    consumer_id,
+                    self.ipc_region_start,
+                    self.ipc_region_end
+                ));
+            allocator.allocate(buffer_size)
+                .ok_or(BrokerError::AllocationFailed)?
+        };
+
+        let perms = 0x3; // Read-write permissions
+
+        // Step 3: Map into producer's address space
+        (callbacks.memory_map_into)(producer_tcb_cap, phys_addr, buffer_size, producer_vaddr, perms)
+            .map_err(|_| BrokerError::MappingFailed)?;
+
+        // Step 4: Map into consumer's address space
+        (callbacks.memory_map_into)(consumer_tcb_cap, phys_addr, buffer_size, consumer_vaddr, perms)
+            .map_err(|_| BrokerError::MappingFailed)?;
+
+        // Step 5: Create notification capability
+        let notify_cap = (callbacks.notification_create)()
+            .map_err(|_| BrokerError::CapabilityFailed)?;
+
+        // Step 6: Transfer notification to producer
+        // Slot 10 is used for notification capabilities (convention)
+        const SLOT_NOTIFY: usize = 10;
+        const CAP_NOTIFICATION: usize = 3; // Notification capability type
+        (callbacks.cap_insert_into)(producer_tcb_cap, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)
+            .map_err(|_| BrokerError::CapabilityFailed)?;
+
+        // Step 7: Transfer notification to consumer
+        (callbacks.cap_insert_into)(consumer_tcb_cap, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)
+            .map_err(|_| BrokerError::CapabilityFailed)?;
+
+        // Step 8: Create channel record
+        let channel_id = self.next_channel_id.fetch_add(1, Ordering::SeqCst);
+
+        let channel = Channel {
+            id: channel_id,
+            producer_id,
+            consumer_id,
+            state: ChannelState::Active,
+            shared_memory_phys: phys_addr,
+            shared_memory_size: buffer_size,
+            producer_vaddr,
+            consumer_vaddr,
+            producer_notify: notify_cap,
+            consumer_notify: notify_cap,
+        };
+
+        // Register channel
+        self.channels.insert(channel_id, channel);
+        self.component_channels.insert(key, channel_id);
+
+        Ok(channel_id)
+    }
+
     /// Get channel information
     pub fn get_channel(&self, channel_id: ChannelId) -> Option<&Channel> {
         self.channels.get(&channel_id)
@@ -325,9 +538,14 @@ impl ChannelBroker {
 static mut CHANNEL_BROKER: Option<ChannelBroker> = None;
 
 /// Initialize the global channel broker
-pub fn init_broker(max_channels: usize) {
+///
+/// # Arguments
+/// * `max_channels` - Maximum number of concurrent channels
+/// * `ipc_region_start` - Start of IPC virtual address region (from build-config.toml)
+/// * `ipc_region_end` - End of IPC virtual address region (from build-config.toml)
+pub fn init_broker(max_channels: usize, ipc_region_start: usize, ipc_region_end: usize) {
     unsafe {
-        CHANNEL_BROKER = Some(ChannelBroker::new(max_channels));
+        CHANNEL_BROKER = Some(ChannelBroker::new(max_channels, ipc_region_start, ipc_region_end));
     }
 }
 

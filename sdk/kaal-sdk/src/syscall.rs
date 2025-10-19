@@ -27,6 +27,10 @@ pub mod numbers {
     pub const SYS_SHMEM_REGISTER: usize = 0x33;
     pub const SYS_SHMEM_QUERY: usize = 0x34;
 
+    // Privileged syscalls for root-task
+    pub const SYS_MEMORY_MAP_INTO: usize = 0x1B;
+    pub const SYS_CAP_INSERT_INTO: usize = 0x1C;
+
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
 
@@ -514,6 +518,37 @@ macro_rules! syscall {
             result
         }
     }};
+
+    // 5 arguments
+    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr) => {{
+        let result: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov x0, {arg0}",
+                "mov x1, {arg1}",
+                "mov x2, {arg2}",
+                "mov x3, {arg3}",
+                "mov x4, {arg4}",
+                "mov x8, {num}",
+                "svc #0",
+                "mov {result}, x0",
+                arg0 = in(reg) $arg0 as usize,
+                arg1 = in(reg) $arg1 as usize,
+                arg2 = in(reg) $arg2 as usize,
+                arg3 = in(reg) $arg3 as usize,
+                arg4 = in(reg) $arg4 as usize,
+                num = in(reg) $num,
+                result = out(reg) result,
+                out("x0") _,
+                out("x1") _,
+                out("x2") _,
+                out("x3") _,
+                out("x4") _,
+                out("x8") _,
+            );
+            result
+        }
+    }};
 }
 
 /// Register shared memory with the kernel registry
@@ -549,5 +584,80 @@ pub unsafe fn shmem_query(channel_name: &str) -> crate::Result<usize> {
         Err(crate::Error::SyscallFailed)
     } else {
         Ok(phys_addr)
+    }
+}
+
+/// Map physical memory into another component's address space (privileged)
+///
+/// This is a privileged syscall only available to the root-task for
+/// centralized IPC channel establishment.
+///
+/// # Arguments
+///
+/// * `target_tcb_cap` - TCB capability of target component
+/// * `phys_addr` - Physical address to map
+/// * `size` - Size in bytes (must be page-aligned)
+/// * `virt_addr` - Virtual address in target's address space
+/// * `permissions` - Permission flags (0x3 = read-write)
+///
+/// # Safety
+///
+/// Unsafe because it modifies another component's address space
+pub unsafe fn memory_map_into(
+    target_tcb_cap: usize,
+    phys_addr: usize,
+    size: usize,
+    virt_addr: usize,
+    permissions: usize,
+) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_MEMORY_MAP_INTO,
+        target_tcb_cap,
+        phys_addr,
+        size,
+        virt_addr,
+        permissions
+    );
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(crate::Error::SyscallFailed)
+    }
+}
+
+/// Insert a capability into another component's CSpace (privileged)
+///
+/// This is a privileged syscall only available to the root-task for
+/// transferring capabilities to components during channel establishment.
+///
+/// # Arguments
+///
+/// * `target_tcb_cap` - TCB capability of target component
+/// * `target_slot` - Slot in target's CSpace
+/// * `cap_type` - Capability type (3 = Notification)
+/// * `object_ptr` - Object reference
+///
+/// # Safety
+///
+/// Unsafe because it modifies another component's CSpace
+pub unsafe fn cap_insert_into(
+    target_tcb_cap: usize,
+    target_slot: usize,
+    cap_type: usize,
+    object_ptr: usize,
+) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_CAP_INSERT_INTO,
+        target_tcb_cap,
+        target_slot,
+        cap_type,
+        object_ptr
+    );
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(crate::Error::SyscallFailed)
     }
 }
