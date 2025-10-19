@@ -789,51 +789,32 @@ pub extern "C" fn _start() -> ! {
         sys_print("[root_task] Component switching working! ✓\n");
     }
 
-    // Chapter 9 Phase 5: Inter-Component IPC Testing
+    // ═══════════════════════════════════════════════════════════
+    // IPC Demo - TEMPORARY: Should move to system_init
+    // ═══════════════════════════════════════════════════════════
+    //
+    // TODO: Move this to system_init once we implement SYS_COMPONENT_SPAWN
+    //
+    // Currently root-task spawns IPC producer/consumer to demonstrate
+    // inter-component communication. This works but violates separation:
+    // - Root-task should only initialize runtime
+    // - Application logic belongs in system_init
+    //
+    // Next step: Implement SYS_COMPONENT_SPAWN syscall so system_init
+    // can spawn components from userspace.
+    //
     unsafe {
         sys_print("\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
-        sys_print("  Chapter 9 Phase 5: Inter-Component IPC\n");
+        sys_print("  IPC Demo (runs from root-task temporarily)\n");
         sys_print("═══════════════════════════════════════════════════════════\n");
         sys_print("\n");
 
-        // Step 1: Initialize IPC Channel Broker (part of runtime)
-        sys_print("[phase5] Step 1: Initializing IPC Channel Broker...\n");
-        sys_print("  → Broker is part of runtime IPC subsystem\n");
-        sys_print("  → Manages channel establishment with kernel privileges\n");
-
-        // Actually initialize the broker
-        // WORKAROUND: Force allocator initialization with a dummy allocation
-        // Without this, BTreeMap initialization crashes (likely due to lazy allocator init)
-        {
-            use alloc::vec::Vec;
-            let mut dummy: Vec<u8> = Vec::new();
-            dummy.push(1); // Force actual allocation
-        }
-
-        // IPC region from generated/memory_config.rs (build-config.toml)
-        use generated::memory_config::{IPC_VIRT_START, IPC_VIRT_END};
-
-        sys_print("  ✓ IPC infrastructure ready\n");
-        sys_print("  ✓ IPC region configured: 0x90000000 - 0xA0000000\n");
-        sys_print("  → Centralized orchestration available (establish_channel_centralized)\n");
-        sys_print("  → Components use decentralized self-service (establish_channel)\n");
-
-        // NOTE: Broker initialization commented out due to BTreeMap allocation issue
-        // The centralized orchestration infrastructure is fully implemented:
-        // - VSpace allocator tracks per-component IPC regions
-        // - establish_channel_centralized() uses VSpace allocator
-        // - Generated IPC constants from build-config.toml
-        // Components currently use decentralized approach (working)
-        // kaal_ipc::broker::init_broker(32, IPC_VIRT_START, IPC_VIRT_END);
-
-        sys_print("\n[phase5] Step 2: Spawning IPC producer component...\n");
+        sys_print("[root_task] Spawning IPC producer...\n");
         let producer = match loader.spawn("ipc_producer") {
             Ok(result) => {
                 sys_print("  ✓ IPC producer spawned (PID: ");
                 print_number(result.pid);
-                sys_print(", VSpace cap: 0x");
-                print_hex(result.vspace_cap);
                 sys_print(")\n");
                 result
             }
@@ -850,13 +831,11 @@ pub extern "C" fn _start() -> ! {
         };
 
         if producer.pid != 0 {
-            sys_print("\n[phase5] Step 3: Spawning IPC consumer component...\n");
+            sys_print("[root_task] Spawning IPC consumer...\n");
             let consumer = match loader.spawn("ipc_consumer") {
                 Ok(result) => {
                     sys_print("  ✓ IPC consumer spawned (PID: ");
                     print_number(result.pid);
-                    sys_print(", TCB cap slot: ");
-                    print_number(result.tcb_cap_slot);
                     sys_print(")\n");
                     result
                 }
@@ -873,26 +852,27 @@ pub extern "C" fn _start() -> ! {
             };
 
             if consumer.pid != 0 {
-                sys_print("\n[phase5] Step 4: Broker orchestration available\n");
-                sys_print("  → Centralized broker infrastructure implemented\n");
-                sys_print("  → Components can use decentralized or centralized patterns\n");
-                sys_print("\n");
-                sys_print("  Note: For this demo, components use decentralized self-service\n");
-                sys_print("  (components call establish_channel() themselves)\n");
+                sys_print("\n[root_task] IPC demo components spawned\n");
+                sys_print("  → Components establish channel via syscalls\n");
+                sys_print("  → Using decentralized self-service pattern\n");
+                sys_print("  → Shared memory registry for discovery\n");
                 sys_print("\n");
 
-                // Yield a few times to let components run
+                // Yield to let components run
                 for _ in 0..20 {
                     sys_yield();
                 }
-
-                sys_print("\n");
-                sys_print("═══════════════════════════════════════════════════════════\n");
-                sys_print("  Phase 5: Architecture-Driven IPC ✓\n");
-                sys_print("═══════════════════════════════════════════════════════════\n");
-                sys_print("\n");
             }
         }
+
+        sys_print("\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("  Root Task: Complete ✓\n");
+        sys_print("═══════════════════════════════════════════════════════════\n");
+        sys_print("\n");
+        sys_print("[root_task] Handing off to system_init\n");
+        sys_print("[root_task] system_init is the developer playground\n");
+        sys_print("\n");
     }
 
     /*

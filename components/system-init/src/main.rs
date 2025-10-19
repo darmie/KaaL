@@ -61,9 +61,46 @@ impl Component for SystemInit {
                 }
             };
 
-            syscall::print("[system_init] TODO: Spawn IPC producer component\n");
-            syscall::print("[system_init] TODO: Spawn IPC consumer component\n");
-            syscall::print("[system_init] TODO: Initialize system services\n");
+            // ═══════════════════════════════════════════════════════════
+            // Developer Playground - Add your experiments here!
+            // ═══════════════════════════════════════════════════════════
+            //
+            // This is the entry point for application-level development.
+            // The kernel and root-task handle low-level initialization.
+            // Use this component to:
+            //
+            // - Test new IPC patterns
+            // - Spawn additional components
+            // - Experiment with syscalls
+            // - Build application logic
+            // - Demo features
+            //
+            // Example: IPC Demo (currently runs from root-task)
+            // TODO: Move IPC producer/consumer spawning here once we have
+            //       userspace component loader syscalls
+            //
+            // For now, the IPC demo runs directly from root-task.
+            // Future: Implement SYS_COMPONENT_SPAWN for userspace component loading
+            //
+            syscall::print("\n");
+            syscall::print("═══════════════════════════════════════════════════════════\n");
+            syscall::print("  System Init: Developer Playground\n");
+            syscall::print("═══════════════════════════════════════════════════════════\n");
+            syscall::print("\n");
+            syscall::print("[system_init] This is your development entry point\n");
+            syscall::print("[system_init] Add experiments, tests, and demos here\n");
+            syscall::print("[system_init] Keep kernel and root-task minimal\n");
+            syscall::print("\n");
+            syscall::print("Available infrastructure:\n");
+            syscall::print("  ✓ IPC: Shared memory + notifications\n");
+            syscall::print("  ✓ Memory: Allocate, map, unmap\n");
+            syscall::print("  ✓ Capabilities: Create, transfer, manage\n");
+            syscall::print("  ✓ Components: Producer/consumer patterns\n");
+            syscall::print("\n");
+            syscall::print("Next steps:\n");
+            syscall::print("  → Implement SYS_COMPONENT_SPAWN for userspace\n");
+            syscall::print("  → Move IPC demo from root-task to here\n");
+            syscall::print("  → Add your own experiments!\n");
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("  System Init: Ready ✓\n");
@@ -71,7 +108,7 @@ impl Component for SystemInit {
             syscall::print("\n");
 
             // Event loop - block waiting for notifications instead of busy-yielding
-            syscall::print("[system_init] Entering event loop (blocking on notifications)\n");
+            syscall::print("[system_init] Entering event loop (waiting for signals)\n");
             loop {
                 // Block waiting for notification events
                 // This removes us from the scheduler's ready queue
