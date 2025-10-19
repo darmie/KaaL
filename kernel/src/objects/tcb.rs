@@ -66,6 +66,18 @@ pub struct TCB {
 
     /// Thread ID (for debugging)
     tid: usize,
+
+    /// Capability bitmask - determines which syscalls this thread can invoke
+    ///
+    /// Each bit represents a capability:
+    /// - Bit 0: CAP_MEMORY (memory_allocate, memory_map, memory_unmap)
+    /// - Bit 1: CAP_PROCESS (process_create, process_delete)
+    /// - Bit 2: CAP_IPC (notification, endpoint operations)
+    /// - Bit 3: CAP_CAPS (capability operations)
+    /// - Bit 4-63: Reserved for future capabilities
+    ///
+    /// Root-task gets all capabilities (0xFFFFFFFFFFFFFFFF)
+    capabilities: u64,
 }
 
 /// Thread state - lifecycle states of a thread
@@ -109,6 +121,22 @@ impl TCB {
     /// Default time slice (in ticks)
     pub const DEFAULT_TIME_SLICE: u32 = 10;
 
+    // Capability bit definitions
+    /// Memory management capabilities (allocate, map, unmap)
+    pub const CAP_MEMORY: u64 = 1 << 0;
+
+    /// Process management capabilities (create, delete)
+    pub const CAP_PROCESS: u64 = 1 << 1;
+
+    /// IPC capabilities (notifications, endpoints)
+    pub const CAP_IPC: u64 = 1 << 2;
+
+    /// Capability management (allocate, insert, delete caps)
+    pub const CAP_CAPS: u64 = 1 << 3;
+
+    /// All capabilities (for privileged processes like root-task)
+    pub const CAP_ALL: u64 = 0xFFFFFFFFFFFFFFFF;
+
     /// Create a new TCB in the Inactive state
     ///
     /// # Arguments
@@ -130,6 +158,7 @@ impl TCB {
         ipc_buffer: VirtAddr,
         entry_point: u64,
         stack_pointer: u64,
+        capabilities: u64,
     ) -> Self {
         let mut context = TrapFrame::new();
 
@@ -169,6 +198,7 @@ impl TCB {
             priority: Self::DEFAULT_PRIORITY,
             time_slice: Self::DEFAULT_TIME_SLICE,
             tid,
+            capabilities,
         }
     }
 
@@ -188,6 +218,21 @@ impl TCB {
     #[inline]
     pub fn set_state(&mut self, state: ThreadState) {
         self.state = state;
+    }
+
+    /// Check if this thread has the specified capability
+    ///
+    /// Returns true if ALL bits in `required_cap` are set in this thread's capabilities.
+    ///
+    /// # Example
+    /// ```
+    /// if thread.has_capability(TCB::CAP_MEMORY) {
+    ///     // Thread can call memory syscalls
+    /// }
+    /// ```
+    #[inline]
+    pub fn has_capability(&self, required_cap: u64) -> bool {
+        (self.capabilities & required_cap) == required_cap
     }
 
     /// Get the thread priority

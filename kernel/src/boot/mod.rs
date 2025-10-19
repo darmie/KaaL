@@ -295,6 +295,7 @@ pub fn kernel_entry() -> ! {
             VirtAddr::new(0), // No IPC buffer
             0, // No entry point (will never execute user code)
             0, // No stack
+            0, // No capabilities (idle thread can't call syscalls)
         );
         core::ptr::write(idle_tcb_ptr, idle_tcb);
 

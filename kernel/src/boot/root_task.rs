@@ -367,6 +367,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
         VirtAddr::new(0x8000_0000),            // IPC buffer (not used yet)
         entry_addr as u64,                     // Entry point
         stack_top as u64,                      // Stack pointer
+        crate::objects::TCB::CAP_ALL,          // Root-task gets ALL capabilities
     );
     crate::kprintln!("  Writing TCB...");
     core::ptr::write(root_tcb_ptr, root_tcb);

@@ -733,6 +733,8 @@ fn sys_process_create(
     // Create TCB
     let tcb_ptr = tcb_frame.as_usize() as *mut TCB;
     unsafe {
+        // TODO: Accept capabilities parameter from caller and pass here
+        // For now, grant all capabilities (same as root-task)
         let tcb = TCB::new(
             pid,
             cspace_ptr,
@@ -740,6 +742,7 @@ fn sys_process_create(
             ipc_buffer,
             entry_point,
             stack_pointer,
+            TCB::CAP_ALL,  // TODO: Pass actual capabilities from spawn request
         );
         core::ptr::write(tcb_ptr, tcb);
 
