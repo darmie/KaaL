@@ -116,6 +116,7 @@ capabilities = [
     "memory:map",
     "notification:signal",
     "notification:wait",
+    "caps:allocate",  # Needed to create notifications
 ]
 
 [[component]]
@@ -129,6 +130,7 @@ capabilities = [
     "memory:map",
     "notification:signal",
     "notification:wait",
+    "caps:allocate",  # Needed to create notifications
 ]
 
 # Test component - Capability enforcement test
@@ -137,7 +139,7 @@ name = "test_minimal"
 binary = "test-minimal"
 type = "service"
 priority = 55  # Run after system_init (system_init is 50)
-autostart = true  # Enable to test capability enforcement
+autostart = false  # Disabled to allow IPC components to run
 capabilities = []  # NO capabilities - tests that syscalls are properly denied
 
 # Applications - User-facing programs

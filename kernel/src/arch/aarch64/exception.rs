@@ -332,8 +332,10 @@ extern "C" fn exception_curr_el_spx_sync_handler(tf: &mut TrapFrame) {
 
 #[no_mangle]
 extern "C" fn exception_curr_el_spx_irq() {
-    kprintln!("[exception] Current EL with SP_ELx - IRQ");
-    panic!("Unhandled exception: Current EL SPx IRQ");
+    // Timer interrupt for preemption (kernel running)
+    unsafe {
+        crate::scheduler::timer::timer_tick();
+    }
 }
 
 #[no_mangle]
@@ -418,8 +420,10 @@ extern "C" fn exception_lower_el_aarch64_sync_handler(frame: &mut TrapFrame) {
 
 #[no_mangle]
 extern "C" fn exception_lower_el_aarch64_irq() {
-    kprintln!("[exception] Lower EL (AArch64) - IRQ");
-    panic!("Unhandled exception: Lower EL IRQ");
+    // Timer interrupt for preemption (userspace running)
+    unsafe {
+        crate::scheduler::timer::timer_tick();
+    }
 }
 
 #[no_mangle]
