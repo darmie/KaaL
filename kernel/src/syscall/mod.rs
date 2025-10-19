@@ -12,6 +12,49 @@ use crate::{kprintln, ksyscall_debug};
 use crate::objects::{TCB, Endpoint, Notification};
 use core::ptr;
 
+/// Shared memory registry entry
+#[derive(Copy, Clone)]
+struct ShmemEntry {
+    name: [u8; 32],      // Channel name (null-terminated)
+    name_len: usize,     // Actual length of name
+    phys_addr: usize,    // Physical address of shared memory
+    size: usize,         // Size in bytes
+    valid: bool,         // Whether this entry is in use
+}
+
+impl ShmemEntry {
+    const fn new() -> Self {
+        ShmemEntry {
+            name: [0; 32],
+            name_len: 0,
+            phys_addr: 0,
+            size: 0,
+            valid: false,
+        }
+    }
+}
+
+/// Global shared memory registry (kernel-managed)
+///
+/// # Architecture Note
+///
+/// This registry is currently implemented in the kernel for simplicity, but in a
+/// proper microkernel architecture, it belongs in the userspace capability broker.
+///
+/// ## Migration Path to Userspace Broker
+///
+/// The syscalls SYS_SHMEM_REGISTER and SYS_SHMEM_QUERY should become IPC calls to
+/// a broker endpoint. The broker (in runtime/ipc/src/broker.rs) already has the
+/// shmem_registry infrastructure ready for this migration.
+///
+/// Benefits of userspace broker:
+/// - Keeps kernel minimal (microkernel principle)
+/// - Policy decisions (access control, quotas) in userspace
+/// - Easier testing and debugging
+///
+/// The current implementation works correctly for Phase 6 demonstration.
+static mut SHMEM_REGISTRY: [ShmemEntry; 16] = [ShmemEntry::new(); 16];
+
 /// Look up an endpoint capability from the current thread's CSpace
 ///
 /// Returns pointer to Endpoint object, or null if:
@@ -220,6 +263,10 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_CHANNEL_ESTABLISH => channel::sys_channel_establish(tf, args[0], args[1], args[2]),
         numbers::SYS_CHANNEL_QUERY => channel::sys_channel_query(args[0]),
         numbers::SYS_CHANNEL_CLOSE => channel::sys_channel_close(args[0]),
+
+        // Shared memory registry syscalls
+        numbers::SYS_SHMEM_REGISTER => sys_shmem_register(tf, args[0], args[1], args[2], args[3]),
+        numbers::SYS_SHMEM_QUERY => sys_shmem_query(tf, args[0], args[1]),
 
         _ => {
             ksyscall_debug!("[syscall] Unknown syscall number: {} from ELR={:#x}, x8={:#x}",
@@ -1669,4 +1716,82 @@ fn sys_poll(notification_cap_slot: u64) -> u64 {
         ksyscall_debug!("[syscall] Poll -> signals 0x{:x}", signals);
         signals
     }
+}
+
+/// Register shared memory with the kernel registry
+/// Args: name_ptr, name_len, phys_addr, size
+/// Returns: 0 on success, u64::MAX on error
+fn sys_shmem_register(tf: &TrapFrame, name_ptr: u64, name_len: u64, phys_addr: u64, size: u64) -> u64 {
+    use core::cmp::min;
+
+    if name_len == 0 || name_len > 32 {
+        kprintln!("[syscall] shmem_register: invalid name length {}", name_len);
+        return u64::MAX;
+    }
+
+    // Copy channel name from userspace
+    let mut name_buf = [0u8; 32];
+    if !unsafe { copy_from_user(name_ptr, &mut name_buf[..name_len as usize], name_len as usize, tf.saved_ttbr0) } {
+        kprintln!("[syscall] shmem_register: failed to copy name from userspace");
+        return u64::MAX;
+    }
+
+    // Find free slot in registry
+    unsafe {
+        for entry in SHMEM_REGISTRY.iter_mut() {
+            if !entry.valid {
+                // Use this slot
+                let len = min(name_len as usize, 32);
+                entry.name[..len].copy_from_slice(&name_buf[..len]);
+                entry.name_len = len;
+                entry.phys_addr = phys_addr as usize;
+                entry.size = size as usize;
+                entry.valid = true;
+
+                kprintln!("[syscall] shmem_register: registered '{}' at phys={:#x}, size={:#x}",
+                         core::str::from_utf8(&name_buf[..len]).unwrap_or("<invalid>"),
+                         phys_addr, size);
+                return 0;
+            }
+        }
+    }
+
+    kprintln!("[syscall] shmem_register: registry full");
+    u64::MAX
+}
+
+/// Query shared memory from the kernel registry
+/// Args: name_ptr, name_len
+/// Returns: (phys_addr << 32) | size on success, 0 if not found
+fn sys_shmem_query(tf: &TrapFrame, name_ptr: u64, name_len: u64) -> u64 {
+    if name_len == 0 || name_len > 32 {
+        return 0;
+    }
+
+    // Copy channel name from userspace
+    let mut name_buf = [0u8; 32];
+    if !unsafe { copy_from_user(name_ptr, &mut name_buf[..name_len as usize], name_len as usize, tf.saved_ttbr0) } {
+        kprintln!("[syscall] shmem_query: failed to copy name from userspace");
+        return 0;
+    }
+
+    // Search for matching entry
+    unsafe {
+        for entry in SHMEM_REGISTRY.iter() {
+            if entry.valid && entry.name_len == name_len as usize {
+                if &entry.name[..entry.name_len] == &name_buf[..name_len as usize] {
+                    // Found it - return phys_addr in lower 32 bits, size in upper 32 bits
+                    // Actually, let's just return phys_addr and use a separate syscall for size
+                    kprintln!("[syscall] shmem_query: found '{}' at phys={:#x}, size={:#x}",
+                             core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"),
+                             entry.phys_addr, entry.size);
+                    return entry.phys_addr as u64;
+                }
+            }
+        }
+    }
+
+    kprintln!("[syscall] shmem_query: not found '{}'",
+             core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"));
+    0
 }

@@ -52,7 +52,7 @@ pub struct ChannelConfig {
 /// This is the architecture-driven approach - no hardcoded addresses.
 ///
 /// # Arguments
-/// * `_target_pid` - Process ID of the target component (unused for now - TODO: implement proper discovery)
+/// * `channel_name` - Unique identifier for this channel (e.g., "producer_to_consumer")
 /// * `buffer_size` - Size of the shared memory buffer (must be page-aligned)
 /// * `role` - This component's role in the channel
 ///
@@ -60,25 +60,56 @@ pub struct ChannelConfig {
 /// * `Ok(ChannelConfig)` - Channel configuration on success
 /// * `Err(&str)` - Error message on failure
 pub fn establish_channel(
-    _target_pid: usize,
+    channel_name: &str,
     buffer_size: usize,
     role: ChannelRole,
 ) -> Result<ChannelConfig, &'static str> {
-    // Validate buffer size is page-aligned
+    // Validate inputs
+    if channel_name.is_empty() || channel_name.len() > 32 {
+        return Err("Channel name must be 1-32 characters");
+    }
+
     if buffer_size == 0 || (buffer_size & 0xFFF) != 0 {
         return Err("Buffer size must be non-zero and page-aligned");
     }
 
-    // Step 1: Allocate physical memory for the shared buffer
-    let phys_addr = match syscall::memory_allocate(buffer_size) {
-        Ok(addr) => addr,
-        Err(_) => return Err("Failed to allocate physical memory"),
-    };
+    let (phys_addr, virt_addr) = match role {
+        ChannelRole::Producer => {
+            // Producer allocates the shared buffer physical memory
+            let buffer_phys = match syscall::memory_allocate(buffer_size) {
+                Ok(addr) => addr,
+                Err(_) => return Err("Failed to allocate buffer physical memory"),
+            };
 
-    // Step 2: Map into our address space
-    let virt_addr = match syscall::memory_map(phys_addr, buffer_size, 0x3) {
-        Ok(addr) => addr,
-        Err(_) => return Err("Failed to map memory into address space"),
+            // Map buffer into our address space
+            let buffer_virt = match syscall::memory_map(buffer_phys, buffer_size, 0x3) {
+                Ok(addr) => addr,
+                Err(_) => return Err("Failed to map buffer into address space"),
+            };
+
+            // Register the physical address with the kernel broker
+            unsafe {
+                syscall::shmem_register(channel_name, buffer_phys, buffer_size)
+                    .map_err(|_| "Failed to register shared memory with broker")?;
+            }
+
+            (buffer_phys, buffer_virt)
+        }
+        ChannelRole::Consumer => {
+            // Query the broker for the physical address
+            let buffer_phys = unsafe {
+                syscall::shmem_query(channel_name)
+                    .map_err(|_| "Producer has not yet allocated shared memory")?
+            };
+
+            // Map the producer's buffer into our address space
+            let buffer_virt = match syscall::memory_map(buffer_phys, buffer_size, 0x3) {
+                Ok(addr) => addr,
+                Err(_) => return Err("Failed to map shared buffer into address space"),
+            };
+
+            (buffer_phys, buffer_virt)
+        }
     };
 
     // Step 3: Create notification for signaling
@@ -88,7 +119,7 @@ pub fn establish_channel(
     };
 
     // TODO: For proper IPC, we need to:
-    // - Share the physical address with the other component
+    // - Share the physical address with the other component via broker
     // - Exchange notification capabilities
     // This would typically go through a broker/nameserver
 
@@ -96,7 +127,7 @@ pub fn establish_channel(
         buffer_addr: virt_addr,
         buffer_size,
         notification_cap,
-        memory_cap: None,
+        memory_cap: Some(phys_addr), // Store physical address for debugging
         channel_id: 0, // TODO: Get from broker
         role,
     })

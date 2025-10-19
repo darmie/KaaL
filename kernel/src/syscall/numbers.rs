@@ -128,6 +128,18 @@ pub const SYS_CHANNEL_QUERY: u64 = 0x31;
 /// Returns: 1 on success, 0 on error
 pub const SYS_CHANNEL_CLOSE: u64 = 0x32;
 
+/// Register shared memory with broker (Producer)
+/// Args: channel_name_ptr, channel_name_len, phys_addr, size
+/// Returns: 0 on success, -1 on error
+/// Allows producer to register allocated physical memory with the broker
+pub const SYS_SHMEM_REGISTER: u64 = 0x33;
+
+/// Query shared memory from broker (Consumer)
+/// Args: channel_name_ptr, channel_name_len
+/// Returns: physical address on success, 0 if not found, -1 on error
+/// Allows consumer to discover the physical address allocated by producer
+pub const SYS_SHMEM_QUERY: u64 = 0x34;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

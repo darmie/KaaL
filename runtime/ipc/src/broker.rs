@@ -77,6 +77,8 @@ pub struct ChannelBroker {
     next_channel_id: AtomicUsize,
     /// Maximum channels
     max_channels: usize,
+    /// Shared memory registry for dynamic discovery
+    shmem_registry: capability_broker::ShmemRegistry,
 }
 
 impl ChannelBroker {
@@ -87,7 +89,35 @@ impl ChannelBroker {
             component_channels: BTreeMap::new(),
             next_channel_id: AtomicUsize::new(1),
             max_channels,
+            shmem_registry: capability_broker::ShmemRegistry::new(),
         }
+    }
+
+    /// Register shared memory with the broker
+    ///
+    /// Called by producers to publish physical memory for consumers to discover
+    pub fn register_shmem(
+        &mut self,
+        channel_name: alloc::string::String,
+        phys_addr: usize,
+        size: usize,
+        owner_pid: usize,
+    ) -> Result<(), BrokerError> {
+        self.shmem_registry
+            .register(channel_name, phys_addr, size, owner_pid)
+            .map_err(|_| BrokerError::ChannelExists)
+    }
+
+    /// Query shared memory from the broker
+    ///
+    /// Called by consumers to discover physical memory published by producers
+    pub fn query_shmem(&self, channel_name: &str) -> Option<&capability_broker::ShmemEntry> {
+        self.shmem_registry.query(channel_name)
+    }
+
+    /// Cleanup shared memory registrations for a terminated process
+    pub fn cleanup_shmem(&mut self, pid: usize) {
+        self.shmem_registry.cleanup_process(pid);
     }
 
     /// Establish a channel between two components

@@ -24,6 +24,9 @@ pub mod numbers {
     pub const SYS_CHANNEL_QUERY: usize = 0x31;
     pub const SYS_CHANNEL_CLOSE: usize = 0x32;
 
+    pub const SYS_SHMEM_REGISTER: usize = 0x33;
+    pub const SYS_SHMEM_QUERY: usize = 0x34;
+
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
 
@@ -483,4 +486,68 @@ macro_rules! syscall {
     ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr) => {{
         unsafe { $crate::syscall::raw_syscall_3args($num, $arg0 as usize, $arg1 as usize, $arg2 as usize) }
     }};
+
+    // 4 arguments
+    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr, $arg3:expr) => {{
+        let result: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov x0, {arg0}",
+                "mov x1, {arg1}",
+                "mov x2, {arg2}",
+                "mov x3, {arg3}",
+                "mov x8, {num}",
+                "svc #0",
+                "mov {result}, x0",
+                arg0 = in(reg) $arg0 as usize,
+                arg1 = in(reg) $arg1 as usize,
+                arg2 = in(reg) $arg2 as usize,
+                arg3 = in(reg) $arg3 as usize,
+                num = in(reg) $num,
+                result = out(reg) result,
+                out("x0") _,
+                out("x1") _,
+                out("x2") _,
+                out("x3") _,
+                out("x8") _,
+            );
+            result
+        }
+    }};
+}
+
+/// Register shared memory with the kernel registry
+///
+/// Allows producer to publish physical address for consumers to discover
+pub unsafe fn shmem_register(channel_name: &str, phys_addr: usize, size: usize) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_SHMEM_REGISTER,
+        channel_name.as_ptr(),
+        channel_name.len(),
+        phys_addr,
+        size
+    );
+
+    if result == usize::MAX {
+        Err(crate::Error::SyscallFailed)
+    } else {
+        Ok(())
+    }
+}
+
+/// Query shared memory from the kernel registry
+///
+/// Allows consumer to discover physical address published by producer
+pub unsafe fn shmem_query(channel_name: &str) -> crate::Result<usize> {
+    let phys_addr = crate::syscall!(
+        numbers::SYS_SHMEM_QUERY,
+        channel_name.as_ptr(),
+        channel_name.len()
+    );
+
+    if phys_addr == 0 {
+        Err(crate::Error::SyscallFailed)
+    } else {
+        Ok(phys_addr)
+    }
 }

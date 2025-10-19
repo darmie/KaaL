@@ -52,14 +52,17 @@ impl Component for IpcConsumer {
 
             // Step 1: Establish channel using architecture-driven approach
             // The establish_channel function uses syscalls to dynamically allocate resources
-            let producer_pid = 0; // TODO: Discover via nameserver/broker
+            let channel_name = "kaal.ipc.producer_consumer";
             let buffer_size = 0x1000; // 4KB buffer
 
             syscall::print("[consumer] Establishing channel via syscalls...\n");
+            syscall::print("  - Channel: ");
+            syscall::print(channel_name);
+            syscall::print("\n");
             syscall::print("  - Buffer size: 4KB\n");
             syscall::print("  - Role: Consumer\n");
 
-            let channel_config = match establish_channel(producer_pid, buffer_size, ChannelRole::Consumer) {
+            let channel_config = match establish_channel(channel_name, buffer_size, ChannelRole::Consumer) {
                 Ok(config) => {
                     syscall::print("  ✓ Channel established with dynamic allocation\n");
                     config

@@ -59,10 +59,12 @@ pub mod device_manager;
 pub mod endpoint_manager;
 pub mod memory_manager;
 pub mod service_registry;
+pub mod shmem_registry;
 
 pub use device_manager::{DeviceId, DeviceResource};
 pub use endpoint_manager::Endpoint;
 pub use memory_manager::MemoryRegion;
+pub use shmem_registry::{ShmemRegistry, ShmemEntry};
 
 /// Errors that can occur in the Capability Broker
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
