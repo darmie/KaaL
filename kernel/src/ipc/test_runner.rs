@@ -98,6 +98,7 @@ unsafe fn init_test_infrastructure() {
             VirtAddr::new(0x0),         // ipc_buffer (not used in tests)
             0x0,                        // entry_point (not used)
             0x10000,                    // stack_pointer (dummy)
+            TCB::CAP_ALL,               // capabilities
         );
 
         TEST_TCBS[i].write(tcb);
@@ -119,6 +120,7 @@ unsafe fn init_test_infrastructure() {
             VirtAddr::new(0x0),         // ipc_buffer
             idle_thread_fn as u64,      // entry_point (actual function!)
             stack_top as u64,           // stack_pointer (real stack)
+            TCB::CAP_ALL,               // capabilities
         );
 
         IDLE_TCB.write(idle_tcb);

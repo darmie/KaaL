@@ -130,6 +130,7 @@ pub fn test_tcb_creation() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         tcb.tid() == 1
@@ -150,6 +151,7 @@ pub fn test_tcb_state_transitions() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         // Inactive -> Runnable
@@ -181,6 +183,7 @@ pub fn test_tcb_priority() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         if tcb.priority() != 128 { return false; }
@@ -215,6 +218,7 @@ pub fn test_endpoint_queue_operations() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         let mut receiver = TCB::new(
@@ -224,6 +228,7 @@ pub fn test_endpoint_queue_operations() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         let sender_ptr = &mut sender as *mut TCB;
@@ -317,6 +322,7 @@ pub fn test_tcb_invocation_priority() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         let cap = Capability::new(CapType::Tcb, &mut tcb as *mut _ as usize);
@@ -345,6 +351,7 @@ pub fn test_invocation_rights_enforcement() -> bool {
             VirtAddr::new(0x10000000),
             0x200000,
             0x300000,
+            TCB::CAP_ALL,
         );
 
         let cap = Capability::new(CapType::Tcb, &mut tcb as *mut _ as usize);
