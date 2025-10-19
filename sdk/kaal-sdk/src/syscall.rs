@@ -30,6 +30,7 @@ pub mod numbers {
     // Privileged syscalls for root-task
     pub const SYS_MEMORY_MAP_INTO: usize = 0x1B;
     pub const SYS_CAP_INSERT_INTO: usize = 0x1C;
+    pub const SYS_CAP_INSERT_SELF: usize = 0x1D;
 
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
@@ -549,6 +550,50 @@ macro_rules! syscall {
             result
         }
     }};
+
+    // 9 arguments (8 in x0-x7, priority in x9)
+    // Special case for SYS_PROCESS_CREATE
+    ($num:expr, $arg0:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $priority:expr) => {{
+        let result: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov x0, {arg0}",
+                "mov x1, {arg1}",
+                "mov x2, {arg2}",
+                "mov x3, {arg3}",
+                "mov x4, {arg4}",
+                "mov x5, {arg5}",
+                "mov x6, {arg6}",
+                "mov x7, {arg7}",
+                "mov x8, {num}",
+                "mov x9, {priority}",
+                "svc #0",
+                "mov {result}, x0",
+                arg0 = in(reg) $arg0 as usize,
+                arg1 = in(reg) $arg1 as usize,
+                arg2 = in(reg) $arg2 as usize,
+                arg3 = in(reg) $arg3 as usize,
+                arg4 = in(reg) $arg4 as usize,
+                arg5 = in(reg) $arg5 as usize,
+                arg6 = in(reg) $arg6 as usize,
+                arg7 = in(reg) $arg7 as usize,
+                num = in(reg) $num,
+                priority = in(reg) $priority as usize,
+                result = out(reg) result,
+                out("x0") _,
+                out("x1") _,
+                out("x2") _,
+                out("x3") _,
+                out("x4") _,
+                out("x5") _,
+                out("x6") _,
+                out("x7") _,
+                out("x8") _,
+                out("x9") _,
+            );
+            result
+        }
+    }};
 }
 
 /// Register shared memory with the kernel registry
@@ -651,6 +696,92 @@ pub unsafe fn cap_insert_into(
         numbers::SYS_CAP_INSERT_INTO,
         target_tcb_cap,
         target_slot,
+        cap_type,
+        object_ptr
+    );
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(crate::Error::SyscallFailed)
+    }
+}
+
+/// Create a new process with full isolation
+///
+/// # Arguments
+///
+/// * `entry_point` - Initial program counter
+/// * `stack_pointer` - Initial stack pointer (virtual address)
+/// * `page_table_root` - Physical address of page table (TTBR0)
+/// * `cspace_root` - Physical address of CNode (capability space root)
+/// * `code_phys` - Physical address where code is loaded
+/// * `code_vaddr` - Virtual address where code should be mapped
+/// * `code_size` - Size of code region in bytes
+/// * `stack_phys` - Physical address where stack is located
+/// * `priority` - Scheduling priority (0-255)
+///
+/// # Returns
+///
+/// Process ID (TCB physical address), or error on failure
+///
+/// # Safety
+///
+/// Unsafe because it creates a new isolated process with its own address space
+pub unsafe fn process_create(
+    entry_point: usize,
+    stack_pointer: usize,
+    page_table_root: usize,
+    cspace_root: usize,
+    code_phys: usize,
+    code_vaddr: usize,
+    code_size: usize,
+    stack_phys: usize,
+    priority: u8,
+) -> crate::Result<usize> {
+    let result = crate::syscall!(
+        numbers::SYS_PROCESS_CREATE,
+        entry_point,
+        stack_pointer,
+        page_table_root,
+        cspace_root,
+        code_phys,
+        code_vaddr,
+        code_size,
+        stack_phys,
+        priority
+    );
+
+    if result == usize::MAX {
+        Err(crate::Error::SyscallFailed)
+    } else {
+        Ok(result)
+    }
+}
+
+/// Insert capability into caller's own CSpace
+///
+/// # Arguments
+///
+/// * `slot` - Slot in caller's CSpace
+/// * `cap_type` - Capability type (4 = TCB)
+/// * `object_ptr` - Object reference (PID for TCB)
+///
+/// # Returns
+///
+/// Ok(()) on success, error on failure
+///
+/// # Safety
+///
+/// Unsafe because it modifies the caller's CSpace
+pub unsafe fn cap_insert_self(
+    slot: usize,
+    cap_type: usize,
+    object_ptr: usize,
+) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_CAP_INSERT_SELF,
+        slot,
         cap_type,
         object_ptr
     );

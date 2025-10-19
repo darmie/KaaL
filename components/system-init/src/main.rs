@@ -62,58 +62,50 @@ impl Component for SystemInit {
             };
 
             // ═══════════════════════════════════════════════════════════
-            // Developer Playground - Add your experiments here!
+            // Developer Playground - Hybrid Component Spawning
             // ═══════════════════════════════════════════════════════════
             //
-            // This is the entry point for application-level development.
-            // The kernel and root-task handle low-level initialization.
-            // Use this component to:
-            //
-            // - Test new IPC patterns
-            // - Spawn additional components
-            // - Experiment with syscalls
-            // - Build application logic
-            // - Demo features
-            //
-            // Example: IPC Demo (currently runs from root-task)
-            //
-            // TODO: Move component spawning to SDK (see docs/COMPONENT_SPAWN_DESIGN.md)
-            //
-            // Planned approach (Option B - SDK helper):
-            //   let registry = generated::component_registry::get_registry();
-            //   let producer = kaal_sdk::component::spawn(registry, "ipc_producer")?;
-            //   let consumer = kaal_sdk::component::spawn(registry, "ipc_consumer")?;
-            //
-            // This reuses existing syscalls (no kernel changes needed!):
-            //   - SYS_MEMORY_ALLOCATE (for process memory, stack, page table)
-            //   - SYS_MEMORY_MAP/UNMAP (to copy ELF segments)
-            //   - SYS_PROCESS_CREATE (to create TCB)
-            //   - SYS_CAP_INSERT_SELF (to get TCB capability)
-            //
-            // See docs/COMPONENT_SPAWN_DESIGN.md for full design.
+            // This demonstrates the hybrid approach:
+            // 1. Registry-based spawning for autostart components (from generated registry)
+            // 2. SDK helper available for runtime spawning (spawn_from_elf still works!)
             //
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("  System Init: Developer Playground\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
-            syscall::print("[system_init] This is your development entry point\n");
-            syscall::print("[system_init] Add experiments, tests, and demos here\n");
-            syscall::print("[system_init] Keep kernel and root-task minimal\n");
-            syscall::print("\n");
-            syscall::print("Available infrastructure:\n");
-            syscall::print("  ✓ IPC: Shared memory + notifications\n");
-            syscall::print("  ✓ Memory: Allocate, map, unmap\n");
-            syscall::print("  ✓ Capabilities: Create, transfer, manage\n");
-            syscall::print("  ✓ Components: Producer/consumer patterns\n");
-            syscall::print("\n");
-            syscall::print("Next steps:\n");
-            syscall::print("  → Implement SYS_COMPONENT_SPAWN for userspace\n");
-            syscall::print("  → Move IPC demo from root-task to here\n");
-            syscall::print("  → Add your own experiments!\n");
+
+            // Import generated registry
+            mod generated {
+                include!("generated/registry.rs");
+            }
+
+            // Spawn autostart components from registry
+            syscall::print("[system_init] Spawning autostart components from registry...\n");
+            for component in generated::COMPONENT_REGISTRY {
+                if component.autostart {
+                    syscall::print("[system_init]   → Spawning ");
+                    syscall::print(component.name);
+                    syscall::print("...\n");
+
+                    match kaal_sdk::component::spawn_from_elf(component.binary_data, component.priority) {
+                        Ok(_result) => {
+                            syscall::print("[system_init]   ✓ ");
+                            syscall::print(component.name);
+                            syscall::print(" spawned successfully!\n");
+                        }
+                        Err(_) => {
+                            syscall::print("[system_init]   ERROR: Failed to spawn ");
+                            syscall::print(component.name);
+                            syscall::print("\n");
+                        }
+                    }
+                }
+            }
+
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  System Init: Ready ✓\n");
+            syscall::print("  System Init: Component Spawning Demo Complete!\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
 

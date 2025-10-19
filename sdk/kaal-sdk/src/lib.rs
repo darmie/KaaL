@@ -31,6 +31,7 @@ pub mod message;
 pub mod allocator;
 pub mod args;
 pub mod channel_setup;
+pub mod elf;
 
 // Re-export IPC from kaal-ipc for convenience
 pub use kaal_ipc as ipc;
@@ -58,6 +59,10 @@ pub enum Error {
     Busy,
     /// Operation would block
     WouldBlock,
+    /// Resource not found
+    NotFound,
+    /// Invalid ELF binary
+    InvalidElf,
 }
 
 impl Error {

@@ -98,18 +98,22 @@ export def "build elfloader" [
     $bootimage
 }
 
-# Build components
+# Build components (excluding system_init which is built last)
 export def "build components" [platform_cfg: record] {
     print ""
-    print "Building components..."
+    print "Building components (excluding system_init)..."
 
     # Get list of components from components.toml
     let components_data = (open components.toml)
     let components = ($components_data | get component)
 
-    # Build ALL components (not just autostart ones)
-    # This ensures components can be spawned on-demand later
+    # Build ALL components EXCEPT system_init (not just autostart ones)
+    # system_init is built last because it needs the registry
     for comp in $components {
+        if $comp.name == "system_init" {
+            continue  # Skip system_init, build it last
+        }
+
         let comp_dir = $"components/($comp.binary)"
         let cargo_toml = $"($comp_dir)/Cargo.toml"
         if ($cargo_toml | path exists) {
@@ -121,5 +125,25 @@ export def "build components" [platform_cfg: record] {
         }
     }
 
-    print "✓ Components built"
+    print "✓ Components built (except system_init)"
+}
+
+# Build system_init (must be called AFTER registry generation)
+export def "build system-init" [] {
+    print ""
+    print "Building system_init (with generated registry)..."
+
+    let comp_dir = "components/system-init"
+    let cargo_toml = $"($comp_dir)/Cargo.toml"
+
+    if ($cargo_toml | path exists) {
+        cd $comp_dir
+        cargo build-safe --target aarch64-unknown-none --release
+        cd ../..
+        print "✓ system_init built"
+    } else {
+        error make {
+            msg: "system_init Cargo.toml not found"
+        }
+    }
 }

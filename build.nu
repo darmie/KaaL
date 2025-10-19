@@ -98,12 +98,15 @@ def main [
     print ""
     codegen component-linkers --platform $platform
 
-    # Build components
+    # Build components (excluding system_init)
     build components $platform_cfg
 
     # Generate component registry
     print ""
     codegen component-registry
+
+    # Build system_init (after registry is generated)
+    build system-init
 
     # Calculate addresses
     let elfloader_addr = (config calc-addr $platform_cfg.ram_base $platform_cfg.elfloader_offset)

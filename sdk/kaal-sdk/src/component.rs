@@ -374,3 +374,7 @@ macro_rules! register_component {
             )?;
     };
 }
+
+// Component spawning
+pub mod spawn;
+pub use spawn::{SpawnResult, spawn_from_elf};
