@@ -76,11 +76,21 @@ impl Component for SystemInit {
             // - Demo features
             //
             // Example: IPC Demo (currently runs from root-task)
-            // TODO: Move IPC producer/consumer spawning here once we have
-            //       userspace component loader syscalls
             //
-            // For now, the IPC demo runs directly from root-task.
-            // Future: Implement SYS_COMPONENT_SPAWN for userspace component loading
+            // TODO: Move component spawning to SDK (see docs/COMPONENT_SPAWN_DESIGN.md)
+            //
+            // Planned approach (Option B - SDK helper):
+            //   let registry = generated::component_registry::get_registry();
+            //   let producer = kaal_sdk::component::spawn(registry, "ipc_producer")?;
+            //   let consumer = kaal_sdk::component::spawn(registry, "ipc_consumer")?;
+            //
+            // This reuses existing syscalls (no kernel changes needed!):
+            //   - SYS_MEMORY_ALLOCATE (for process memory, stack, page table)
+            //   - SYS_MEMORY_MAP/UNMAP (to copy ELF segments)
+            //   - SYS_PROCESS_CREATE (to create TCB)
+            //   - SYS_CAP_INSERT_SELF (to get TCB capability)
+            //
+            // See docs/COMPONENT_SPAWN_DESIGN.md for full design.
             //
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
