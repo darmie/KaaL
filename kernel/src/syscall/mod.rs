@@ -423,7 +423,19 @@ static mut NEXT_CAP_SLOT: u64 = 100;
 /// Returns a capability slot number that can be used to store capabilities.
 /// Capability slots are process-local identifiers used to reference kernel objects.
 fn sys_cap_allocate() -> u64 {
+    // Check if caller has capability management capability
     unsafe {
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            ksyscall_debug!("[syscall] cap_allocate: no current thread");
+            return u64::MAX;
+        }
+
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_allocate: caller lacks CAP_CAPS capability");
+            return u64::MAX; // Permission denied
+        }
+
         let slot = NEXT_CAP_SLOT;
         NEXT_CAP_SLOT += 1;
         slot
@@ -439,6 +451,20 @@ fn sys_cap_allocate() -> u64 {
 /// For multi-page allocations, allocates contiguous frames.
 fn sys_memory_allocate(size: u64) -> u64 {
     use crate::memory::{alloc_frame, PAGE_SIZE};
+
+    // Check if caller has memory allocation capability
+    unsafe {
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            ksyscall_debug!("[syscall] memory_allocate: no current thread");
+            return u64::MAX;
+        }
+
+        if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
+            ksyscall_debug!("[syscall] memory_allocate: caller lacks CAP_MEMORY capability");
+            return u64::MAX; // Permission denied
+        }
+    }
 
     let page_size = PAGE_SIZE as u64;
     let pages_needed = ((size + page_size - 1) / page_size) as usize;
@@ -576,6 +602,20 @@ fn sys_process_create(
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
     use crate::scheduler;
+
+    // Check if caller has process creation capability
+    unsafe {
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            ksyscall_debug!("[syscall] process_create: no current thread");
+            return u64::MAX;
+        }
+
+        if !(*current_tcb).has_capability(TCB::CAP_PROCESS) {
+            ksyscall_debug!("[syscall] process_create: caller lacks CAP_PROCESS capability");
+            return u64::MAX; // Permission denied
+        }
+    }
 
     // Debug output (always show for debugging spawned components)
     crate::kprintln!("[syscall] sys_process_create: entry={:#x}, stack={:#x}, pt={:#x}, priority={}",
@@ -814,6 +854,20 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
 
+    // Check if caller has memory mapping capability
+    unsafe {
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            ksyscall_debug!("[syscall] memory_map: no current thread");
+            return u64::MAX;
+        }
+
+        if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
+            ksyscall_debug!("[syscall] memory_map: caller lacks CAP_MEMORY capability");
+            return u64::MAX; // Permission denied
+        }
+    }
+
     crate::kprintln!("[syscall] memory_map: phys={:#x}, size={:#x}, perms={:#x}", phys_addr, size, permissions);
 
     // Round size up to page boundary
@@ -894,16 +948,25 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 
     ksyscall_debug!("[syscall] memory_unmap: virt={:#x}, size={}", virt_addr, size);
 
-    // Round size up to page boundary
-    let page_size = PAGE_SIZE as u64;
-    let num_pages = ((size + page_size - 1) / page_size) as usize;
-
-    // Get caller's page table from current TCB
+    // Check if caller has memory mapping capability
     let current_tcb = unsafe { crate::scheduler::current_thread() };
     if current_tcb.is_null() {
         ksyscall_debug!("[syscall] memory_unmap: no current thread");
         return u64::MAX;
     }
+
+    unsafe {
+        if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
+            ksyscall_debug!("[syscall] memory_unmap: caller lacks CAP_MEMORY capability");
+            return u64::MAX; // Permission denied
+        }
+    }
+
+    // Round size up to page boundary
+    let page_size = PAGE_SIZE as u64;
+    let num_pages = ((size + page_size - 1) / page_size) as usize;
+
+    // Get caller's page table from current TCB
 
     let page_table_phys = unsafe { (*current_tcb).vspace_root() };
     let page_table = page_table_phys as *mut PageTable;
@@ -1077,6 +1140,12 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
             return u64::MAX;
         }
 
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_insert_into: caller lacks CAP_CAPS capability");
+            return u64::MAX; // Permission denied
+        }
+
         let cspace_root = (*current_tcb).cspace_root();
         if cspace_root.is_null() {
             ksyscall_debug!("[syscall] cap_insert_into: thread has no CSpace root");
@@ -1171,6 +1240,12 @@ fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
         if current_tcb.is_null() {
             ksyscall_debug!("[syscall] cap_insert_self: no current thread");
             return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_insert_self: caller lacks CAP_CAPS capability");
+            return u64::MAX; // Permission denied
         }
 
         let cspace_root = (*current_tcb).cspace_root();
