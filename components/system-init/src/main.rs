@@ -65,18 +65,23 @@ impl Component for SystemInit {
             // Developer Playground - Hybrid Component Spawning
             // ═══════════════════════════════════════════════════════════
             //
-            // This demonstrates the hybrid approach:
-            // 1. root-task spawns autostart components (from components.toml)
-            // 2. system_init CAN spawn components on-demand using SDK helper (spawn_from_elf)
-            // 3. Generated registry available for runtime spawning if needed
+            // Hybrid approach architecture (capability granting TODO):
+            // 1. root-task spawns components with autostart=true (works now)
+            // 2. system_init WILL spawn spawned_by="system_init" components (future)
+            // 3. Runtime on-demand spawning via SDK helper (needs capability grants)
+            //
+            // NOTE: spawned_by delegation requires capability granting to be implemented
+            // Currently, system_init can't spawn because declared capabilities aren't
+            // actually granted by the kernel yet. This will be implemented in a future
+            // chapter when we add the capability distribution system.
             //
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  System Init: Ready\n");
+            syscall::print("  System Init: Ready (Developer Playground)\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
-            syscall::print("[system_init] IPC demo components spawned by root-task\n");
-            syscall::print("[system_init] Registry available for on-demand spawning\n");
+            syscall::print("[system_init] Component spawning delegated to root-task\n");
+            syscall::print("[system_init] TODO: Implement capability granting for spawned_by\n");
             syscall::print("\n");
 
             // Event loop - block waiting for notifications instead of busy-yielding

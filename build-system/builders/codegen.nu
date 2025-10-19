@@ -144,11 +144,15 @@ export def "codegen system-init-registry" [] {
 
         let cargo_toml = $"components/($comp.binary)/Cargo.toml"
         if ($cargo_toml | path exists) {
+            # Check if this component should be spawned by system_init
+            let spawned_by_system_init = ($comp.spawned_by? | default "") == "system_init"
+
             {
                 name: $comp.name,
                 type: $comp.type,
                 priority: $comp.priority,
-                autostart: ($comp.autostart? | default false),
+                # Components with spawned_by="system_init" are autostart for system_init
+                autostart: $spawned_by_system_init,
                 # Path is relative to src/generated/registry.rs, so need ../../../
                 binary_path: $"../../../($comp.binary)/target/aarch64-unknown-none/release/($comp.binary)"
             }
