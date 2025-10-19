@@ -488,7 +488,7 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ## Chapter 9: Framework Integration & Runtime Services
 
-**Status**: 🚧 IN PROGRESS - Phase 1 Complete (2025-10-15)
+**Status**: ✅ COMPLETE - Core Framework (Phases 1-5, 2025-10-19)
 
 ### Prerequisites
 - ✅ Chapters 0-7 complete (microkernel operational!)
@@ -497,65 +497,56 @@ This provides a natural development flow where IPC implementation informs the fi
 
 ### Completed ✅
 
-#### Phase 1: Runtime Services Foundation ✅ COMPLETE (2025-10-15)
-1. ✅ Capability Broker (~630 LOC total)
-   - Device Manager with boot info integration
-   - Memory Manager with syscall wrappers
-   - Endpoint Manager with IPC endpoint creation
-   - File: [runtime/capability-broker/](../../runtime/capability-broker/)
+#### Phase 1-5: Core Framework ✅ COMPLETE (2025-10-19)
 
-2. ✅ Boot Info Infrastructure (~550 LOC total)
-   - Kernel-side BootInfo structure and population
-   - Userspace boot info types and reading
-   - Device regions (UART0, UART1, RTC, Timer)
-   - Untyped memory regions
-   - Files: [kernel/src/boot/boot_info.rs](../../kernel/src/boot/boot_info.rs), [runtime/capability-broker/src/boot_info.rs](../../runtime/capability-broker/src/boot_info.rs)
+**Phase 1**: Runtime Services Foundation (Capability Broker, Boot Info)
+**Phase 2**: Shared Memory IPC (Notifications, SharedRing)
+**Phase 3**: KaaL SDK (Component patterns, syscall wrappers)
+**Phase 4**: Component Spawning (system_init, component loading)
+**Phase 5**: End-to-End IPC Testing (Producer/Consumer demo working!)
 
-3. ✅ Root Task Integration
-   - Broker initialization from boot info
-   - All 4 tests passing (memory, device, endpoint allocation)
-   - File: [runtime/root-task/src/broker_integration.rs](../../runtime/root-task/src/broker_integration.rs)
+**Key Achievements**:
+1. ✅ Full IPC demo working - producer/consumer exchanging messages
+2. ✅ Capability granting via capabilities_bitmask in component registry
+3. ✅ Shared memory syscalls (shmem_register, shmem_query, memory_map)
+4. ✅ Notification syscalls (signal, wait, poll)
+5. ✅ Timer-based preemption enabled (5ms timeslice)
+6. ✅ Component spawning infrastructure complete
 
-### In Progress 🚧
-
-#### Phase 2: IPC Integration Testing (Planned)
-- [ ] Full end-to-end IPC tests (deferred from Chapter 5)
-- [ ] Multi-component send/receive
-- [ ] Capability transfer (grant/mint/derive)
-- [ ] IPC performance benchmarking
+**Files Modified** (Session Summary):
+- [kernel/src/boot/mod.rs](../../kernel/src/boot/mod.rs) - Timer initialization
+- [build-system/builders/codegen.nu](../../build-system/builders/codegen.nu) - Capabilities parsing
+- [components/system-init/src/main.rs](../../components/system-init/src/main.rs) - Use capabilities_bitmask
+- [components.toml](../../components.toml) - Added caps:allocate, disabled test_minimal
 
 ### Future Work 📋
 
-#### Phase 3: KaaL SDK
-- [ ] Device Driver Development Kit
-- [ ] Example drivers (UART, Timer, GPIO)
-- [ ] SDK examples
-
-#### Phase 4: System Services
-- [ ] Basic VFS implementation
-- [ ] Network stack foundation
+#### Phase 6: Example Drivers & Applications (Optional)
+- [ ] UART driver using SDK component pattern
+- [ ] Timer driver with interrupt handling
+- [ ] GPIO driver for hardware control
+- [ ] Simple shell service demonstrating IPC
+- [ ] Echo server for IPC testing
 
 ### Known Blockers
 
-**Phase 1**: ✅ None - Complete!
+**Core Framework (Phases 1-5)**: ✅ None - All Complete!
 
-**Phase 2**:
-- Need to create dedicated IPC test components (sender/receiver processes)
-- Need IPC performance measurement infrastructure
-- Need to test capability transfer across process boundaries
+**Phase 6 (Optional)**:
+- No blockers, just implementation time
 
 ### Future Improvements
 
-#### High Priority (Phase 2)
-- [ ] **IPC End-to-End Testing** - Real multi-process IPC scenarios (1 week)
-- [ ] **Capability Transfer Testing** - Grant/mint/derive across processes (2-3 days)
-- [ ] **IPC Performance Measurement** - Latency benchmarking (1-2 days)
+#### High Priority
+- [x] **IPC End-to-End Testing** - ✅ COMPLETE (Producer/Consumer demo working)
+- [x] **Timer Preemption** - ✅ COMPLETE (5ms timeslice, IRQs enabled)
+- [ ] **IPC Performance Measurement** - Latency benchmarking (future work)
 
-#### Medium Priority (Phase 3)
-- [ ] **DDDK Implementation** - Device driver development kit (1-2 weeks)
-- [ ] **Example Drivers** - UART, Timer, GPIO drivers (1 week)
+#### Medium Priority (Phase 6)
+- [ ] **Example Drivers** - UART, Timer, GPIO drivers (1-2 weeks)
+- [ ] **Example Services** - Shell, file server (1 week)
 
-**Note**: Chapter 9 transitions from **microkernel development** (Chapters 0-7) to **ecosystem building** (Framework components in user-space).
+**Note**: Chapter 9 core framework is **COMPLETE**! The microkernel now has a working IPC system, component spawning, and time-slicing preemption. Phase 6 (example drivers/apps) is optional for demonstrating the system.
 
 ---
 

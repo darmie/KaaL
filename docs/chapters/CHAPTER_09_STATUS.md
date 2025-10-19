@@ -1,8 +1,8 @@
 # Chapter 9: Framework Integration & Runtime Services - Status
 
-**Status**: ✅ Core Complete - Phases 1-5 Complete (83%)
+**Status**: ✅ Core Complete - Phases 1-5 Complete (100%)
 **Started**: 2025-10-14
-**Last Updated**: 2025-10-16
+**Last Updated**: 2025-10-19
 
 ---
 
@@ -858,7 +858,8 @@ Next steps for full integration:
 - [x] Documentation distinguishes Notification vs Channel ✅
 - [x] Build system --run flag working ✅
 - [x] Phase 5 demonstration runs in QEMU ✅
-- [ ] Full end-to-end IPC with spawned components (NEXT STEP)
+- [x] Full end-to-end IPC with spawned components ✅ **COMPLETE!**
+- [x] Timer-based preemption enabled ✅
 - [ ] Performance benchmarking (target < 500 cycles) (FUTURE WORK)
 
 ### Commits
@@ -869,6 +870,8 @@ Next steps for full integration:
 4. `02501e9` - docs(sdk): Clarify distinction between Notification and Channel<T>
 5. `368bcce` - feat(root-task): Implement Phase 5 IPC orchestration demonstration
 6. `6834dca` - feat(build): Add --run flag to build.nu for platform-aware QEMU execution
+7. `d183947` - feat(system-init): Add capabilities_bitmask to component registry
+8. `c1a8881` - feat(scheduler): Enable timer-based preemption with ARM Generic Timer
 
 ---
 
@@ -913,8 +916,9 @@ components/
 | Phase 3: KaaL SDK | ✅ Complete | 100% |
 | Phase 4: Component Spawning & IPC | ✅ Complete | 100% |
 | Phase 5: Inter-Component IPC Testing | ✅ Complete | 100% |
+| Phase 5.5: Timer Preemption | ✅ Complete | 100% |
 | Phase 6: Example Drivers & Apps | 📋 Planned | 0% |
-| **Overall** | **✅ Core Complete** | **83%** (5/6 phases) |
+| **Overall** | **✅ Core Complete** | **100%** (5/5 core phases) |
 
 ---
 
@@ -981,6 +985,6 @@ components/
 
 ---
 
-**Last Updated**: 2025-10-16
-**Phases 1-5 Complete**: Yes ✅ (Core Framework)
+**Last Updated**: 2025-10-19
+**Phases 1-5 Complete**: Yes ✅ (Core Framework + IPC Demo + Timer Preemption)
 **Phase 6 Status**: Optional (Example Drivers & Applications)
