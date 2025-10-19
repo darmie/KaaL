@@ -789,6 +789,8 @@ fn sys_process_create(
 
         // Initialize saved_ttbr0 in the context for context switching
         (*tcb_ptr).context_mut().saved_ttbr0 = page_table_root;
+        crate::kprintln!("[syscall] process_create: set saved_ttbr0={:#x} for TCB={:#x}",
+                        page_table_root, tcb_ptr as usize);
 
         // Set the priority from the component manifest
         // NOTE: In our scheduler, lower numbers = higher priority!
@@ -1760,8 +1762,8 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
                 next_tcb.set_state(crate::objects::ThreadState::Running);
                 crate::scheduler::test_set_current_thread(next);
 
-                crate::kprintln!("[syscall] sys_wait: switching to TCB={:#x}, ELR={:#x}",
-                                next as usize, next_tcb.context().elr_el1);
+                crate::kprintln!("[syscall] sys_wait: switching to TCB={:#x}, ELR={:#x}, TTBR0={:#x}",
+                                next as usize, next_tcb.context().elr_el1, next_tcb.context().saved_ttbr0);
 
                 // Replace our TrapFrame with the next thread's context
                 // When we return from this syscall, the exception handler will restore

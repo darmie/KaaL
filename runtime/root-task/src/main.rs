@@ -201,49 +201,39 @@ unsafe fn sys_process_create(
 
     core::arch::asm!(
         // Set inputs
-        "mov x0, {entry}",
-        "mov x1, {stack}",
-        "mov x2, {pt}",
-        "mov x3, {cspace}",
-        "mov x4, {code_phys}",
-        "mov x5, {code_vaddr}",
-        "mov x6, {code_size}",
-        "mov x7, {stack_phys}",
-        "mov x8, {syscall_num}",
-        "mov x9, {priority}",
-        "mov x10, {caps}",
+        "mov x0, {0}",
+        "mov x1, {1}",
+        "mov x2, {2}",
+        "mov x3, {3}",
+        "mov x4, {4}",
+        "mov x5, {5}",
+        "mov x6, {6}",
+        "mov x7, {7}",
+        "mov x8, {8}",
+        "mov x9, {9}",
+        "mov x10, {10}",
         // Make syscall
         "svc #0",
-        // Read outputs
-        "mov {pid}, x0",
-        "mov {tcb}, x1",
-        "mov {pt_out}, x2",
-        "mov {cs_out}, x3",
-        syscall_num = in(reg) SYS_PROCESS_CREATE,
-        entry = in(reg) entry_point,
-        stack = in(reg) stack_pointer,
-        pt = in(reg) page_table_root,
-        cspace = in(reg) cspace_root,
-        code_phys = in(reg) code_phys,
-        code_vaddr = in(reg) code_vaddr,
-        code_size = in(reg) code_size,
-        stack_phys = in(reg) stack_phys,
-        priority = in(reg) priority as usize,
-        caps = in(reg) capabilities as usize,
-        pid = out(reg) pid,
-        tcb = out(reg) tcb_phys,
-        pt_out = out(reg) pt_phys,
-        cs_out = out(reg) cspace_phys,
-        out("x0") _,
-        out("x1") _,
-        out("x2") _,
-        out("x3") _,
-        out("x4") _,
-        out("x5") _,
-        out("x6") _,
-        out("x7") _,
-        out("x8") _,
-        out("x9") _,
+        // Read outputs into different registers
+        "mov {11}, x0",
+        "mov {12}, x1",
+        "mov {13}, x2",
+        "mov {14}, x3",
+        in(reg) entry_point,          // {0}
+        in(reg) stack_pointer,         // {1}
+        in(reg) page_table_root,       // {2}
+        in(reg) cspace_root,           // {3}
+        in(reg) code_phys,             // {4}
+        in(reg) code_vaddr,            // {5}
+        in(reg) code_size,             // {6}
+        in(reg) stack_phys,            // {7}
+        in(reg) SYS_PROCESS_CREATE,    // {8}
+        in(reg) priority as usize,     // {9}
+        in(reg) capabilities as usize, // {10}
+        out(reg) pid,                  // {11}
+        out(reg) tcb_phys,             // {12}
+        out(reg) pt_phys,              // {13}
+        out(reg) cspace_phys,          // {14}
     );
 
     // Debug: Check what we received (avoid sys_print which causes syscalls)
