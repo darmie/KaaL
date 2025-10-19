@@ -137,41 +137,32 @@ Here's how you'd build a custom service using KaaL's composable APIs:
 #![no_main]
 
 use kaal_sdk::{
-    component::{Component, ComponentType, ComponentMetadata},
+    component::Component,
     capability::Notification,
-    ipc::Channel,
     syscall,
 };
 
-// Define component metadata
-component_metadata! {
+// Declare component (generates metadata, entry point, panic handler)
+kaal_sdk::component! {
     name: "my_service",
     type: Service,
     version: "0.1.0",
+    capabilities: ["notification:wait", "ipc:my_channel"],
+    impl: MyService
 }
 
-struct MyService {
+pub struct MyService {
     notification: Notification,
-    ipc_channel: Option<Channel<MyMessage>>,
-}
-
-#[derive(Debug)]
-struct MyMessage {
-    data: u64,
-    flags: u32,
 }
 
 impl Component for MyService {
     fn init() -> kaal_sdk::Result<Self> {
         syscall::print("[my_service] Initializing...\n");
 
-        // Allocate notification for events
+        // Create notification for event handling
         let notification = Notification::create()?;
 
-        Ok(Self {
-            notification,
-            ipc_channel: None,
-        })
+        Ok(Self { notification })
     }
 
     fn run(&mut self) -> ! {
@@ -181,33 +172,15 @@ impl Component for MyService {
             // Wait for notification
             match self.notification.wait() {
                 Ok(signals) => {
-                    self.handle_event(signals);
+                    syscall::print("[my_service] Received event\n");
+                    // Process event...
                 }
                 Err(_) => {
-                    syscall::print("[my_service] Error waiting for event\n");
+                    syscall::print("[my_service] Error\n");
                 }
             }
         }
     }
-}
-
-impl MyService {
-    fn handle_event(&mut self, signals: u64) {
-        syscall::print("[my_service] Received event: ");
-        // Process event...
-    }
-}
-
-// Entry point
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    MyService::start()
-}
-
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    syscall::print("[my_service] PANIC!\n");
-    loop { unsafe { core::arch::asm!("wfi") } }
 }
 ```
 
