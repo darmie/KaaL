@@ -1,27 +1,37 @@
 # KaaL Build System
 
-A configuration-driven, multi-platform build system for the KaaL microkernel.
+A Nushell-based, configuration-driven, multi-platform build system for the KaaL microkernel.
 
 ## Overview
 
 The KaaL build system generates platform-specific bootable images by:
-1. Reading platform configuration from `build-config.toml`
-2. Dynamically generating linker scripts with correct memory addresses
-3. Building kernel, root task, and elfloader components
-4. Packaging everything into a bootable ELF image
+1. Discovering components from `components.toml`
+2. Reading platform configuration from `build-config.toml`
+3. Dynamically generating linker scripts and component registries
+4. Building components in correct order (components → registry → system_init)
+5. Building kernel and root-task
+6. Packaging everything into a bootable ELF image
 
 ## Quick Start
 
 ```bash
 # Build for default platform (QEMU virt)
-./build.sh
+nu build.nu
+
+# Build and run in QEMU
+nu build.nu --run
 
 # Build for specific platform
-./build.sh --platform qemu-virt
-./build.sh --platform rpi4
+nu build.nu --platform rpi4
+
+# Clean build
+nu build.nu --clean
+
+# List available platforms
+nu build.nu --list-platforms
 
 # Verbose output
-./build.sh --platform qemu-virt -v
+nu build.nu --verbose
 ```
 
 ## Configuration File

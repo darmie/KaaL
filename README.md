@@ -61,24 +61,34 @@ Your Custom OS (you build this)
 
 ### Building a Bootable Image
 
-KaaL uses a config-driven build system to create bootable images for ARM64 platforms:
+KaaL uses a Nushell-based build system to create bootable images for any configured platform:
 
 ```bash
 # Build bootable image for QEMU virt (default)
-./build.sh
+nu build.nu
 
-# Build for Raspberry Pi 4
-./build.sh --platform rpi4
+# Build and run in QEMU
+nu build.nu --run
 
-# Build for custom platform
-./build.sh --platform my-board
+# Build for specific platform
+nu build.nu --platform rpi4
 
-# Test in QEMU
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
-  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+# Clean build
+nu build.nu --clean
+
+# List available platforms
+nu build.nu --list-platforms
 ```
 
-The build system packages your kernel, user-space components, and drivers into a single bootable ELF image. Configure platforms in [build-config.toml](build-config.toml).
+The build system:
+1. Discovers components from `components.toml`
+2. Generates platform-specific configurations from `build-config.toml`
+3. Builds components (excluding system_init)
+4. Generates component registry for system_init
+5. Builds system_init (with embedded component binaries)
+6. Packages kernel + root-task into bootable ELF image
+
+Configure platforms in [build-config.toml](build-config.toml).
 
 ---
 
