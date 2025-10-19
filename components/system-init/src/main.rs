@@ -66,47 +66,17 @@ impl Component for SystemInit {
             // ═══════════════════════════════════════════════════════════
             //
             // This demonstrates the hybrid approach:
-            // 1. Registry-based spawning for autostart components (from generated registry)
-            // 2. SDK helper available for runtime spawning (spawn_from_elf still works!)
+            // 1. root-task spawns autostart components (from components.toml)
+            // 2. system_init CAN spawn components on-demand using SDK helper (spawn_from_elf)
+            // 3. Generated registry available for runtime spawning if needed
             //
             syscall::print("\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  System Init: Developer Playground\n");
+            syscall::print("  System Init: Ready\n");
             syscall::print("═══════════════════════════════════════════════════════════\n");
             syscall::print("\n");
-
-            // Import generated registry
-            mod generated {
-                include!("generated/registry.rs");
-            }
-
-            // Spawn autostart components from registry
-            syscall::print("[system_init] Spawning autostart components from registry...\n");
-            for component in generated::COMPONENT_REGISTRY {
-                if component.autostart {
-                    syscall::print("[system_init]   → Spawning ");
-                    syscall::print(component.name);
-                    syscall::print("...\n");
-
-                    match kaal_sdk::component::spawn_from_elf(component.binary_data, component.priority) {
-                        Ok(_result) => {
-                            syscall::print("[system_init]   ✓ ");
-                            syscall::print(component.name);
-                            syscall::print(" spawned successfully!\n");
-                        }
-                        Err(_) => {
-                            syscall::print("[system_init]   ERROR: Failed to spawn ");
-                            syscall::print(component.name);
-                            syscall::print("\n");
-                        }
-                    }
-                }
-            }
-
-            syscall::print("\n");
-            syscall::print("═══════════════════════════════════════════════════════════\n");
-            syscall::print("  System Init: Component Spawning Demo Complete!\n");
-            syscall::print("═══════════════════════════════════════════════════════════\n");
+            syscall::print("[system_init] IPC demo components spawned by root-task\n");
+            syscall::print("[system_init] Registry available for on-demand spawning\n");
             syscall::print("\n");
 
             // Event loop - block waiting for notifications instead of busy-yielding
