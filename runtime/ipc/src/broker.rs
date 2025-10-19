@@ -120,59 +120,86 @@ impl ChannelBroker {
         self.shmem_registry.cleanup_process(pid);
     }
 
-    /// Establish a channel between two components (broker-orchestrated)
+    /// Establish a channel between two components (centralized orchestration)
     ///
-    /// This is called by root-task when it orchestrates IPC on behalf of components.
-    /// It handles all the privileged operations:
+    /// # What This Does
+    ///
+    /// The **ChannelBroker** (this struct, running in root-task) sets up a complete
+    /// IPC channel by performing all privileged operations on behalf of both components:
     /// 1. Allocates shared memory
-    /// 2. Maps it into both components
+    /// 2. Maps it into both components' address spaces
     /// 3. Creates notification capabilities
-    /// 4. Transfers capabilities to components
+    /// 4. Transfers capabilities to both components
     ///
-    /// # Current Status
+    /// # Current Status: PLACEHOLDER
     ///
-    /// This method is a **placeholder** for future broker-orchestrated IPC.
-    /// The current working implementation uses **component-driven IPC** where
-    /// components call `sdk::channel_setup::establish_channel()` directly.
+    /// This method currently only does **tracking/bookkeeping**. The actual working
+    /// IPC uses **decentralized self-service** (see below).
     ///
-    /// ## Component-Driven IPC (Current - Working)
+    /// # Two Patterns for IPC Channel Establishment
     ///
-    /// Components manage their own channels:
-    /// 1. Producer: allocates memory, registers with broker via SYS_SHMEM_REGISTER
-    /// 2. Consumer: queries broker via SYS_SHMEM_QUERY, maps same physical memory
-    /// 3. Both create their own notification capabilities
+    /// ## Pattern 1: Decentralized Self-Service (Current - WORKING)
     ///
-    /// ## Broker-Orchestrated IPC (Future - This Method)
+    /// Components establish channels themselves via `sdk::channel_setup::establish_channel()`:
     ///
-    /// Root-task manages channels on behalf of components:
+    /// ```text
+    /// Producer:
+    ///   1. Allocates physical memory (SYS_MEMORY_ALLOCATE)
+    ///   2. Maps it into own address space (SYS_MEMORY_MAP)
+    ///   3. Registers with ChannelBroker (SYS_SHMEM_REGISTER)
+    ///   4. Creates own notification (SYS_NOTIFICATION_CREATE)
+    ///
+    /// Consumer:
+    ///   1. Queries ChannelBroker for phys addr (SYS_SHMEM_QUERY)
+    ///   2. Maps same physical memory (SYS_MEMORY_MAP)
+    ///   3. Creates own notification (SYS_NOTIFICATION_CREATE)
+    ///
+    /// ChannelBroker Role: Shared memory registry only (discovery service)
+    /// ```
+    ///
+    /// ## Pattern 2: Centralized Orchestration (Future - THIS METHOD)
+    ///
+    /// ChannelBroker (in root-task) manages entire setup:
+    ///
     /// ```ignore
+    /// // ChannelBroker has privileged access to all components
+    ///
     /// // 1. Allocate shared memory
     /// let phys_addr = sys_memory_allocate(buffer_size)?;
     ///
-    /// // 2. Map into producer at chosen vaddr
-    /// let producer_vaddr = 0x90000000; // Or query component's free space
+    /// // 2. Map into producer's address space
+    /// let producer_vaddr = 0x90000000; // Chosen by broker
     /// sys_memory_map_into(producer_tcb, phys_addr, buffer_size,
     ///                    producer_vaddr, PERMS_RW)?;
     ///
-    /// // 3. Map into consumer at chosen vaddr
-    /// let consumer_vaddr = 0x90000000;
+    /// // 3. Map into consumer's address space
+    /// let consumer_vaddr = 0x90000000; // Same vaddr for simplicity
     /// sys_memory_map_into(consumer_tcb, phys_addr, buffer_size,
     ///                    consumer_vaddr, PERMS_RW)?;
     ///
-    /// // 4. Create notification for producer->consumer signaling
+    /// // 4. Create notification for signaling
     /// let notify_cap = sys_notification_create()?;
     ///
-    /// // 5. Transfer notification to both components
+    /// // 5. Give notification to both components
     /// sys_cap_insert_into(producer_tcb, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)?;
     /// sys_cap_insert_into(consumer_tcb, SLOT_NOTIFY, CAP_NOTIFICATION, notify_cap)?;
+    ///
+    /// // 6. Return channel info to requestor
+    /// Ok(ChannelInfo { producer_vaddr, consumer_vaddr, notify_cap })
     /// ```
     ///
-    /// ## Why Keep Both Approaches?
+    /// # When to Use Each Pattern
     ///
-    /// - **Component-driven**: Simple, flexible, minimal broker involvement
-    /// - **Broker-orchestrated**: Centralized control, easier security policy, audit trail
+    /// **Decentralized Self-Service**:
+    /// - Components know their own memory layout best
+    /// - Flexible, minimal broker involvement
+    /// - Simpler implementation (current Phase 6)
     ///
-    /// The choice depends on use case. Current Phase 6 uses component-driven for simplicity.
+    /// **Centralized Orchestration**:
+    /// - Broker enforces security policies
+    /// - Centralized audit trail
+    /// - Components can't bypass broker
+    /// - Better for untrusted components
     pub fn establish_channel(
         &mut self,
         producer_id: ComponentId,
