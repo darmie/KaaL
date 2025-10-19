@@ -16,9 +16,10 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         capabilities:     &[
         "process:create",
         "memory:allocate",
-        "ipc:*"
+        "ipc:*",
+        "caps:allocate"
     ],
-        capabilities_bitmask: 7,
+        capabilities_bitmask: 15,
         binary_data: Some(include_bytes!("../../../../components/system-init/target/aarch64-unknown-none/release/system-init")),
     },
     ComponentDescriptor {
@@ -82,7 +83,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-producer",
         component_type: ComponentType::Service,
         priority: 60,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "memory:map",
         "notification:signal",
@@ -96,7 +97,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
         priority: 60,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "memory:map",
         "notification:signal",
@@ -109,7 +110,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "test_minimal",
         binary: "test-minimal",
         component_type: ComponentType::Service,
-        priority: 45,
+        priority: 55,
         autostart: true,
         capabilities:     &[],
         capabilities_bitmask: 0,

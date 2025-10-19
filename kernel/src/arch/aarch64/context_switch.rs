@@ -94,43 +94,16 @@ global_asm!(
     .type switch_context_asm, @function
 
 switch_context_asm:
-    // x0 = current TCB (TrapFrame pointer)
-    // x1 = next TCB (TrapFrame pointer)
+    // x0 = current TCB (TrapFrame pointer) - context already saved by caller
+    // x1 = next TCB (TrapFrame pointer) - context to restore
 
-    // Save current thread's context
-    // Save general-purpose registers x0-x30
-    stp x0, x1,   [x0, #(0 * 8)]
-    stp x2, x3,   [x0, #(2 * 8)]
-    stp x4, x5,   [x0, #(4 * 8)]
-    stp x6, x7,   [x0, #(6 * 8)]
-    stp x8, x9,   [x0, #(8 * 8)]
-    stp x10, x11, [x0, #(10 * 8)]
-    stp x12, x13, [x0, #(12 * 8)]
-    stp x14, x15, [x0, #(14 * 8)]
-    stp x16, x17, [x0, #(16 * 8)]
-    stp x18, x19, [x0, #(18 * 8)]
-    stp x20, x21, [x0, #(20 * 8)]
-    stp x22, x23, [x0, #(22 * 8)]
-    stp x24, x25, [x0, #(24 * 8)]
-    stp x26, x27, [x0, #(26 * 8)]
-    stp x28, x29, [x0, #(28 * 8)]
+    // NOTE: We do NOT save current thread's context here!
+    // The caller (syscall handler or scheduler) must save context BEFORE calling this function.
+    // This is critical because:
+    // 1. Syscalls already save the full TrapFrame with correct elr_el1 (PC after svc)
+    // 2. If we save here, we'd overwrite elr_el1 with our LR (wrong!)
 
-    // Save x30 (link register) - this is our return address
-    str x30, [x0, #(30 * 8)]
-
-    // Save stack pointer
-    mov x2, sp
-    str x2, [x0, #(31 * 8)]  // sp_el0 field
-
-    // Save ELR (program counter for return)
-    // For voluntary switch, use current LR as the resume point
-    str x30, [x0, #(32 * 8)]  // elr_el1 field
-
-    // Save SPSR (processor state)
-    mrs x2, spsr_el1
-    str x2, [x0, #(33 * 8)]  // spsr_el1 field
-
-    // Now restore next thread's context
+    // Restore next thread's context
     // Restore general-purpose registers x2-x30 first
     ldp x2, x3,   [x1, #(2 * 8)]
     ldp x4, x5,   [x1, #(4 * 8)]
@@ -151,20 +124,29 @@ switch_context_asm:
     ldr x30, [x1, #(30 * 8)]
 
     // Switch to next thread's page table (TTBR0_EL1)
-    // TrapFrame layout: x0-x30 (31 regs), sp_el0, elr_el1, spsr_el1, esr_el1, far_el1, saved_ttbr0
     ldr x10, [x1, #(36 * 8)]  // saved_ttbr0 field (offset 36)
     msr ttbr0_el1, x10
     tlbi vmalle1is           // Invalidate all TLB entries
     dsb ish
     isb
 
-    // Restore x0 and x1 from next thread
+    // Restore stack pointer for next thread
+    ldr x10, [x1, #(31 * 8)]  // sp_el0 from next thread
+    msr sp_el0, x10
+
+    // Restore ELR and SPSR for next thread
+    ldr x10, [x1, #(32 * 8)]  // elr_el1 from next thread
+    ldr x11, [x1, #(33 * 8)]  // spsr_el1 from next thread
+    msr elr_el1, x10
+    msr spsr_el1, x11
+    isb
+
+    // Restore x0 and x1 LAST (after using x1 for loads)
     ldp x0, x1, [x1, #(0 * 8)]
 
-    // Return normally - do NOT use eret here!
-    // The caller (scheduler or syscall handler) will handle the actual
-    // transition to userspace via the exception return path
-    ret
+    // Return via exception return - this restores PC from elr_el1
+    // and processor state from spsr_el1
+    eret
 
     .size switch_context_asm, .-switch_context_asm
     "

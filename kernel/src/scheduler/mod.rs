@@ -263,6 +263,12 @@ pub unsafe fn block_current() {
         return;
     }
 
+    // Debug: Check saved context before switching
+    let current_tcb = &*current;
+    let ctx = current_tcb.context();
+    crate::kprintln!("[sched] block_current: current TCB={:#x}, saved ELR={:#x}, SP={:#x}",
+                     current as usize, ctx.elr_el1, ctx.sp_el0);
+
     // Current thread is already in a blocked state (set by IPC code)
     // Just yield to next thread
     let next = schedule();
@@ -277,6 +283,9 @@ pub unsafe fn block_current() {
     let next_tcb = &mut *next;
     next_tcb.set_state(crate::objects::ThreadState::Running);
     set_current_thread(next);
+
+    crate::kprintln!("[sched] block_current: switching to TCB={:#x}, ELR={:#x}",
+                     next as usize, next_tcb.context().elr_el1);
 
     // Perform context switch (assembly)
     crate::arch::aarch64::context_switch::switch_context(current, next);

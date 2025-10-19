@@ -16,19 +16,19 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "ipc_producer",
         priority: 60,
-        autostart: false,
-        binary_data: include_bytes!("../../../ipc-producer/target/aarch64-unknown-none/release/ipc-producer"),
+        autostart: true,
+        binary_data: include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer"),
     },
     ComponentDescriptor {
         name: "ipc_consumer",
         priority: 60,
-        autostart: false,
-        binary_data: include_bytes!("../../../ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer"),
+        autostart: true,
+        binary_data: include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer"),
     },
     ComponentDescriptor {
         name: "test_minimal",
-        priority: 45,
+        priority: 55,
         autostart: false,
-        binary_data: include_bytes!("../../../test-minimal/target/aarch64-unknown-none/release/test-minimal"),
+        binary_data: include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal"),
     },
 ];

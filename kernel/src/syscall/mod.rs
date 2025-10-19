@@ -1725,6 +1725,10 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
         // This is critical - if we block, we need the context saved for when we resume
         *(*current).context_mut() = *tf;
 
+        // Debug: verify saved context
+        crate::kprintln!("[syscall] sys_wait: saved context for TCB={:#x}, ELR={:#x}, SP={:#x}",
+                        current as usize, tf.elr_el1, tf.sp_el0);
+
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
         if notification_ptr.is_null() {
@@ -1755,6 +1759,9 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
                 let next_tcb = &mut *next;
                 next_tcb.set_state(crate::objects::ThreadState::Running);
                 crate::scheduler::test_set_current_thread(next);
+
+                crate::kprintln!("[syscall] sys_wait: switching to TCB={:#x}, ELR={:#x}",
+                                next as usize, next_tcb.context().elr_el1);
 
                 // Replace our TrapFrame with the next thread's context
                 // When we return from this syscall, the exception handler will restore
