@@ -45,16 +45,14 @@ jobs:
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/verus-lang/verus/releases/latest | grep "browser_download_url.*x86-linux.zip" | cut -d '"' -f 4)
           wget -O /tmp/verus.zip "$DOWNLOAD_URL"
 
-          # Extract to home directory (preserving directory structure)
-          mkdir -p ~/verus
-          unzip -q /tmp/verus.zip -d ~/verus
+          # Extract to temp and move to final location
+          unzip -q /tmp/verus.zip -d /tmp/verus-extract
 
-          # The zip contains a subdirectory - move its contents up
-          SUBDIR=$(ls -d ~/verus/*/ | head -n 1)
-          if [ -n "$SUBDIR" ]; then
-            mv "$SUBDIR"* ~/verus/
-            rmdir "$SUBDIR"
-          fi
+          # Find the extracted directory and move all contents (including hidden files)
+          EXTRACTED_DIR=$(find /tmp/verus-extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          mkdir -p ~/verus
+          mv "$EXTRACTED_DIR"/* ~/verus/
+          mv "$EXTRACTED_DIR"/.[!.]* ~/verus/ 2>/dev/null || true
 
           chmod +x ~/verus/verus
           ~/verus/verus --version
