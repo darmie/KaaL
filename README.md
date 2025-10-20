@@ -13,8 +13,8 @@ $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲
 
 **A composable OS development framework with a native Rust microkernel**
 
-![QEMU Build](.github/badges/qemu-build.svg)
-![Verification](.github/badges/verification.svg)
+[![QEMU Build](.github/badges/qemu-build.svg)](https://github.com/darmie/KaaL/releases)
+[![Verification](.github/badges/verification.svg)](docs/VERIFICATION_COVERAGE.md)
 
 > KaaL is the skeleton, not the OS. Build your own capability-based operating system using composable components.
 
