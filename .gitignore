@@ -121,8 +121,10 @@ test-results/
 # Cache
 .cache/
 
+# Claude Code session files
+.CLAUDE/
+.claude/
 
-.CLAUDE
 # Generated linker scripts (created by build script)
 kernel/kernel.ld
 runtime/elfloader/linker.ld
