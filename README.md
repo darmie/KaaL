@@ -125,6 +125,18 @@ Configure platforms in [build-config.toml](build-config.toml).
 - **Multi-Platform**: QEMU virt, Raspberry Pi 4, custom boards
 - **Code Generation**: Linker scripts, platform configs, component registries
 
+### Formal Verification
+
+- **Verus**: Mathematical verification of critical kernel components
+- **Verified Modules**: 5 modules, 32 items, 0 errors
+  - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
+  - Capability rights (CapRights bit operations)
+  - Bitmap operations
+- **Zero Runtime Overhead**: All proofs erased during compilation
+- **Production Code**: Verifying actual implementation, not simplified examples
+
+Run verification: `nu scripts/verify.nu`
+
 ---
 
 ## 💡 Example: Building a Custom Component
@@ -249,6 +261,7 @@ Add new platforms by configuring [build-config.toml](build-config.toml).
 
 - [BUILD_SYSTEM.md](BUILD_SYSTEM.md) - Config-driven build system guide
 - [kernel/README.md](kernel/README.md) - KaaL microkernel documentation
+- [kernel/src/verified/mod.rs](kernel/src/verified/mod.rs) - Formal verification status
 - [runtime/elfloader/README.md](runtime/elfloader/README.md) - Bootloader documentation
 - [build-config.toml](build-config.toml) - Platform configuration reference
 
