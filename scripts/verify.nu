@@ -10,7 +10,7 @@ def verify-module [
     --details: string   # Optional details to show on success
 ] {
     print $"📦 Verifying ($name)..."
-    let result = (run-external $verus_bin $file | complete)
+    let result = (run-external $verus_bin "--crate-type=lib" $file | complete)
     let ok = ($result.exit_code == 0)
 
     if $ok {
