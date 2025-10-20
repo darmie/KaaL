@@ -38,7 +38,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             qemu-system-aarch64 \
-            device-tree-compiler
+            device-tree-compiler \
+            llvm
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
