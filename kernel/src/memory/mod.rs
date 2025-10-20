@@ -22,7 +22,7 @@ pub mod address;
 pub mod frame_allocator;
 pub mod paging;
 pub mod heap;
-pub mod verified_bitmap;
+pub mod bitmap;
 
 pub use address::{PhysAddr, VirtAddr, PageFrameNumber};
 pub use address::{PAGE_SIZE, LARGE_PAGE_SIZE, HUGE_PAGE_SIZE};
