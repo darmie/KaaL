@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Terminal</title>
+    <title>KaaL Microkernel Framework</title>
+    <meta
+      name="description"
+      content="KaaL - A Composable OS Development Framework with a Native Rust Microkernel"
+    />
     <style>
       * {
         margin: 0;
@@ -351,46 +355,7 @@
 
       // KaaL Elfloader boot logs - Truncated version
       const content = [
-        {
-          text: "═══════════════════════════════════════════════════════════",
-          type: "info",
-          delay: 0.1,
-        },
-        {
-          text: "  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader",
-          type: "info",
-          delay: 0.1,
-        },
-        {
-          text: "═══════════════════════════════════════════════════════════",
-          type: "info",
-          delay: 0.1,
-        },
         { text: "", type: "normal", delay: 0.5 },
-        { text: "DTB address: 0x40000000", type: "normal", delay: 0.1 },
-        {
-          text: "Device tree parsed successfully",
-          type: "success",
-          delay: 0.1,
-        },
-        { text: "Model: linux,dummy-virt", type: "normal", delay: 0.1 },
-        {
-          text: "Memory region: 0x40000000 - 0x48000000 (128 MB)",
-          type: "normal",
-          delay: 0.1,
-        },
-        { text: "", type: "normal", delay: 0.5 },
-        { text: "Loading images...", type: "info", delay: 0.1 },
-        {
-          text: "  Kernel: 0x40205000 - 0x4022a448 (149 KB)",
-          type: "normal",
-          delay: 0.1,
-        },
-        {
-          text: "  User:   0x4022b000 - 0x402b7c40 (563 KB)",
-          type: "normal",
-          delay: 0.1,
-        },
         {
           text: "Kernel loaded at entry point: 0x40400000",
           type: "success",
@@ -420,25 +385,14 @@
         { text: "", type: "normal", delay: 5 },
         { text: "KaaL Rust Microkernel v0.1.0", type: "info", delay: 0.1 },
         { text: "", type: "normal", delay: 0.5 },
-        {
-          text: "[boot] DTB: 0x40000000 (size: 1048576 bytes)",
-          type: "normal",
-          delay: 0.1,
-        },
+
         {
           text: "[boot] Root task: 0x4022b000 - 0x402b7c40",
           type: "normal",
           delay: 0.1,
         },
         { text: "", type: "normal", delay: 0.5 },
-        { text: "[boot] Parsing device tree...", type: "info", delay: 0.1 },
-        { text: "[boot] Model: linux,dummy-virt", type: "normal", delay: 0.1 },
-        {
-          text: "[boot] Memory: 0x40000000 - 0x48000000 (128 MB)",
-          type: "normal",
-          delay: 0.1,
-        },
-        { text: "", type: "normal", delay: 0.5 },
+
         {
           text: "[memory] Initializing memory subsystem",
           type: "info",
@@ -519,14 +473,14 @@
         { text: "", type: "normal", delay: 2 },
         {
           text: `    
-    $$╲   $$╲                    $$╲       
-    $$ │ $$  │                   $$ │      
-    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      
-    $$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │      
-    $$  $$<   $$$$$$$ │ $$$$$$$ │$$ │      
-    $$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │      
-    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ 
-    ╲__│  ╲__│╲_______│ ╲_______│╲________│
+    $$╲   $$╲                        $$╲       
+    $$ │ $$  │                        $$ │      
+    $$ │$$  ╱ $$$$$$╲   $$$$$$╲     $$ │      
+    $$$$$  ╱  ╲____$$╲  ╲____$$╲  $$ │      
+    $$  $$<   $$$$$$$ │ $$$$$$$ │     $$ │      
+    $$ │╲$$╲ $$  __$$ │$$  __$$ │    $$ │      
+    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │   $$$$$$$$╲ 
+    ╲__│  ╲__│╲_______│ ╲_______│   ╲________│
     `,
           type: "ascii",
           delay: 0.1,
@@ -562,14 +516,14 @@
           type: "normal",
           delay: 0.2,
           interactive: true,
-          link: "https://github.com/darmie/kaal#readme",
+          link: "docs",
         },
         {
           text: "  [2] GitHub",
           type: "normal",
           delay: 0.2,
           interactive: true,
-          link: "https://github.com/darmie/kaal",
+          link: "github",
         },
         { text: "", type: "normal", delay: 0.3 },
         { text: "root@kaal:~$ ", type: "normal", delay: 0.5, cursor: true },
@@ -780,20 +734,20 @@
           updateMenuSelection();
         }
 
-        document.addEventListener("click", (e) => {
-          e.preventDefault();
-          // Activate selected item
-          if (menuItems[selectedMenuIndex]) {
-            const link = menuItems[selectedMenuIndex].dataset.link;
-            if (link) {
-              // Play activation sound
-              if (audioContext) {
-                playBeep("sine", 1200, 0.1, 0.08);
-              }
-              window.open(link, "_blank");
-            }
-          }
-        });
+        // document.addEventListener("click", (e) => {
+        //   e.preventDefault();
+        //   // Activate selected item
+        //   if (menuItems[selectedMenuIndex]) {
+        //     const link = menuItems[selectedMenuIndex].dataset.link;
+        //     if (link) {
+        //       // Play activation sound
+        //       if (audioContext) {
+        //         playBeep("sine", 1200, 0.1, 0.08);
+        //       }
+        //       window.open(link, "_blank");
+        //     }
+        //   }
+        // });
 
         document.addEventListener("keydown", (e) => {
           // Arrow key navigation
@@ -913,7 +867,7 @@
 
             // Add click handler for interactive items
             if (current.interactive) {
-              currentLine.addEventListener("click", handleMenuClick);
+              currentLine.addEventListener("click", _handleMenuClick);
 
               // Sync hover with keyboard selection
               currentLine.addEventListener("mouseenter", function () {
@@ -950,13 +904,14 @@
 
       // Menu URLs
       const menuLinks = {
-        docs: "https://docs.kaal.systems",
+        docs: "https://github.com/darmie/kaal#readme",
         github: "https://github.com/darmie/KaaL",
       };
 
       // Handle menu item clicks
-      function handleMenuClick(e) {
+      function _handleMenuClick(e) {
         const link = e.target.dataset.link;
+        console.log("Menu item clicked:", link, menuLinks[link]);
         if (link && menuLinks[link]) {
           // Play selection sound
           playNotificationSound("success");
