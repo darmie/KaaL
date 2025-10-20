@@ -60,11 +60,17 @@ def main [] {
     let tcb = (verify-module $verus_bin "kernel/src/verified/tcb.rs" "tcb" 29
         --details "TCB state machine, capability checking, time slice management; State transitions verified")
 
+    let cnode_ops = (verify-module $verus_bin "kernel/src/verified/cnode_ops.rs" "cnode_ops" 6
+        --details "CNode slot operations: num_slots, is_valid_index, size validation")
+
+    let capability_ops = (verify-module $verus_bin "kernel/src/verified/capability_ops.rs" "capability_ops" 10
+        --details "Capability derivation, rights checking, union/intersection operations")
+
     # Future verified modules:
     # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -86,4 +92,6 @@ def main [] {
     print "   - cap_rights.rs (capability rights bit operations)"
     print "   - bitmap_prod.rs (production bitmap with advanced features)"
     print "   - tcb.rs (thread control block state machine)"
+    print "   - cnode_ops.rs (CNode slot operations)"
+    print "   - capability_ops.rs (capability derivation and rights)"
 }

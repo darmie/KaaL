@@ -130,9 +130,10 @@ Configure platforms in [build-config.toml](build-config.toml).
 ![Verification](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/darmie/darmie/main/verification)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 7 modules, 73 items, 0 errors
+- **Verified Modules**: 9 modules, 89 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
-  - Capability rights (CapRights bit operations)
+  - Capability system (CapRights, capability derivation, rights checking)
+  - CNode operations (slot management, power-of-2 proofs)
   - Production bitmap (frame conditions, loop invariants)
   - Thread Control Block (TCB state machine, capability checking)
 - **Advanced Features**: State machine verification, bit-level axioms, stateful specs with `old()`, termination proofs
