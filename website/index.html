@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terminal</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Courier New", Courier, monospace;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      /* CRT Monitor Frame */
+      .monitor {
+        background: linear-gradient(145deg, #1a1a1a, #0a0a0a);
+        padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 0 80px rgba(0, 0, 0, 0.9),
+          inset 0 0 15px rgba(0, 0, 0, 0.5);
+        width: 98vw;
+        height: 98vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Terminal Screen */
+      .screen {
+        background: radial-gradient(
+            ellipse at center,
+            rgba(0, 100, 0, 0.4) 0%,
+            rgba(0, 0, 0, 0.95) 70%,
+            #000 100%
+          ),
+          #000;
+        border: 3px solid #0a0a0a;
+        border-radius: 15px;
+        padding: 25px;
+        position: relative;
+        overflow-y: auto;
+        overflow-x: hidden;
+        height: 100%;
+        width: 100%;
+        box-shadow: inset 0 0 80px rgba(0, 255, 0, 0.08),
+          inset 0 0 30px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.9);
+        /* Screen curvature */
+        transform: perspective(1000px) rotateY(0deg);
+        border-radius: 2% / 3%;
+      }
+
+      /* Scanline Effect */
+      .screen::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.15),
+          rgba(0, 0, 0, 0.15) 1px,
+          transparent 1px,
+          transparent 2px
+        );
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      /* Screen Glow */
+      .screen::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 255, 0, 0.03) 0%,
+          transparent 60%
+        );
+        pointer-events: none;
+        z-index: 1;
+        animation: glow-pulse 2s ease-in-out infinite alternate;
+      }
+
+      @keyframes glow-pulse {
+        0% {
+          opacity: 0.8;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      /* Custom scrollbar for terminal */
+      .screen::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .screen::-webkit-scrollbar-track {
+        background: #0a0a0a;
+      }
+
+      .screen::-webkit-scrollbar-thumb {
+        background: #33ff33;
+        border-radius: 4px;
+        box-shadow: 0 0 5px rgba(51, 255, 51, 0.5);
+      }
+
+      .screen::-webkit-scrollbar-thumb:hover {
+        background: #00ff00;
+        box-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+      }
+
+      /* Terminal Content */
+      .terminal {
+        color: #33ff33;
+        text-shadow: 0 0 5px rgba(51, 255, 51, 0.7),
+          0 0 2px rgba(51, 255, 51, 0.5);
+        font-size: 20px;
+        line-height: 1.5;
+        position: relative;
+        z-index: 3;
+      }
+
+      .terminal-line {
+        margin-bottom: 8px;
+      }
+
+      /* Cursor */
+      .cursor {
+        display: inline-block;
+        width: 12px;
+        height: 20px;
+        background: #33ff33;
+        box-shadow: 0 0 8px rgba(51, 255, 51, 0.8),
+          0 0 4px rgba(51, 255, 51, 0.5);
+        animation: blink 1s infinite;
+        margin-left: 2px;
+        vertical-align: text-bottom;
+      }
+
+      @keyframes blink {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* ASCII Art styling */
+      .ascii-art {
+        color: #00ff00;
+        text-shadow: 0 0 15px rgba(0, 255, 0, 0.9), 0 0 8px rgba(0, 255, 0, 0.6),
+          0 0 3px rgba(0, 255, 0, 0.4);
+        font-size: 32px;
+        line-height: 1.1;
+        margin: 20px 0;
+        white-space: pre;
+        font-weight: bold;
+      }
+
+      /* System messages */
+      .success {
+        color: #00ff00;
+        text-shadow: 0 0 5px rgba(0, 255, 0, 0.7), 0 0 2px rgba(0, 255, 0, 0.5);
+      }
+
+      .warning {
+        color: #ffff00;
+        text-shadow: 0 0 5px rgba(255, 255, 0, 0.7),
+          0 0 2px rgba(255, 255, 0, 0.5);
+      }
+
+      .error {
+        color: #ff3333;
+        text-shadow: 0 0 5px rgba(255, 51, 51, 0.7),
+          0 0 2px rgba(255, 51, 51, 0.5);
+      }
+
+      .info {
+        color: #33ffff;
+        text-shadow: 0 0 5px rgba(51, 255, 255, 0.7),
+          0 0 2px rgba(51, 255, 255, 0.5);
+      }
+
+      /* Interactive menu items */
+      .interactive {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-block;
+        padding: 2px 0;
+      }
+
+      .interactive:hover {
+        color: #ffff00;
+        text-shadow: 0 0 10px rgba(255, 255, 0, 0.9),
+          0 0 5px rgba(255, 255, 0, 0.6);
+        transform: translateX(5px);
+      }
+
+      .interactive:active {
+        color: #00ff00;
+        text-shadow: 0 0 15px rgba(0, 255, 0, 1), 0 0 8px rgba(0, 255, 0, 0.8);
+      }
+
+      /* Selected menu item (keyboard navigation) */
+      .interactive.selected {
+        color: #ffff00;
+        background: rgba(255, 255, 0, 0.1);
+        text-shadow: 0 0 10px rgba(255, 255, 0, 0.9),
+          0 0 5px rgba(255, 255, 0, 0.6);
+        padding-left: 5px;
+        border-left: 3px solid #ffff00;
+      }
+
+      .interactive.selected::before {
+        content: "▶ ";
+        color: #ffff00;
+        animation: blink 0.8s infinite;
+      }
+
+      /* Interactive menu items */
+      .interactive {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        padding: 5px 0;
+        display: inline-block;
+      }
+
+      .interactive:hover {
+        color: #00ff00;
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.9), 0 0 5px rgba(0, 255, 0, 0.6);
+        transform: translateX(5px);
+      }
+
+      .interactive.selected {
+        color: #000;
+        background: #33ff33;
+        text-shadow: none;
+        padding: 5px 10px;
+        margin-left: -10px;
+      }
+
+      /* Flicker animation for authenticity */
+      @keyframes flicker {
+        0% {
+          opacity: 1;
+        }
+        3% {
+          opacity: 0.95;
+        }
+        6% {
+          opacity: 1;
+        }
+      }
+
+      .screen {
+        animation: flicker 0.15s infinite;
+      }
+
+      /* Text selection */
+      ::selection {
+        background: #0080ff;
+        text-shadow: none;
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .monitor {
+          padding: 10px;
+          width: 100vw;
+          height: 100vh;
+          border-radius: 0;
+        }
+
+        .screen {
+          padding: 15px;
+          border-radius: 0;
+        }
+
+        .terminal {
+          font-size: 16px;
+        }
+
+        .ascii-art {
+          font-size: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="monitor">
+      <div class="screen">
+        <div class="terminal" id="terminal">
+          <!-- Content will be typed here by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const terminal = document.getElementById("terminal");
+
+      // Initial boot prompt
+      const bootPrompt = [
+        { text: "", type: "normal", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.1 },
+        {
+          text: "═══════════════════════════════════════════════════════════",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "═══════════════════════════════════════════════════════════",
+          type: "info",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.1 },
+        {
+          text: "  Press any key to start boot sequence...",
+          type: "info",
+          delay: 0.1,
+          blink: true,
+        },
+      ];
+
+      // KaaL Elfloader boot logs - Truncated version
+      const content = [
+        {
+          text: "═══════════════════════════════════════════════════════════",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "  KaaL Elfloader v0.1.0 - Rust Microkernel Boot Loader",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "═══════════════════════════════════════════════════════════",
+          type: "info",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "DTB address: 0x40000000", type: "normal", delay: 0.1 },
+        {
+          text: "Device tree parsed successfully",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "Model: linux,dummy-virt", type: "normal", delay: 0.1 },
+        {
+          text: "Memory region: 0x40000000 - 0x48000000 (128 MB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "Loading images...", type: "info", delay: 0.1 },
+        {
+          text: "  Kernel: 0x40205000 - 0x4022a448 (149 KB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        {
+          text: "  User:   0x4022b000 - 0x402b7c40 (563 KB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        {
+          text: "Kernel loaded at entry point: 0x40400000",
+          type: "success",
+          delay: 0.1,
+        },
+        {
+          text: "Root task loaded at entry point: 0x40100000",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "Images loaded successfully!", type: "success", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "Setting up page tables...", type: "info", delay: 0.1 },
+        { text: "Page tables configured", type: "success", delay: 0.1 },
+        { text: "TTBR0: 0x47ffc000", type: "normal", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "Jumping to KaaL kernel at 0x40400000...",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "═══════════════════════════════════════════════════════════",
+          type: "info",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 5 },
+        { text: "KaaL Rust Microkernel v0.1.0", type: "info", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "[boot] DTB: 0x40000000 (size: 1048576 bytes)",
+          type: "normal",
+          delay: 0.1,
+        },
+        {
+          text: "[boot] Root task: 0x4022b000 - 0x402b7c40",
+          type: "normal",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "[boot] Parsing device tree...", type: "info", delay: 0.1 },
+        { text: "[boot] Model: linux,dummy-virt", type: "normal", delay: 0.1 },
+        {
+          text: "[boot] Memory: 0x40000000 - 0x48000000 (128 MB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "[memory] Initializing memory subsystem",
+          type: "info",
+          delay: 0.1,
+        },
+        {
+          text: "  RAM: 0x40000000 - 0x48000000 (128MB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        {
+          text: "  Kernel: 0x40400000 - 0x4043b000 (236KB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        {
+          text: "  Frames: 31685/32768 free (123MB usable)",
+          type: "success",
+          delay: 0.1,
+        },
+        {
+          text: "[boot] MMU enabled successfully",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "[boot] Kernel initialization complete",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "[boot] Initializing scheduler", type: "info", delay: 0.1 },
+        {
+          text: "[timer] Timer frequency: 62500000 Hz",
+          type: "normal",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "[boot] Starting root task", type: "info", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.5 },
+        { text: "[root_task] Creating root task...", type: "info", delay: 0.1 },
+        {
+          text: "  Image: 0x4022b000 - 0x402b7c40 (563 KB)",
+          type: "normal",
+          delay: 0.1,
+        },
+        { text: "  Entry: 0x40100000", type: "normal", delay: 0.1 },
+        { text: "  ✓ Kernel regions mapped", type: "success", delay: 0.1 },
+        {
+          text: "  ✓ 124 pages mapped for all LOAD segments",
+          type: "success",
+          delay: 0.1,
+        },
+        {
+          text: "  ✓ Root task ready for EL0 transition",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "[boot_info] Boot info created (11088 bytes)",
+          type: "success",
+          delay: 0.1,
+        },
+        {
+          text: "[root_task] CNode created (256 slots)",
+          type: "success",
+          delay: 0.1,
+        },
+        { text: "[root_task] Root TCB ready", type: "success", delay: 0.1 },
+        { text: "", type: "normal", delay: 0.5 },
+        {
+          text: "[root_task] Transitioning to EL0...",
+          type: "info",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 2 },
+        {
+          text: `    
+    $$╲   $$╲                    $$╲       
+    $$ │ $$  │                   $$ │      
+    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      
+    $$$$$  ╱  ╲____$$╲  ╲____$$╲ $$ │      
+    $$  $$<   $$$$$$$ │ $$$$$$$ │$$ │      
+    $$ │╲$$╲ $$  __$$ │$$  __$$ │$$ │      
+    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ 
+    ╲__│  ╲__│╲_______│ ╲_______│╲________│
+    `,
+          type: "ascii",
+          delay: 0.1,
+        },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "  KaaL Root Task (EL0) v0.1.0", type: "info", delay: 0.2 },
+        { text: "", type: "normal", delay: 0.3 },
+        {
+          text: "[root_task] Hello from userspace (EL0)",
+          type: "success",
+          delay: 0.2,
+        },
+        { text: "", type: "normal", delay: 0.3 },
+        {
+          text: "KaaL is a composable OS development framework with a native Rust microkernel.",
+          type: "normal",
+          delay: 0.2,
+        },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "-----------------------------", type: "normal", delay: 0.3 },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "[Author: Damilare Akinlaja]", type: "info", delay: 0.2 },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "[X/Twitter: @fourEyedWiz]", type: "info", delay: 0.2 },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "-----------------------------", type: "normal", delay: 0.3 },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "Select an option:", type: "info", delay: 0.2 },
+        { text: "", type: "normal", delay: 0.3 },
+        {
+          text: "  [1] Read Docs",
+          type: "normal",
+          delay: 0.2,
+          interactive: true,
+          link: "https://github.com/darmie/kaal#readme",
+        },
+        {
+          text: "  [2] GitHub",
+          type: "normal",
+          delay: 0.2,
+          interactive: true,
+          link: "https://github.com/darmie/kaal",
+        },
+        { text: "", type: "normal", delay: 0.3 },
+        { text: "root@kaal:~$ ", type: "normal", delay: 0.5, cursor: true },
+      ];
+
+      let lineIndex = 0;
+      let charIndex = 0;
+      let currentLine = null;
+      let currentContent = null;
+      let isPromptMode = true;
+      let audioContext = null;
+      let masterGain = null;
+      let noiseNode = null;
+
+      // Initialize Web Audio API
+      async function initAudio() {
+        try {
+          audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+
+          // Master gain for overall volume control
+          masterGain = audioContext.createGain();
+          masterGain.gain.value = 0.3;
+          masterGain.connect(audioContext.destination);
+
+          // Create subtle background noise
+          createBackgroundNoise();
+
+          console.log("Web Audio API initialized successfully");
+        } catch (error) {
+          console.error("Audio initialization error:", error);
+          throw error;
+        }
+      }
+
+      // Create continuous background noise for CRT ambience
+      function createBackgroundNoise() {
+        const bufferSize = 2 * audioContext.sampleRate;
+        const noiseBuffer = audioContext.createBuffer(
+          1,
+          bufferSize,
+          audioContext.sampleRate
+        );
+        const output = noiseBuffer.getChannelData(0);
+
+        // Generate pink noise
+        let b0 = 0,
+          b1 = 0,
+          b2 = 0,
+          b3 = 0,
+          b4 = 0,
+          b5 = 0,
+          b6 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.969 * b2 + white * 0.153852;
+          b3 = 0.8665 * b3 + white * 0.3104856;
+          b4 = 0.55 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.016898;
+          output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+          output[i] *= 0.11; // Scale down
+          b6 = white * 0.115926;
+        }
+
+        noiseNode = audioContext.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+
+        const noiseGain = audioContext.createGain();
+        noiseGain.gain.value = 0.015; // Very subtle
+
+        noiseNode.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        noiseNode.start(0);
+      }
+
+      // Play typing sound - short beep
+      function playTypingSound() {
+        if (!audioContext) return;
+
+        try {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.type = "square";
+          oscillator.frequency.value = 800 + Math.random() * 200;
+
+          gainNode.gain.value = 0.05;
+          gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            audioContext.currentTime + 0.02
+          );
+
+          oscillator.connect(gainNode);
+          gainNode.connect(masterGain);
+
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.02);
+        } catch (error) {
+          console.error("Typing sound error:", error);
+        }
+      }
+
+      // Play notification beep for different message types
+      function playNotificationSound(type) {
+        if (!audioContext) return;
+
+        try {
+          switch (type) {
+            case "success":
+              playBeep("sine", 523.25, 0.08, 0.06); // C5
+              setTimeout(() => playBeep("sine", 659.25, 0.08, 0.06), 50); // E5
+              break;
+            case "error":
+            case "warning":
+              playBeep("sawtooth", 82.41, 0.15, 0.08); // E2
+              break;
+            case "info":
+              playBeep("triangle", 880, 0.05, 0.06); // A5
+              break;
+            case "ascii":
+              // Ascending cascade for banner
+              const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99]; // C4-G5
+              notes.forEach((freq, i) => {
+                setTimeout(() => playBeep("sine", freq, 0.3, 0.12), i * 50);
+              });
+              break;
+          }
+        } catch (error) {
+          console.error("Notification sound error:", error);
+        }
+      }
+
+      // Generic beep function
+      function playBeep(type, frequency, decay, volume) {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+
+        gainNode.gain.value = volume;
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioContext.currentTime + decay
+        );
+
+        oscillator.connect(gainNode);
+        gainNode.connect(masterGain);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + decay);
+      }
+
+      // Auto-scroll function
+      function scrollToBottom() {
+        const screen = document.querySelector(".screen");
+        screen.scrollTop = screen.scrollHeight;
+      }
+
+      // Handle menu item clicks
+      function handleMenuClick(e) {
+        const link = e.currentTarget.dataset.link;
+        // Update selection to clicked item
+        const clickedIndex = menuItems.indexOf(e.currentTarget);
+        if (clickedIndex !== -1) {
+          selectedMenuIndex = clickedIndex;
+          updateMenuSelection();
+        }
+
+        if (link) {
+          // Play click sound
+          if (audioContext) {
+            playBeep("sine", 1200, 0.1, 0.08);
+          }
+          // Open link in new tab
+          window.open(link, "_blank");
+        }
+      }
+
+      // Keyboard navigation for menu
+      let keyboardListenerAdded = false;
+      let selectedMenuIndex = 0;
+      let menuItems = [];
+
+      function updateMenuSelection() {
+        menuItems.forEach((item, index) => {
+          if (index === selectedMenuIndex) {
+            item.classList.add("selected");
+          } else {
+            item.classList.remove("selected");
+          }
+        });
+      }
+
+      function addKeyboardNavigation() {
+        if (keyboardListenerAdded) return;
+        keyboardListenerAdded = true;
+
+        // Get all interactive menu items
+        menuItems = Array.from(document.querySelectorAll(".interactive"));
+
+        // Select first item by default
+        if (menuItems.length > 0) {
+          selectedMenuIndex = 0;
+          updateMenuSelection();
+        }
+
+        document.addEventListener("click", (e) => {
+          e.preventDefault();
+          // Activate selected item
+          if (menuItems[selectedMenuIndex]) {
+            const link = menuItems[selectedMenuIndex].dataset.link;
+            if (link) {
+              // Play activation sound
+              if (audioContext) {
+                playBeep("sine", 1200, 0.1, 0.08);
+              }
+              window.open(link, "_blank");
+            }
+          }
+        });
+
+        document.addEventListener("keydown", (e) => {
+          // Arrow key navigation
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (menuItems.length > 0) {
+              selectedMenuIndex = (selectedMenuIndex + 1) % menuItems.length;
+              updateMenuSelection();
+              // Play navigation sound
+              if (audioContext) {
+                playBeep("triangle", 800, 0.05, 0.04);
+              }
+            }
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (menuItems.length > 0) {
+              selectedMenuIndex =
+                (selectedMenuIndex - 1 + menuItems.length) % menuItems.length;
+              updateMenuSelection();
+              // Play navigation sound
+              if (audioContext) {
+                playBeep("triangle", 800, 0.05, 0.04);
+              }
+            }
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            // Activate selected item
+            if (menuItems[selectedMenuIndex]) {
+              const link = menuItems[selectedMenuIndex].dataset.link;
+              if (link) {
+                // Play activation sound
+                if (audioContext) {
+                  playBeep("sine", 1200, 0.1, 0.08);
+                }
+                window.open(link, "_blank");
+              }
+            }
+          } else {
+            // Number key shortcuts
+            menuItems.forEach((elem, index) => {
+              const text = elem.textContent;
+              const match = text.match(/\[(\d+)\]/);
+              if (match && e.key === match[1]) {
+                e.preventDefault();
+                selectedMenuIndex = index;
+                updateMenuSelection();
+                // Play activation sound
+                if (audioContext) {
+                  playBeep("sine", 1200, 0.1, 0.08);
+                }
+                // Open the link
+                const link = elem.dataset.link;
+                if (link) {
+                  window.open(link, "_blank");
+                }
+              }
+            });
+          }
+        });
+      }
+
+      function typeWriter() {
+        if (lineIndex < currentContent.length) {
+          const current = currentContent[lineIndex];
+
+          if (!currentLine) {
+            currentLine = document.createElement("div");
+
+            if (current.type === "ascii") {
+              currentLine.className = "ascii-art";
+              // Play special banner sound
+              playNotificationSound("ascii");
+            } else {
+              currentLine.className = `terminal-line ${current.type}`;
+              // Play notification sound for message type (only in boot mode, not prompt)
+              if (current.text.length > 0 && !isPromptMode) {
+                playNotificationSound(current.type);
+              }
+            }
+
+            // Add interactive class if specified
+            if (current.interactive) {
+              currentLine.classList.add("interactive");
+              currentLine.dataset.link = current.link;
+            }
+
+            terminal.appendChild(currentLine);
+            scrollToBottom();
+          }
+
+          if (charIndex < current.text.length) {
+            currentLine.textContent += current.text[charIndex];
+            charIndex++;
+
+            // Play typing sound (but not too frequently, and not in prompt mode)
+            if (
+              !isPromptMode &&
+              (charIndex % 2 === 0 || current.text.length < 20)
+            ) {
+              playTypingSound();
+            }
+
+            scrollToBottom();
+            setTimeout(typeWriter, current.delay);
+          } else {
+            // Add cursor to the last line if specified
+            if (current.cursor) {
+              const cursor = document.createElement("span");
+              cursor.className = "cursor";
+              currentLine.appendChild(cursor);
+            }
+
+            // Add blinking effect to the line if specified
+            if (current.blink) {
+              currentLine.style.animation = "blink 1s infinite";
+            }
+
+            // Add click handler for interactive items
+            if (current.interactive) {
+              currentLine.addEventListener("click", handleMenuClick);
+
+              // Sync hover with keyboard selection
+              currentLine.addEventListener("mouseenter", function () {
+                const index = menuItems.indexOf(this);
+                if (index !== -1 && index !== selectedMenuIndex) {
+                  selectedMenuIndex = index;
+                  updateMenuSelection();
+                  // Play navigation sound on hover
+                  if (audioContext) {
+                    playBeep("triangle", 800, 0.05, 0.04);
+                  }
+                }
+              });
+
+              // Enable keyboard navigation once menu items are added
+              setTimeout(() => addKeyboardNavigation(), 100);
+            }
+
+            lineIndex++;
+            charIndex = 0;
+            currentLine = null;
+            scrollToBottom();
+
+            // Minimal delay between lines
+            setTimeout(typeWriter, 20);
+          }
+        } else {
+          // Boot sequence complete - enable keyboard navigation
+          if (!isPromptMode) {
+            // enableMenuNavigation();
+          }
+        }
+      }
+
+      // Menu URLs
+      const menuLinks = {
+        docs: "https://docs.kaal.systems",
+        github: "https://github.com/darmie/KaaL",
+      };
+
+      // Handle menu item clicks
+      function handleMenuClick(e) {
+        const link = e.target.dataset.link;
+        if (link && menuLinks[link]) {
+          // Play selection sound
+          playNotificationSound("success");
+
+          // Visual feedback
+          e.target.classList.add("selected");
+
+          // Open link after brief delay
+          setTimeout(() => {
+            window.open(menuLinks[link], "_blank");
+            e.target.classList.remove("selected");
+          }, 200);
+        }
+      }
+
+      // Start the typewriter effect when page loads
+      window.addEventListener("load", () => {
+        let bootStarted = false;
+
+        // Show initial prompt
+        currentContent = bootPrompt;
+        setTimeout(typeWriter, 200);
+
+        // Start boot sequence on keypress
+        const startBootSequence = async (e) => {
+          if (bootStarted) return;
+          bootStarted = true;
+
+          // Initialize audio
+          try {
+            await initAudio();
+            console.log("Audio system ready - sound enabled");
+          } catch (error) {
+            console.warn("Audio init failed, continuing without sound:", error);
+          }
+
+          // Clear terminal
+          terminal.innerHTML = "";
+          lineIndex = 0;
+          charIndex = 0;
+          currentLine = null;
+          isPromptMode = false;
+
+          // Start main boot sequence
+          currentContent = content;
+          setTimeout(typeWriter, 100);
+        };
+
+        // Listen for any keypress
+        document.addEventListener("keydown", startBootSequence, { once: true });
+
+        // Also allow click as alternative
+        document.addEventListener("click", startBootSequence, { once: true });
+      });
+    </script>
+  </body>
+</html>
