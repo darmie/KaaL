@@ -274,36 +274,31 @@ jobs:
         run: |
           mkdir -p .github/badges
 
-          VERSION="${{ steps.version.outputs.version }}"
-          MESSAGE="QEMU ARM64"
-
-          # Calculate text widths with padding
-          LABEL_WIDTH=85
-          MESSAGE_WIDTH=$((${#MESSAGE} * 6 + 20))
-          TOTAL_WIDTH=$((LABEL_WIDTH + MESSAGE_WIDTH))
-          MESSAGE_X=$((LABEL_WIDTH + MESSAGE_WIDTH / 2))
-
-          # Generate SVG badge
-          cat > .github/badges/qemu-build.svg <<EOF
-          <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${TOTAL_WIDTH}" height="20" role="img" aria-label="build: ${MESSAGE}">
-            <title>build: ${MESSAGE}</title>
+          # Generate SVG badge with fixed dimensions for proper rendering
+          cat > .github/badges/qemu-build.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="150"
+            height="20" role="img" aria-label="build: QEMU ARM64">
+            <title>build: QEMU ARM64</title>
             <linearGradient id="s" x2="0" y2="100%">
-              <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-              <stop offset="1" stop-opacity=".1"/>
+              <stop offset="0" stop-color="#bbb" stop-opacity=".1" />
+              <stop offset="1" stop-opacity=".1" />
             </linearGradient>
             <clipPath id="r">
-              <rect width="${TOTAL_WIDTH}" height="20" rx="3" fill="#fff"/>
+              <rect width="145" height="20" rx="3" fill="#fff" />
             </clipPath>
             <g clip-path="url(#r)">
-              <rect width="${LABEL_WIDTH}" height="20" fill="#555"/>
-              <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="20" fill="#007ec6"/>
-              <rect width="${TOTAL_WIDTH}" height="20" fill="url(#s)"/>
+              <rect width="55" height="20" fill="#555" />
+              <rect x="55" width="120" height="20" fill="#007ec6" />
+              <rect width="250" height="20" fill="url(#s)" />
             </g>
-            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-              <text aria-hidden="true" x="425" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="550">build</text>
-              <text x="425" y="140" transform="scale(.1)" fill="#fff" textLength="550">build</text>
-              <text aria-hidden="true" x="${MESSAGE_X}0" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="$((${MESSAGE_WIDTH} - 10))0">${MESSAGE}</text>
-              <text x="${MESSAGE_X}0" y="140" transform="scale(.1)" fill="#fff" textLength="$((${MESSAGE_WIDTH} - 10))0">${MESSAGE}</text>
+            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif"
+              text-rendering="geometricPrecision" font-size="110">
+              <text aria-hidden="true" x="250" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)"
+                textLength="350">build</text>
+              <text x="250" y="140" transform="scale(.1)" fill="#fff" textLength="350">build</text>
+              <text aria-hidden="true" x="1000" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)"
+                textLength="800">QEMU ARM64</text>
+              <text x="1000" y="140" transform="scale(.1)" fill="#fff" textLength="800">QEMU ARM64</text>
             </g>
           </svg>
           EOF
