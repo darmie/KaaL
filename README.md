@@ -127,15 +127,20 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 ### Formal Verification
 
+![Verification](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/darmie/kaal/badges/badges/verification.json)
+
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 5 modules, 32 items, 0 errors
+- **Verified Modules**: 6 modules, 44 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
   - Capability rights (CapRights bit operations)
-  - Bitmap operations
+  - Production bitmap (frame conditions, loop invariants)
+- **Advanced Features**: Bit-level axioms, stateful specs with `old()`, termination proofs
 - **Zero Runtime Overhead**: All proofs erased during compilation
 - **Production Code**: Verifying actual implementation, not simplified examples
 
 Run verification: `nu scripts/verify.nu`
+
+See [docs/ADVANCED_VERIFICATION.md](docs/ADVANCED_VERIFICATION.md) for details on advanced Verus features.
 
 ---
 

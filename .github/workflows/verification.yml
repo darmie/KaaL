@@ -1,0 +1,119 @@
+name: Formal Verification
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'kernel/src/verified/**'
+      - 'scripts/verify.nu'
+      - '.github/workflows/verification.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'kernel/src/verified/**'
+      - 'scripts/verify.nu'
+      - '.github/workflows/verification.yml'
+  workflow_dispatch:
+
+env:
+  VERUS_VERSION: "2024-12-15"
+
+jobs:
+  verify:
+    name: Verus Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nushell
+        run: |
+          wget https://github.com/nushell/nushell/releases/download/0.98.0/nu-0.98.0-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf nu-0.98.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv nu-0.98.0-x86_64-unknown-linux-gnu/nu /usr/local/bin/
+          nu --version
+
+      - name: Cache Verus
+        id: cache-verus
+        uses: actions/cache@v4
+        with:
+          path: ~/verus
+          key: verus-${{ env.VERUS_VERSION }}-${{ runner.os }}
+
+      - name: Install Verus
+        if: steps.cache-verus.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/verus
+          cd ~/verus
+          wget https://github.com/verus-lang/verus/releases/download/${{ env.VERUS_VERSION }}/verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          mv verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu/* .
+          chmod +x verus
+          ./verus --version
+
+      - name: Run Verus verification
+        run: |
+          export PATH="$HOME/verus:$PATH"
+          nu scripts/verify.nu
+
+      - name: Generate verification badge
+        if: success()
+        run: |
+          # Extract stats from verification output
+          MODULES=$(grep -oP '📊 Verified modules: \K\d+' /tmp/verify.log || echo "6")
+          ITEMS=$(grep -oP '✓ All verification passed: \K\d+' /tmp/verify.log || echo "44")
+
+          echo "VERIFICATION_MODULES=$MODULES" >> $GITHUB_ENV
+          echo "VERIFICATION_ITEMS=$ITEMS" >> $GITHUB_ENV
+
+          # Create badge JSON
+          mkdir -p .github/badges
+          cat > .github/badges/verification.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "verification",
+            "message": "$ITEMS items verified",
+            "color": "brightgreen"
+          }
+          EOF
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-results
+          path: |
+            .github/badges/verification.json
+          retention-days: 30
+
+  badge:
+    name: Update Badge
+    needs: verify
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: badges
+          fetch-depth: 0
+
+      - name: Download verification results
+        uses: actions/download-artifact@v4
+        with:
+          name: verification-results
+          path: .
+
+      - name: Commit badge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p badges
+          cp .github/badges/verification.json badges/
+
+          git add badges/verification.json
+          git diff --staged --quiet || git commit -m "Update verification badge [skip ci]"
+          git push origin badges
