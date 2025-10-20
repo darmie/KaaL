@@ -13,7 +13,7 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 10 modules, 96 items, 0 errors
+//! **Verified**: 11 modules, 115 items, 0 errors
 //! - ✅ `bitmap_simple`: Simple bitmap (3 items)
 //! - ✅ `phys_addr`: Physical address operations (10 items)
 //! - ✅ `virt_addr`: Virtual address operations (10 items)
@@ -24,6 +24,7 @@
 //! - ✅ `cnode_ops`: CNode slot operations (6 items)
 //! - ✅ `capability_ops`: Capability derivation and rights (10 items)
 //! - ✅ `page_table_ops`: Page table level operations (7 items)
+//! - ✅ `thread_queue_ops`: Thread queue and endpoint operations (19 items)
 //!
 //! **Details**:
 //! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
@@ -34,12 +35,14 @@
 //! - CNode operations: num_slots, is_valid_index, size validation with power-of-2 proofs
 //! - Capability operations: derive, has_right, union, intersection with bitwise axioms
 //! - Page table operations: shift, block_size, index, supports_blocks, next for 4-level ARMv8-A tables
+//! - Thread queue operations: enqueue, dequeue, remove, queue bounds, FIFO properties
+//! - Endpoint operations: badge management, queue status checks, idle state
 //! - Advanced features: frame conditions with old(), loop invariants, termination proofs, state machine verification
 //! - Shared axioms: mod_le_self, align_down_divisible, bit operations, power-of-2 properties (zero runtime cost)
 //!
 //! **Next Priority**:
-//! - ⏳ IPC endpoint operations
 //! - ⏳ Virtual address space operations
+//! - ⏳ Scheduler operations
 //!
 //! **Planned**:
 //! - ⏳ Frame allocator verification (Phase 3)

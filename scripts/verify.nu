@@ -69,11 +69,14 @@ def main [] {
     let page_table_ops = (verify-module $verus_bin "kernel/src/verified/page_table_ops.rs" "page_table_ops" 7
         --details "PageTableLevel operations: shift, block_size, index, supports_blocks, next")
 
+    let thread_queue_ops = (verify-module $verus_bin "kernel/src/verified/thread_queue_ops.rs" "thread_queue_ops" 19
+        --details "ThreadQueue and Endpoint operations: enqueue, dequeue, queue state, FIFO properties")
+
     # Future verified modules:
     # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -98,4 +101,5 @@ def main [] {
     print "   - cnode_ops.rs (CNode slot operations)"
     print "   - capability_ops.rs (capability derivation and rights)"
     print "   - page_table_ops.rs (page table level operations)"
+    print "   - thread_queue_ops.rs (thread queue and endpoint operations)"
 }
