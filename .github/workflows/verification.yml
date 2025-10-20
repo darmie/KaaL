@@ -15,9 +15,6 @@ on:
       - '.github/workflows/verification.yml'
   workflow_dispatch:
 
-env:
-  VERUS_VERSION: "2024-12-15"
-
 jobs:
   verify:
     name: Verus Verification
@@ -39,32 +36,31 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/verus
-          key: verus-${{ env.VERUS_VERSION }}-${{ runner.os }}
+          key: verus-latest-${{ runner.os }}
 
       - name: Install Verus
         if: steps.cache-verus.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/verus
           cd ~/verus
-          wget https://github.com/verus-lang/verus/releases/download/${{ env.VERUS_VERSION }}/verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xzf verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          mv verus-${{ env.VERUS_VERSION }}-x86_64-unknown-linux-gnu/* .
+          # Download latest release
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/verus-lang/verus/releases/latest | grep "browser_download_url.*x86-linux.zip" | cut -d '"' -f 4)
+          wget -O verus.zip "$DOWNLOAD_URL"
+          unzip verus.zip
           chmod +x verus
           ./verus --version
 
       - name: Run Verus verification
         run: |
           export PATH="$HOME/verus:$PATH"
-          nu scripts/verify.nu
+          nu scripts/verify.nu 2>&1 | tee /tmp/verify.log
 
       - name: Generate verification badge
         if: success()
         run: |
-          # Extract stats from verification output
-          MODULES=$(grep -oP '📊 Verified modules: \K\d+' /tmp/verify.log || echo "6")
-          ITEMS=$(grep -oP '✓ All verification passed: \K\d+' /tmp/verify.log || echo "44")
+          # Extract stats from verification output (handle unicode emoji)
+          ITEMS=$(grep "All verification passed" /tmp/verify.log | grep -oP '\d+(?= items verified)' || echo "44")
 
-          echo "VERIFICATION_MODULES=$MODULES" >> $GITHUB_ENV
           echo "VERIFICATION_ITEMS=$ITEMS" >> $GITHUB_ENV
 
           # Create badge JSON
