@@ -13,20 +13,22 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 4 modules, 28 items, 0 errors
+//! **Verified**: 5 modules, 32 items, 0 errors
 //! - ✅ `bitmap_simple`: Simple bitmap (3 items)
 //! - ✅ `phys_addr`: Physical address operations (10 items)
 //! - ✅ `virt_addr`: Virtual address operations (10 items)
 //! - ✅ `page_frame_number`: Page frame number operations (5 items)
+//! - ✅ `cap_rights`: Capability rights bit operations (4 items)
 //!
 //! **Details**:
 //! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
 //! - PFN operations: new, as_usize, phys_addr, from_phys_addr
+//! - CapRights operations: empty, contains, get_bits + constants (READ, WRITE, GRANT, ALL)
 //! - Shared axioms: mod_le_self, align_down_divisible (zero runtime cost)
 //!
 //! **Next Priority**:
 //! - ⏳ Bitmap with bit operations (requires more axioms)
-//! - ⏳ Cap table operations
+//! - ⏳ CNode slot operations
 //!
 //! **Planned**:
 //! - ⏳ Frame allocator verification (Phase 3)
