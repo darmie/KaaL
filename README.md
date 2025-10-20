@@ -62,6 +62,73 @@ Your Custom OS (you build this)
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+Before building KaaL, ensure you have the required dependencies installed:
+
+```bash
+# Run the automated setup script
+nu setup.nu
+
+# Or verify existing installation
+nu setup.nu --verify-only
+```
+
+The setup script will install:
+
+- **Rust nightly** toolchain with `aarch64-unknown-none` target
+- **QEMU** (qemu-system-aarch64) for ARM64 emulation
+- **Device Tree Compiler** (dtc) for device tree manipulation
+- **LLVM** tools (llvm-objcopy) for object file conversion
+- **Nushell** (if not already installed)
+
+**Supported Platforms:**
+
+- macOS (via Homebrew)
+- Linux (Debian/Ubuntu, Fedora/RHEL, Arch)
+- Windows (WSL2 recommended)
+
+**Manual Installation:**
+
+If you prefer manual setup or the script doesn't work for your platform:
+
+**macOS:**
+
+```bash
+brew install qemu dtc llvm
+rustup toolchain install nightly
+rustup default nightly
+rustup target add aarch64-unknown-none
+```
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y qemu-system-aarch64 device-tree-compiler llvm
+rustup toolchain install nightly
+rustup default nightly
+rustup target add aarch64-unknown-none
+```
+
+**Linux (Fedora/RHEL):**
+
+```bash
+sudo dnf install -y qemu-system-aarch64 dtc llvm
+rustup toolchain install nightly
+rustup default nightly
+rustup target add aarch64-unknown-none
+```
+
+**Linux (Arch):**
+
+```bash
+sudo pacman -S qemu-system-aarch64 dtc llvm
+rustup toolchain install nightly
+rustup default nightly
+rustup target add aarch64-unknown-none
+```
+
 ### Building a Bootable Image
 
 KaaL uses a Nushell-based build system to create bootable images for any configured platform:
@@ -133,7 +200,7 @@ Configure platforms in [build-config.toml](build-config.toml).
 ![Verification](.github/badges/verification.svg)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 15 modules, 215 items, 0 errors
+- **Verified Modules**: 16 modules, 234 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
   - Capability system (CapRights, capability derivation, rights checking)
   - CNode operations (slot management, power-of-2 proofs)
@@ -142,6 +209,8 @@ Configure platforms in [build-config.toml](build-config.toml).
   - Scheduler operations (priority bitmap, O(1) priority lookup with leading_zeros)
   - Syscall invocation (argument validation, rights checking, label parsing)
   - Frame allocator (alloc/dealloc, free count tracking, bounds safety)
+  - Untyped memory (watermark allocator, child tracking, revocation safety)
+  - VSpace operations (page table walking L0-L3, map/unmap 4KB/2MB/1GB pages)
   - Production bitmap (frame conditions, loop invariants)
   - Thread Control Block (TCB state machine, capability checking)
 - **Advanced Features**: State machine verification, bit-level axioms, stateful specs with `old()`, termination proofs, power-of-2 arithmetic, FIFO queue properties, priority-based scheduling, error propagation
