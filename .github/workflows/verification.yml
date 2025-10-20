@@ -23,6 +23,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -67,8 +70,30 @@ jobs:
           export PATH="$HOME/verus:$PATH"
           nu scripts/verify.nu 2>&1 | tee /tmp/verify.log
 
+      - name: Extract verification stats
+        if: success()
+        id: stats
+        run: |
+          # Extract verification stats from output
+          ITEMS=$(grep "All verification passed" /tmp/verify.log | sed -E 's/.*passed: ([0-9]+) items verified.*/\1/')
+          MODULES=$(grep "Verified modules:" /tmp/verify.log | sed -E 's/.*modules: ([0-9]+)\/[0-9]+/\1/')
+
+          echo "items=$ITEMS" >> $GITHUB_OUTPUT
+          echo "modules=$MODULES" >> $GITHUB_OUTPUT
+          echo "📊 Verification: $MODULES modules, $ITEMS items"
+
+      - name: Update verification badge
+        if: success()
+        uses: RubbaBoy/BYOB@v1.3.0
+        with:
+          name: verification
+          label: 'verification'
+          status: '${{ steps.stats.outputs.items }} items verified'
+          color: 00d000
+          github_token: ${{ secrets.GIST_TOKEN }}
+
       - name: Summary
         if: success()
         run: |
           echo "✅ Verification completed successfully!"
-          echo "All 6 modules verified, 0 errors"
+          echo "📊 ${{ steps.stats.outputs.modules }} modules, ${{ steps.stats.outputs.items }} items verified"
