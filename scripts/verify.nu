@@ -78,11 +78,11 @@ def main [] {
     let invocation_ops = (verify-module $verus_bin "kernel/src/verified/invocation_ops.rs" "invocation_ops" 53
         --details "Invocation operations: argument validation, rights checking, label parsing for TCB/CNode/Endpoint")
 
-    # Future verified modules:
-    # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
+    let frame_allocator_ops = (verify-module $verus_bin "kernel/src/verified/frame_allocator_ops.rs" "frame_allocator_ops" 15
+        --details "Frame allocator operations: alloc, dealloc, add_region, reserve_region, free count tracking")
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -110,4 +110,5 @@ def main [] {
     print "   - thread_queue_ops.rs (thread queue and endpoint operations)"
     print "   - scheduler_ops.rs (priority-based scheduler operations)"
     print "   - invocation_ops.rs (syscall invocation validation)"
+    print "   - frame_allocator_ops.rs (frame allocator operations)"
 }
