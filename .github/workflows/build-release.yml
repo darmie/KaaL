@@ -1,0 +1,340 @@
+name: Build QEMU ARM64 Boot Image
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v0.1.0
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0-dev)'
+        required: false
+        default: 'dev'
+
+jobs:
+  build-bootimage:
+    name: Build ARM64 Boot Image for QEMU
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.88.0
+          targets: aarch64-unknown-none
+
+      - name: Install Nushell
+        run: |
+          wget https://github.com/nushell/nushell/releases/download/0.98.0/nu-0.98.0-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf nu-0.98.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv nu-0.98.0-x86_64-unknown-linux-gnu/nu /usr/local/bin/
+          nu --version
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qemu-system-aarch64 \
+            device-tree-compiler
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build boot image
+        run: |
+          echo "Building KaaL microkernel boot image for QEMU ARM64..."
+          nu build.nu --platform qemu_virt
+
+          # Verify the build succeeded
+          if [ ! -f "target/kaal-qemu_virt.elf" ]; then
+            echo "Error: Boot image not found!"
+            exit 1
+          fi
+
+          echo "✅ Boot image built successfully: target/kaal-qemu_virt.elf"
+          ls -lh target/kaal-qemu_virt.elf
+
+      - name: Create release directory
+        run: |
+          mkdir -p release
+
+          # Copy boot image
+          cp target/kaal-qemu_virt.elf release/kaal-qemu-arm64.elf
+
+          # Create run script
+          cat > release/run-qemu.sh <<'EOF'
+          #!/bin/bash
+          # KaaL Microkernel - QEMU Runner Script
+
+          set -e
+
+          # Check if QEMU is installed
+          if ! command -v qemu-system-aarch64 &> /dev/null; then
+              echo "Error: qemu-system-aarch64 not found!"
+              echo "Install with: sudo apt-get install qemu-system-aarch64"
+              exit 1
+          fi
+
+          echo "Starting KaaL microkernel in QEMU..."
+          echo "Press Ctrl+A then X to exit QEMU"
+          echo ""
+
+          qemu-system-aarch64 \
+              -machine virt \
+              -cpu cortex-a57 \
+              -m 128M \
+              -nographic \
+              -kernel kaal-qemu-arm64.elf \
+              -semihosting
+          EOF
+
+          chmod +x release/run-qemu.sh
+
+          # Create README
+          cat > release/README.md <<'EOF'
+          # KaaL Microkernel - QEMU ARM64 Boot Image
+
+          This package contains a bootable KaaL microkernel image for QEMU ARM64.
+
+          ## What's Included
+
+          - `kaal-qemu-arm64.elf` - Bootable ELF image for QEMU virt machine
+          - `run-qemu.sh` - Convenience script to run the kernel
+
+          ## Quick Start
+
+          ### Prerequisites
+
+          - QEMU ARM64 emulator (`qemu-system-aarch64`)
+
+          **Ubuntu/Debian:**
+          ```bash
+          sudo apt-get install qemu-system-aarch64
+          ```
+
+          **macOS (with Homebrew):**
+          ```bash
+          brew install qemu
+          ```
+
+          ### Running the Kernel
+
+          **Option 1: Use the run script**
+          ```bash
+          chmod +x run-qemu.sh
+          ./run-qemu.sh
+          ```
+
+          **Option 2: Manual command**
+          ```bash
+          qemu-system-aarch64 \
+              -machine virt \
+              -cpu cortex-a57 \
+              -m 128M \
+              -nographic \
+              -kernel kaal-qemu-arm64.elf \
+              -semihosting
+          ```
+
+          ### Exiting QEMU
+
+          Press `Ctrl+A` then `X` to exit QEMU.
+
+          ## System Requirements
+
+          - **Machine**: QEMU virt (ARM64)
+          - **CPU**: cortex-a57 or compatible
+          - **RAM**: 128MB minimum
+          - **Platform**: Linux, macOS, or Windows (with WSL2)
+
+          ## About KaaL
+
+          KaaL is a capability-based microkernel written in Rust with formal verification.
+
+          - **Repository**: https://github.com/darmie/KaaL
+          - **Documentation**: https://github.com/darmie/KaaL#readme
+          - **License**: MIT
+
+          ## Verification Status
+
+          This kernel includes formally verified components:
+          - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
+          - Capability system (rights checking, derivation)
+          - Thread scheduler (priority-based scheduling)
+          - Syscall invocation (argument validation)
+          - Frame allocator (allocation/deallocation)
+
+          Total: 14 modules, 204 items verified with Verus (0 errors)
+
+          ## Support
+
+          For issues, questions, or contributions, please visit:
+          https://github.com/darmie/KaaL/issues
+          EOF
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+
+      - name: Create archive
+        run: |
+          cd release
+          tar czf ../kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz *
+          cd ..
+
+          # Create checksums
+          sha256sum kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz > checksums.txt
+
+          echo "📦 Created release archive:"
+          ls -lh kaal-qemu-arm64-*.tar.gz
+          echo ""
+          echo "📋 Checksums:"
+          cat checksums.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaal-qemu-arm64-${{ steps.version.outputs.version }}
+          path: |
+            kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz
+            checksums.txt
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz
+            checksums.txt
+          body: |
+            # KaaL Microkernel ${{ steps.version.outputs.version }}
+
+            **QEMU ARM64 Boot Image**
+
+            This release contains a bootable KaaL microkernel image for QEMU ARM64.
+
+            ## 📥 Download and Run
+
+            ```bash
+            # Download and extract
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz
+            tar xzf kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz
+
+            # Run with QEMU
+            ./run-qemu.sh
+            ```
+
+            ## 🔍 Verification Status
+
+            - ✅ 14 modules formally verified with Verus
+            - ✅ 204 items verified (0 errors)
+            - ✅ Memory, capabilities, scheduler, syscalls, frame allocator
+
+            ## 📋 What's Included
+
+            - `kaal-qemu-arm64.elf` - Bootable kernel image
+            - `run-qemu.sh` - Convenience run script
+            - `README.md` - Full documentation
+
+            ## 🔒 Checksums
+
+            See `checksums.txt` for SHA256 verification.
+
+            ## 📚 Documentation
+
+            For full documentation, visit: https://github.com/${{ github.repository }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'dev') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate build badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir -p .github/badges
+
+          VERSION="${{ steps.version.outputs.version }}"
+          MESSAGE="QEMU ARM64"
+
+          # Calculate text widths with padding
+          LABEL_WIDTH=85
+          MESSAGE_WIDTH=$((${#MESSAGE} * 6 + 20))
+          TOTAL_WIDTH=$((LABEL_WIDTH + MESSAGE_WIDTH))
+          MESSAGE_X=$((LABEL_WIDTH + MESSAGE_WIDTH / 2))
+
+          # Generate SVG badge
+          cat > .github/badges/qemu-build.svg <<EOF
+          <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${TOTAL_WIDTH}" height="20" role="img" aria-label="build: ${MESSAGE}">
+            <title>build: ${MESSAGE}</title>
+            <linearGradient id="s" x2="0" y2="100%">
+              <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+              <stop offset="1" stop-opacity=".1"/>
+            </linearGradient>
+            <clipPath id="r">
+              <rect width="${TOTAL_WIDTH}" height="20" rx="3" fill="#fff"/>
+            </clipPath>
+            <g clip-path="url(#r)">
+              <rect width="${LABEL_WIDTH}" height="20" fill="#555"/>
+              <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="20" fill="#007ec6"/>
+              <rect width="${TOTAL_WIDTH}" height="20" fill="url(#s)"/>
+            </g>
+            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+              <text aria-hidden="true" x="425" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="550">build</text>
+              <text x="425" y="140" transform="scale(.1)" fill="#fff" textLength="550">build</text>
+              <text aria-hidden="true" x="${MESSAGE_X}0" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="$((${MESSAGE_WIDTH} - 10))0">${MESSAGE}</text>
+              <text x="${MESSAGE_X}0" y="140" transform="scale(.1)" fill="#fff" textLength="$((${MESSAGE_WIDTH} - 10))0">${MESSAGE}</text>
+            </g>
+          </svg>
+          EOF
+
+          echo "Generated QEMU build badge:"
+          cat .github/badges/qemu-build.svg
+
+      - name: Commit badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/badges/qemu-build.svg || true
+
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "chore(ci): Update QEMU build badge [skip ci]"
+          git push || echo "No changes to push"
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** QEMU ARM64 (virt machine)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- \`kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`checksums.txt\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Quick Start" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "tar xzf kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "./run-qemu.sh" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
