@@ -13,7 +13,7 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 12 modules, 136 items, 0 errors
+//! **Verified**: 13 modules, 189 items, 0 errors
 //! - ✅ `bitmap_simple`: Simple bitmap (3 items)
 //! - ✅ `phys_addr`: Physical address operations (10 items)
 //! - ✅ `virt_addr`: Virtual address operations (10 items)
@@ -26,6 +26,7 @@
 //! - ✅ `page_table_ops`: Page table level operations (7 items)
 //! - ✅ `thread_queue_ops`: Thread queue and endpoint operations (19 items)
 //! - ✅ `scheduler_ops`: Priority-based scheduler operations (21 items)
+//! - ✅ `invocation_ops`: Syscall invocation validation (53 items)
 //!
 //! **Details**:
 //! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
@@ -39,12 +40,13 @@
 //! - Thread queue operations: enqueue, dequeue, remove, queue bounds, FIFO properties
 //! - Endpoint operations: badge management, queue status checks, idle state
 //! - Scheduler operations: priority bitmap (set/clear/find), O(1) priority lookup with leading_zeros, FIFO within priority
+//! - Invocation operations: argument validation, rights checking, label parsing, error propagation for TCB/CNode/Endpoint
 //! - Advanced features: frame conditions with old(), loop invariants, termination proofs, state machine verification
 //! - Shared axioms: mod_le_self, align_down_divisible, bit operations, power-of-2 properties (zero runtime cost)
 //!
 //! **Next Priority**:
 //! - ⏳ Virtual address space operations
-//! - ⏳ Syscall interface operations
+//! - ⏳ Frame allocator operations
 //!
 //! **Planned**:
 //! - ⏳ Frame allocator verification (Phase 3)
