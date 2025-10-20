@@ -10,30 +10,27 @@
 //! - Reserves kernel and boot loader regions
 //! - O(n) allocation (scan for free frame)
 //!
+//! # Implementation Notes
+//! - Uses modular Bitmap from bitmap.rs (supports optional verification)
+//! - Each bit represents one 4KB page frame
+//! - 1 = allocated, 0 = free
+//!
 //! # Future Optimizations
 //! - Buddy allocator for better performance
 //! - Free list for O(1) allocation
 //! - NUMA-aware allocation
-//!
-//! # Implementation Notes
-//! - Uses a fixed-size bitmap (supports up to MAX_FRAMES physical frames)
-//! - Each bit represents one 4KB page frame
-//! - 1 = allocated, 0 = free
-
-#[path = "../generated/memory_config.rs"]
-mod memory_config;
-use memory_config::MAX_PHYSICAL_FRAMES as MAX_FRAMES;
 
 use crate::memory::address::{PhysAddr, PageFrameNumber, PAGE_SIZE};
+use crate::memory::bitmap::{Bitmap, MAX_BITS};
 
 
 /// Physical frame allocator
 ///
-/// Tracks physical memory frames using a bitmap.
+/// Tracks physical memory frames using a modular Bitmap.
 /// Frame numbers are relative to ram_base (not absolute physical addresses).
 pub struct FrameAllocator {
     /// Bitmap tracking frame allocation (1 = allocated, 0 = free)
-    bitmap: [u64; MAX_FRAMES / 64],
+    bitmap: Bitmap,
 
     /// Total number of frames managed by this allocator
     total_frames: usize,
@@ -49,7 +46,7 @@ impl FrameAllocator {
     /// Create a new empty frame allocator
     pub const fn new() -> Self {
         Self {
-            bitmap: [0; MAX_FRAMES / 64],
+            bitmap: Bitmap::new(),
             total_frames: 0,
             free_frames: 0,
             ram_base: 0,
@@ -74,8 +71,8 @@ impl FrameAllocator {
 
         // Mark all frames in this region as free
         for frame in start_frame..end_frame {
-            if frame < MAX_FRAMES {
-                self.mark_free(frame);
+            if frame < MAX_BITS {
+                self.bitmap.clear(frame); // 0 = free
             }
         }
 
@@ -97,8 +94,8 @@ impl FrameAllocator {
         let end_frame = start_frame + num_frames;
 
         for frame in start_frame..end_frame {
-            if frame < MAX_FRAMES && self.is_free(frame) {
-                self.mark_allocated(frame);
+            if frame < MAX_BITS && !self.bitmap.is_set(frame) {
+                self.bitmap.set(frame); // 1 = allocated
                 self.free_frames = self.free_frames.saturating_sub(1);
             }
         }
@@ -113,25 +110,15 @@ impl FrameAllocator {
             return None;
         }
 
-        // Scan bitmap for first free frame (simple linear search)
-        for (chunk_idx, &chunk) in self.bitmap.iter().enumerate() {
-            if chunk != !0 {
-                // This chunk has at least one free frame
-                for bit_idx in 0..64 {
-                    let frame = chunk_idx * 64 + bit_idx;
-                    if frame >= self.total_frames {
-                        return None;
-                    }
+        // Use bitmap's find_first_unset to find a free frame
+        // Note: bitmap uses 1=allocated, 0=free
+        if let Some(frame) = self.bitmap.find_first_unset(self.total_frames) {
+            self.bitmap.set(frame); // Mark as allocated
+            self.free_frames -= 1;
 
-                    if self.is_free(frame) {
-                        self.mark_allocated(frame);
-                        self.free_frames -= 1;
-                        // Convert relative frame number to absolute physical address
-                        let phys_addr = self.ram_base + (frame * PAGE_SIZE);
-                        return Some(PageFrameNumber::from_phys_addr(PhysAddr::new(phys_addr)));
-                    }
-                }
-            }
+            // Convert relative frame number to absolute physical address
+            let phys_addr = self.ram_base + (frame * PAGE_SIZE);
+            return Some(PageFrameNumber::from_phys_addr(PhysAddr::new(phys_addr)));
         }
 
         None
@@ -149,34 +136,10 @@ impl FrameAllocator {
             return; // Invalid address
         }
         let frame = (phys_addr - self.ram_base) / PAGE_SIZE;
-        if frame < MAX_FRAMES && !self.is_free(frame) {
-            self.mark_free(frame);
+        if frame < MAX_BITS && self.bitmap.is_set(frame) {
+            self.bitmap.clear(frame); // 0 = free
             self.free_frames += 1;
         }
-    }
-
-    /// Check if a frame is free
-    #[inline]
-    fn is_free(&self, frame: usize) -> bool {
-        let chunk_idx = frame / 64;
-        let bit_idx = frame % 64;
-        (self.bitmap[chunk_idx] & (1u64 << bit_idx)) == 0
-    }
-
-    /// Mark a frame as allocated
-    #[inline]
-    fn mark_allocated(&mut self, frame: usize) {
-        let chunk_idx = frame / 64;
-        let bit_idx = frame % 64;
-        self.bitmap[chunk_idx] |= 1u64 << bit_idx;
-    }
-
-    /// Mark a frame as free
-    #[inline]
-    fn mark_free(&mut self, frame: usize) {
-        let chunk_idx = frame / 64;
-        let bit_idx = frame % 64;
-        self.bitmap[chunk_idx] &= !(1u64 << bit_idx);
     }
 
     /// Get the number of free frames
