@@ -1,0 +1,34 @@
+# Verus Configuration for KaaL Microkernel
+
+[verus]
+# Verus binary path
+binary = "/Users/amaterasu/verus/verus"
+
+# Z3 solver path (auto-detected if in PATH)
+# z3_path = "/opt/homebrew/bin/z3"
+
+# Verification timeout (seconds)
+timeout = 60
+
+# Number of parallel verification tasks
+jobs = 4
+
+# Verification cache directory
+cache_dir = ".verus/cache"
+
+[build]
+# Features to enable during verification
+features = ["verification"]
+
+# Target for verification (use host target, not embedded)
+target = "aarch64-apple-darwin"
+
+[proof]
+# Enable debug output for failing proofs
+debug = true
+
+# Show Z3 queries for debugging
+show_queries = false
+
+# Maximum proof search depth
+max_depth = 100

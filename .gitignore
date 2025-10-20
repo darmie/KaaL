@@ -130,3 +130,9 @@ runtime/elfloader/linker.ld
 
 # Generated memory configuration (created by build script)
 kernel/src/generated/
+
+# Verus verification cache
+.verus/cache/
+
+# Verification build artifacts
+target-verus/

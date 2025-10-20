@@ -8,6 +8,7 @@ pub struct ComponentDescriptor {
     pub name: &'static str,
     pub priority: u8,
     pub autostart: bool,
+    pub capabilities_bitmask: u64,
     pub binary_data: &'static [u8],
 }
 
@@ -17,18 +18,21 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "ipc_producer",
         priority: 60,
         autostart: true,
+        capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer"),
     },
     ComponentDescriptor {
         name: "ipc_consumer",
         priority: 60,
         autostart: true,
+        capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer"),
     },
     ComponentDescriptor {
         name: "test_minimal",
         priority: 55,
         autostart: false,
+        capabilities_bitmask: 0,
         binary_data: include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal"),
     },
 ];

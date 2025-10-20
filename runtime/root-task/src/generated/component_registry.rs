@@ -87,9 +87,10 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         capabilities:     &[
         "memory:map",
         "notification:signal",
-        "notification:wait"
+        "notification:wait",
+        "caps:allocate"
     ],
-        capabilities_bitmask: 5,
+        capabilities_bitmask: 13,
         binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
     },
     ComponentDescriptor {
@@ -101,9 +102,10 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         capabilities:     &[
         "memory:map",
         "notification:signal",
-        "notification:wait"
+        "notification:wait",
+        "caps:allocate"
     ],
-        capabilities_bitmask: 5,
+        capabilities_bitmask: 13,
         binary_data: Some(include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer")),
     },
     ComponentDescriptor {
@@ -111,7 +113,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "test-minimal",
         component_type: ComponentType::Service,
         priority: 55,
-        autostart: true,
+        autostart: false,
         capabilities:     &[],
         capabilities_bitmask: 0,
         binary_data: Some(include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal")),
