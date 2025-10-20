@@ -2,17 +2,17 @@ name: Formal Verification
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'kernel/src/verified/**'
-      - 'scripts/verify.nu'
-      - '.github/workflows/verification.yml'
+      - "kernel/src/verified/**"
+      - "scripts/verify.nu"
+      - ".github/workflows/verification.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'kernel/src/verified/**'
-      - 'scripts/verify.nu'
-      - '.github/workflows/verification.yml'
+      - "kernel/src/verified/**"
+      - "scripts/verify.nu"
+      - ".github/workflows/verification.yml"
   workflow_dispatch:
 
 jobs:
@@ -87,9 +87,10 @@ jobs:
         uses: RubbaBoy/BYOB@v1.3.0
         with:
           name: verification
-          label: 'verification'
-          status: '${{ steps.stats.outputs.items }} items verified'
+          label: "verification"
+          status: "${{ steps.stats.outputs.items }} items verified"
           color: 00d000
+          branch: badges
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
