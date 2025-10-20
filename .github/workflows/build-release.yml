@@ -44,35 +44,33 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
+            ~/.cargo/registry/
+            ~/.cargo/git/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', 'runtime/**/Cargo.lock', 'components/**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Build boot image
         run: |
           echo "Building KaaL microkernel boot image for QEMU ARM64..."
-          nu build.nu --platform qemu_virt
+          nu build.nu --platform qemu-virt
 
           # Verify the build succeeded
-          if [ ! -f "target/kaal-qemu_virt.elf" ]; then
+          if [ ! -f "target/kaal-qemu-virt.elf" ]; then
             echo "Error: Boot image not found!"
             exit 1
           fi
 
-          echo "✅ Boot image built successfully: target/kaal-qemu_virt.elf"
-          ls -lh target/kaal-qemu_virt.elf
+          echo "✅ Boot image built successfully: target/kaal-qemu-virt.elf"
+          ls -lh target/kaal-qemu-virt.elf
 
       - name: Create release directory
         run: |
           mkdir -p release
 
           # Copy boot image
-          cp target/kaal-qemu_virt.elf release/kaal-qemu-arm64.elf
+          cp target/kaal-qemu-virt.elf release/kaal-qemu-arm64.elf
 
           # Create run script
           cat > release/run-qemu.sh <<'EOF'
