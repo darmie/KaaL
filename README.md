@@ -143,7 +143,9 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 Run verification: `nu scripts/verify.nu`
 
-See [docs/ADVANCED_VERIFICATION.md](docs/ADVANCED_VERIFICATION.md) for details on advanced Verus features.
+**Documentation:**
+- [Advanced Verification Techniques](docs/ADVANCED_VERIFICATION.md) - Detailed guide to advanced Verus features
+- [Verification Coverage Report](docs/VERIFICATION_COVERAGE.md) - Complete coverage analysis and remaining work
 
 ---
 
