@@ -141,4 +141,4 @@ jobs:
         run: |
           echo "✅ Verification completed successfully!"
           echo "📊 ${{ steps.stats.outputs.modules }} modules, ${{ steps.stats.outputs.items }} items verified"
-          echo "🎖️  Badge updated: .github/badges/verification.json"
+          echo "🎖️  Badge updated: .github/badges/verification.svg"
