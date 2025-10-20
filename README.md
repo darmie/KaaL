@@ -127,7 +127,7 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 ### Formal Verification
 
-![Verification](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/darmie/darmie/main/verification)
+![](https://byob.yarr.is/darmie/KaaL/verification)
 
 - **Verus**: Mathematical verification of critical kernel components
 - **Verified Modules**: 9 modules, 89 items, 0 errors
