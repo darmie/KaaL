@@ -41,16 +41,23 @@ jobs:
       - name: Install Verus
         if: steps.cache-verus.outputs.cache-hit != 'true'
         run: |
-          mkdir -p ~/verus
-          cd ~/verus
-          # Download latest release
+          # Download latest release to temp location
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/verus-lang/verus/releases/latest | grep "browser_download_url.*x86-linux.zip" | cut -d '"' -f 4)
-          wget -O verus.zip "$DOWNLOAD_URL"
-          unzip -q verus.zip
-          # Find and move verus binary to current directory
-          find . -name "verus" -type f -executable -exec mv {} . \;
-          chmod +x verus
-          ./verus --version
+          wget -O /tmp/verus.zip "$DOWNLOAD_URL"
+
+          # Extract to home directory (preserving directory structure)
+          mkdir -p ~/verus
+          unzip -q /tmp/verus.zip -d ~/verus
+
+          # The zip contains a subdirectory - move its contents up
+          SUBDIR=$(ls -d ~/verus/*/ | head -n 1)
+          if [ -n "$SUBDIR" ]; then
+            mv "$SUBDIR"* ~/verus/
+            rmdir "$SUBDIR"
+          fi
+
+          chmod +x ~/verus/verus
+          ~/verus/verus --version
 
       - name: Run Verus verification
         run: |
