@@ -260,8 +260,6 @@ jobs:
             ## 📚 Documentation
 
             For full documentation, visit: https://github.com/${{ github.repository }}
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'dev') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
