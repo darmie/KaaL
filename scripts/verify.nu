@@ -66,11 +66,14 @@ def main [] {
     let capability_ops = (verify-module $verus_bin "kernel/src/verified/capability_ops.rs" "capability_ops" 10
         --details "Capability derivation, rights checking, union/intersection operations")
 
+    let page_table_ops = (verify-module $verus_bin "kernel/src/verified/page_table_ops.rs" "page_table_ops" 7
+        --details "PageTableLevel operations: shift, block_size, index, supports_blocks, next")
+
     # Future verified modules:
     # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -94,4 +97,5 @@ def main [] {
     print "   - tcb.rs (thread control block state machine)"
     print "   - cnode_ops.rs (CNode slot operations)"
     print "   - capability_ops.rs (capability derivation and rights)"
+    print "   - page_table_ops.rs (page table level operations)"
 }
