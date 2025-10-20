@@ -169,14 +169,8 @@ jobs:
 
           ## Verification Status
 
-          This kernel includes formally verified components:
-          - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
-          - Capability system (rights checking, derivation)
-          - Thread scheduler (priority-based scheduling)
-          - Syscall invocation (argument validation)
-          - Frame allocator (allocation/deallocation)
-
-          Total: 14 modules, 204 items verified with Verus (0 errors)
+          This kernel includes formally verified components using Verus.
+          For details, see: https://github.com/${{ github.repository }}/blob/main/docs/VERIFICATION_COVERAGE.md
 
           ## Support
 
@@ -220,9 +214,13 @@ jobs:
           retention-days: 90
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: KaaL ${{ steps.version.outputs.version }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
           files: |
             kaal-qemu-arm64-${{ steps.version.outputs.version }}.tar.gz
             checksums.txt
@@ -246,9 +244,8 @@ jobs:
 
             ## 🔍 Verification Status
 
-            - ✅ 14 modules formally verified with Verus
-            - ✅ 204 items verified (0 errors)
-            - ✅ Memory, capabilities, scheduler, syscalls, frame allocator
+            This kernel includes formally verified components using Verus.
+            For current verification status, see the [Verification Coverage Report](https://github.com/${{ github.repository }}/blob/main/docs/VERIFICATION_COVERAGE.md)
 
             ## 📋 What's Included
 
