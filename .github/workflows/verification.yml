@@ -90,7 +90,7 @@ jobs:
           label: 'verification'
           status: '${{ steps.stats.outputs.items }} items verified'
           color: 00d000
-          github_token: ${{ secrets.GIST_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: success()
