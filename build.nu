@@ -159,7 +159,7 @@ def main [
     print ""
 
     # Print QEMU command
-    if ($platform_cfg | get -o qemu_machine) != null {
+    if ($platform_cfg.qemu_machine? != null) {
         print $"Run in QEMU:"
         print $"  qemu-system-aarch64 -machine ($platform_cfg.qemu_machine) -cpu ($platform_cfg.qemu_cpu) -m ($platform_cfg.qemu_memory) -nographic -kernel ($bootimage)"
         print ""
@@ -176,7 +176,7 @@ def main [
 
     # Run in QEMU if requested
     if $run {
-        if ($platform_cfg | get -o qemu_machine) == null {
+        if ($platform_cfg.qemu_machine? == null) {
             print $"(ansi red)Error: Platform ($platform) does not support QEMU execution(ansi reset)"
             return
         }
