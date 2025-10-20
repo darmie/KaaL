@@ -84,8 +84,11 @@ def main [] {
     let untyped_ops = (verify-module $verus_bin "kernel/src/verified/untyped_ops.rs" "untyped_ops" 11
         --details "Untyped memory operations: new, allocate, revoke, watermark allocator, child tracking")
 
+    let vspace_ops = (verify-module $verus_bin "kernel/src/verified/vspace_ops.rs" "vspace_ops" 19
+        --details "VSpace operations: page table walking (L0-L3), map/unmap pages (4KB/2MB/1GB), alignment checks")
+
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -115,4 +118,5 @@ def main [] {
     print "   - invocation_ops.rs (syscall invocation validation)"
     print "   - frame_allocator_ops.rs (frame allocator operations)"
     print "   - untyped_ops.rs (untyped memory watermark allocator)"
+    print "   - vspace_ops.rs (virtual address space operations)"
 }
