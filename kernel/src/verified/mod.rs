@@ -11,13 +11,20 @@
 //! - **Implementations**: How the code works (exec functions)
 //! - **Proofs**: Why the code is correct (proof blocks)
 //!
-//! ## Verified Modules
+//! ## Current Status
 //!
-//! - `bitmap`: Simple bitmap operations (learning example)
-//! - `frame`: Frame allocator (Phase 2)
-//! - `pagetable`: Page table operations (Phase 2)
-//! - `ipc`: IPC message passing (Phase 3)
-//! - `capability`: Capability system (Phase 4)
+//! **Verified**: 1 module, 3 functions, 0 errors
+//! - ✅ `bitmap_simple`: Simple bitmap (educational example)
+//!
+//! **Production Code (Ready for Verification)**:
+//! - 🔧 [kernel::memory::bitmap](../memory/bitmap.rs): Modular bitmap with axioms
+//! - 🔧 [kernel::memory::frame_allocator](../memory/frame_allocator.rs): Uses modular bitmap
+//!
+//! **Planned**:
+//! - ⏳ Frame allocator verification (pending bit operation axioms)
+//! - ⏳ Page table verification (Phase 2)
+//! - ⏳ IPC verification (Phase 3)
+//! - ⏳ Capability system verification (Phase 4)
 //!
 //! ## Usage
 //!
