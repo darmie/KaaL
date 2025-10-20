@@ -82,30 +82,55 @@ jobs:
           echo "modules=$MODULES" >> $GITHUB_OUTPUT
           echo "📊 Verification: $MODULES modules, $ITEMS items"
 
-      - name: Generate badge JSON
+      - name: Generate badge SVG
         if: success()
         run: |
           # Create badges directory if it doesn't exist
           mkdir -p .github/badges
 
-          # Generate shields.io endpoint JSON format
-          cat > .github/badges/verification.json <<EOF
-          {
-            "schemaVersion": 1,
-            "label": "verification",
-            "message": "${{ steps.stats.outputs.items }} items verified",
-            "color": "brightgreen"
-          }
+          ITEMS="${{ steps.stats.outputs.items }}"
+          MESSAGE="${ITEMS} items verified"
+
+          # Calculate text widths (approximate)
+          LABEL_WIDTH=75
+          MESSAGE_WIDTH=$((${#MESSAGE} * 6 + 10))
+          TOTAL_WIDTH=$((LABEL_WIDTH + MESSAGE_WIDTH))
+          MESSAGE_X=$((LABEL_WIDTH + MESSAGE_WIDTH / 2))
+
+          # Generate SVG badge (shields.io style)
+          cat > .github/badges/verification.svg <<EOF
+          <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${TOTAL_WIDTH}" height="20" role="img" aria-label="verification: ${MESSAGE}">
+            <title>verification: ${MESSAGE}</title>
+            <linearGradient id="s" x2="0" y2="100%">
+              <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+              <stop offset="1" stop-opacity=".1"/>
+            </linearGradient>
+            <clipPath id="r">
+              <rect width="${TOTAL_WIDTH}" height="20" rx="3" fill="#fff"/>
+            </clipPath>
+            <g clip-path="url(#r)">
+              <rect width="${LABEL_WIDTH}" height="20" fill="#555"/>
+              <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="20" fill="#4c1"/>
+              <rect width="${TOTAL_WIDTH}" height="20" fill="url(#s)"/>
+            </g>
+            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+              <text aria-hidden="true" x="385" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="650">verification</text>
+              <text x="385" y="140" transform="scale(.1)" fill="#fff" textLength="650">verification</text>
+              <text aria-hidden="true" x="${MESSAGE_X}0" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${MESSAGE_WIDTH}0">${MESSAGE}</text>
+              <text x="${MESSAGE_X}0" y="140" transform="scale(.1)" fill="#fff" textLength="${MESSAGE_WIDTH}0">${MESSAGE}</text>
+            </g>
+          </svg>
           EOF
 
-          cat .github/badges/verification.json
+          echo "Generated badge SVG:"
+          cat .github/badges/verification.svg
 
-      - name: Commit badge JSON
+      - name: Commit badge SVG
         if: success()
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add .github/badges/verification.json
+          git add .github/badges/verification.svg
 
           # Only commit if there are changes
           git diff --staged --quiet || git commit -m "chore(ci): Update verification badge [skip ci]"
