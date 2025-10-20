@@ -452,14 +452,14 @@
         { text: "", type: "normal", delay: 2 },
         {
           text: `    
-    $$╲   $$╲                        $$╲       
-    $$ │ $$  │                        $$ │      
-    $$ │$$  ╱ $$$$$$╲   $$$$$$╲     $$ │      
-    $$$$$  ╱  ╲____$$╲  ╲____$$╲  $$ │      
-    $$  $$<   $$$$$$$ │ $$$$$$$ │     $$ │      
-    $$ │╲$$╲ $$  __$$ │$$  __$$ │    $$ │      
-    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │   $$$$$$$$╲ 
-    ╲__│  ╲__│╲_______│ ╲_______│   ╲________│
+    $$╲   $$╲                     $$╲       
+    $$ │ $$  │                     $$ │      
+    $$ │$$  ╱ $$$$$$╲   $$$$$$╲  $$ │      
+    $$$$$  ╱  ╲____$$╲  ╲____$$╲$$ │      
+    $$  $$<    $$$$$$$ │  $$$$$$$ │ $$ │      
+    $$ │╲$$╲ $$  __$$$│$$  __$$$│ $$ │      
+    $$ │ ╲$$╲╲$$$$$$$ │╲$$$$$$$ │$$$$$$$$╲ 
+    ╲__│  ╲__│╲_______│ ╲_______│╲________│
     `,
           type: "ascii",
           delay: 0.1,
@@ -638,6 +638,12 @@
         }
       }
 
+      // Menu URLs
+      const menuLinks = {
+        docs: "https://github.com/darmie/kaal#readme",
+        github: "https://github.com/darmie/KaaL",
+      };
+
       // Generic beep function
       function playBeep(type, frequency, decay, volume) {
         const oscillator = audioContext.createOscillator();
@@ -730,7 +736,7 @@
 
         document.addEventListener("keydown", (e) => {
           // Arrow key navigation
-          if (e.key === "ArrowDown") {
+          if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
             e.preventDefault();
             if (menuItems.length > 0) {
               selectedMenuIndex = (selectedMenuIndex + 1) % menuItems.length;
@@ -740,7 +746,7 @@
                 playBeep("triangle", 800, 0.05, 0.04);
               }
             }
-          } else if (e.key === "ArrowUp") {
+          } else if (e.key === "ArrowUp" || e.key === "ArrowRight") {
             e.preventDefault();
             if (menuItems.length > 0) {
               selectedMenuIndex =
@@ -755,7 +761,7 @@
             e.preventDefault();
             // Activate selected item
             if (menuItems[selectedMenuIndex]) {
-              const link = menuItems[selectedMenuIndex].dataset.link;
+              const link = menuLinks[menuItems[selectedMenuIndex].dataset.link];
               if (link) {
                 // Play activation sound
                 if (audioContext) {
@@ -880,12 +886,6 @@
           }
         }
       }
-
-      // Menu URLs
-      const menuLinks = {
-        docs: "https://github.com/darmie/kaal#readme",
-        github: "https://github.com/darmie/KaaL",
-      };
 
       // Handle menu item clicks
       function _handleMenuClick(e) {
