@@ -82,19 +82,38 @@ jobs:
           echo "modules=$MODULES" >> $GITHUB_OUTPUT
           echo "📊 Verification: $MODULES modules, $ITEMS items"
 
-      - name: Update verification badge
+      - name: Generate badge JSON
         if: success()
-        uses: RubbaBoy/BYOB@v1.3.0
-        with:
-          name: verification
-          label: "verification"
-          status: "${{ steps.stats.outputs.items }} items verified"
-          color: 00d000
-          branch: badges
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create badges directory if it doesn't exist
+          mkdir -p .github/badges
+
+          # Generate shields.io endpoint JSON format
+          cat > .github/badges/verification.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "verification",
+            "message": "${{ steps.stats.outputs.items }} items verified",
+            "color": "brightgreen"
+          }
+          EOF
+
+          cat .github/badges/verification.json
+
+      - name: Commit badge JSON
+        if: success()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/badges/verification.json
+
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "chore(ci): Update verification badge [skip ci]"
+          git push
 
       - name: Summary
         if: success()
         run: |
           echo "✅ Verification completed successfully!"
           echo "📊 ${{ steps.stats.outputs.modules }} modules, ${{ steps.stats.outputs.items }} items verified"
+          echo "🎖️  Badge updated: .github/badges/verification.json"
