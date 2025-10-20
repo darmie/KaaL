@@ -58,20 +58,20 @@ jobs:
           nu build.nu --platform qemu-virt
 
           # Verify the build succeeded
-          if [ ! -f "target/kaal-qemu-virt.elf" ]; then
+          if [ ! -f "runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader" ]; then
             echo "Error: Boot image not found!"
             exit 1
           fi
 
-          echo "✅ Boot image built successfully: target/kaal-qemu-virt.elf"
-          ls -lh target/kaal-qemu-virt.elf
+          echo "✅ Boot image built successfully"
+          ls -lh runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 
       - name: Create release directory
         run: |
           mkdir -p release
 
           # Copy boot image
-          cp target/kaal-qemu-virt.elf release/kaal-qemu-arm64.elf
+          cp runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader release/kaal-qemu-arm64.elf
 
           # Create run script
           cat > release/run-qemu.sh <<'EOF'
