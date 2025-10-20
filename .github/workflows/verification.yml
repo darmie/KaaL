@@ -46,7 +46,9 @@ jobs:
           # Download latest release
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/verus-lang/verus/releases/latest | grep "browser_download_url.*x86-linux.zip" | cut -d '"' -f 4)
           wget -O verus.zip "$DOWNLOAD_URL"
-          unzip verus.zip
+          unzip -q verus.zip
+          # Find and move verus binary to current directory
+          find . -name "verus" -type f -executable -exec mv {} . \;
           chmod +x verus
           ./verus --version
 
