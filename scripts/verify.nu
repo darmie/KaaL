@@ -81,8 +81,11 @@ def main [] {
     let frame_allocator_ops = (verify-module $verus_bin "kernel/src/verified/frame_allocator_ops.rs" "frame_allocator_ops" 15
         --details "Frame allocator operations: alloc, dealloc, add_region, reserve_region, free count tracking")
 
+    let untyped_ops = (verify-module $verus_bin "kernel/src/verified/untyped_ops.rs" "untyped_ops" 11
+        --details "Untyped memory operations: new, allocate, revoke, watermark allocator, child tracking")
+
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -111,4 +114,5 @@ def main [] {
     print "   - scheduler_ops.rs (priority-based scheduler operations)"
     print "   - invocation_ops.rs (syscall invocation validation)"
     print "   - frame_allocator_ops.rs (frame allocator operations)"
+    print "   - untyped_ops.rs (untyped memory watermark allocator)"
 }

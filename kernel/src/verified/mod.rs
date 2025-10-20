@@ -13,7 +13,7 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 14 modules, 204 items, 0 errors
+//! **Verified**: 15 modules, 215 items, 0 errors
 //! - ✅ `bitmap_simple`: Simple bitmap (3 items)
 //! - ✅ `phys_addr`: Physical address operations (10 items)
 //! - ✅ `virt_addr`: Virtual address operations (10 items)
@@ -28,6 +28,7 @@
 //! - ✅ `scheduler_ops`: Priority-based scheduler operations (21 items)
 //! - ✅ `invocation_ops`: Syscall invocation validation (53 items)
 //! - ✅ `frame_allocator_ops`: Frame allocator operations (15 items)
+- ✅ `untyped_ops`: Untyped memory watermark allocator (11 items)
 //!
 //! **Details**:
 //! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
@@ -43,6 +44,7 @@
 //! - Scheduler operations: priority bitmap (set/clear/find), O(1) priority lookup with leading_zeros, FIFO within priority
 //! - Invocation operations: argument validation, rights checking, label parsing, error propagation for TCB/CNode/Endpoint
 //! - Frame allocator operations: alloc, dealloc, add_region, reserve_region, free count accuracy with bounds safety
+- Untyped memory operations: new, allocate, revoke, watermark monotonicity, overflow prevention, child tracking
 //! - Advanced features: frame conditions with old(), loop invariants, termination proofs, state machine verification
 //! - Shared axioms: mod_le_self, align_down_divisible, bit operations, power-of-2 properties (zero runtime cost)
 //!
