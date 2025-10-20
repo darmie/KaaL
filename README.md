@@ -127,14 +127,15 @@ Configure platforms in [build-config.toml](build-config.toml).
 
 ### Formal Verification
 
-![Verification](https://img.shields.io/badge/verification-44_items_verified-brightgreen)
+![Verification](https://img.shields.io/badge/verification-73_items_verified-brightgreen)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 6 modules, 44 items, 0 errors
+- **Verified Modules**: 7 modules, 73 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
   - Capability rights (CapRights bit operations)
   - Production bitmap (frame conditions, loop invariants)
-- **Advanced Features**: Bit-level axioms, stateful specs with `old()`, termination proofs
+  - Thread Control Block (TCB state machine, capability checking)
+- **Advanced Features**: State machine verification, bit-level axioms, stateful specs with `old()`, termination proofs
 - **Zero Runtime Overhead**: All proofs erased during compilation
 - **Production Code**: Verifying actual implementation, not simplified examples
 

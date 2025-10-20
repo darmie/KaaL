@@ -13,24 +13,27 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 6 modules, 44 items, 0 errors
+//! **Verified**: 7 modules, 73 items, 0 errors
 //! - ✅ `bitmap_simple`: Simple bitmap (3 items)
 //! - ✅ `phys_addr`: Physical address operations (10 items)
 //! - ✅ `virt_addr`: Virtual address operations (10 items)
 //! - ✅ `page_frame_number`: Page frame number operations (5 items)
 //! - ✅ `cap_rights`: Capability rights bit operations (4 items)
 //! - ✅ `bitmap_prod`: Production bitmap with advanced features (12 items)
+//! - ✅ `tcb`: Thread Control Block state machine (29 items)
 //!
 //! **Details**:
 //! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
 //! - PFN operations: new, as_usize, phys_addr, from_phys_addr
 //! - CapRights operations: empty, contains, get_bits + constants (READ, WRITE, GRANT, ALL)
 //! - Bitmap operations: new, is_set, set, clear, find_first_unset + 4 bit-level axioms
-//! - Advanced features: frame conditions with old(), loop invariants, termination proofs
+//! - TCB operations: state transitions, capability checking, time slice management, lifecycle operations
+//! - Advanced features: frame conditions with old(), loop invariants, termination proofs, state machine verification
 //! - Shared axioms: mod_le_self, align_down_divisible, bit operations (zero runtime cost)
 //!
 //! **Next Priority**:
 //! - ⏳ CNode slot operations
+//! - ⏳ Page table operations
 //! - ⏳ Capability derivation proofs
 //!
 //! **Planned**:

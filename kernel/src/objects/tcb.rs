@@ -7,6 +7,17 @@
 //! - IPC buffer location
 //! - Thread state and scheduling information
 //!
+//! ## Formal Verification
+//!
+//! Core TCB operations have been formally verified using Verus. See
+//! [kernel/src/verified/tcb.rs](../verified/tcb.rs) for verified implementations.
+//!
+//! **Verified**: 29 items including:
+//! - State machine transitions (Inactive→Runnable→Running→Blocked)
+//! - Capability checking (has_capability)
+//! - Time slice management (tick, refill)
+//! - Thread lifecycle operations (activate, deactivate, block, unblock, resume, suspend)
+//!
 //! ## Thread Lifecycle
 //!
 //! ```
