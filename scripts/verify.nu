@@ -54,12 +54,14 @@ def main [] {
     let cap_rights = (verify-module $verus_bin "kernel/src/verified/cap_rights.rs" "cap_rights" 4
         --details "Functions: empty, contains, get_bits; Constants: READ, WRITE, GRANT, ALL")
 
+    let bitmap_prod = (verify-module $verus_bin "kernel/src/verified/bitmap_prod.rs" "bitmap_prod" 12
+        --details "Functions: new, is_set, set, clear, find_first_unset; Frame conditions with old(); Loop invariants")
+
     # Future verified modules:
-    # let bitmap_prod = (verify-module $verus_bin "kernel/src/verified/bitmap.rs" "bitmap" 15)
     # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -79,4 +81,5 @@ def main [] {
     print "   - virt_addr.rs (virtual address operations)"
     print "   - page_frame_number.rs (page frame number operations)"
     print "   - cap_rights.rs (capability rights bit operations)"
+    print "   - bitmap_prod.rs (production bitmap with advanced features)"
 }
