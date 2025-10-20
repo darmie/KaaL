@@ -20,7 +20,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         "caps:allocate"
     ],
         capabilities_bitmask: 15,
-        binary_data: Some(include_bytes!("../../../../components/system-init/target/aarch64-unknown-none/release/system-init")),
+        binary_data: None,
     },
     ComponentDescriptor {
         name: "serial_driver",
