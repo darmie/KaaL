@@ -45,12 +45,18 @@ def main [] {
     let phys_addr = (verify-module $verus_bin "kernel/src/verified/phys_addr.rs" "phys_addr" 10
         --details "Functions: new, as_usize, is_aligned, align_down, align_up, page_number, is_null")
 
+    let virt_addr = (verify-module $verus_bin "kernel/src/verified/virt_addr.rs" "virt_addr" 10
+        --details "Functions: new, as_usize, is_aligned, align_down, align_up, page_number, is_null")
+
+    let pfn = (verify-module $verus_bin "kernel/src/verified/page_frame_number.rs" "page_frame_number" 5
+        --details "Functions: new, as_usize, phys_addr, from_phys_addr")
+
     # Future verified modules:
-    # let virt_addr = (verify-module $verus_bin "kernel/src/verified/virt_addr.rs" "virt_addr" 10)
-    # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 15)
+    # let bitmap_prod = (verify-module $verus_bin "kernel/src/verified/bitmap.rs" "bitmap" 15)
+    # let frame_alloc = (verify-module $verus_bin "kernel/src/verified/frame_allocator.rs" "frame_allocator" 20)
 
     # Calculate summary
-    let results = [$bitmap, $phys_addr]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -67,4 +73,6 @@ def main [] {
     print $"📊 Verified modules: ($passed_modules)/($total_modules)"
     print "   - bitmap_simple.rs (simple bitmap operations)"
     print "   - phys_addr.rs (physical address operations)"
+    print "   - virt_addr.rs (virtual address operations)"
+    print "   - page_frame_number.rs (page frame number operations)"
 }

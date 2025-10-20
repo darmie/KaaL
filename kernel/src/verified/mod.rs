@@ -13,18 +13,26 @@
 //!
 //! ## Current Status
 //!
-//! **Verified**: 1 module, 3 functions, 0 errors
-//! - ✅ `bitmap_simple`: Simple bitmap (educational example)
+//! **Verified**: 4 modules, 28 items, 0 errors
+//! - ✅ `bitmap_simple`: Simple bitmap (3 items)
+//! - ✅ `phys_addr`: Physical address operations (10 items)
+//! - ✅ `virt_addr`: Virtual address operations (10 items)
+//! - ✅ `page_frame_number`: Page frame number operations (5 items)
 //!
-//! **Production Code (Ready for Verification)**:
-//! - 🔧 [kernel::memory::bitmap](../memory/bitmap.rs): Modular bitmap with axioms
-//! - 🔧 [kernel::memory::frame_allocator](../memory/frame_allocator.rs): Uses modular bitmap
+//! **Details**:
+//! - Address operations: new, as_usize, is_aligned, align_down, align_up, page_number, is_null
+//! - PFN operations: new, as_usize, phys_addr, from_phys_addr
+//! - Shared axioms: mod_le_self, align_down_divisible (zero runtime cost)
+//!
+//! **Next Priority**:
+//! - ⏳ Bitmap with bit operations (requires more axioms)
+//! - ⏳ Cap table operations
 //!
 //! **Planned**:
-//! - ⏳ Frame allocator verification (pending bit operation axioms)
-//! - ⏳ Page table verification (Phase 2)
-//! - ⏳ IPC verification (Phase 3)
-//! - ⏳ Capability system verification (Phase 4)
+//! - ⏳ Frame allocator verification (Phase 3)
+//! - ⏳ Page table verification (Phase 4)
+//! - ⏳ IPC verification (Phase 5)
+//! - ⏳ Capability system verification (Phase 6)
 //!
 //! ## Usage
 //!
