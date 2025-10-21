@@ -360,6 +360,61 @@ impl CNodeCdt {
     /// - Returns `CapError::NotFound` if source slot is empty
     /// - Returns `CapError::SlotOccupied` if destination slot is occupied
     /// - Returns `CapError::InvalidOperation` if indices are out of bounds
+    /// Copy a capability to another slot
+    ///
+    /// Creates an exact copy of the capability, preserving all rights and badges.
+    /// The copy shares the same parent in the CDT as the source.
+    pub fn copy(&mut self, src_index: usize, dest_index: usize) -> Result<(), CapError> {
+        if !self.is_valid_index(src_index) || !self.is_valid_index(dest_index) {
+            return Err(CapError::InvalidOperation);
+        }
+
+        // Get source node
+        let src_node_ptr = self.lookup_node(src_index)
+            .ok_or(CapError::NotFound)?;
+
+        // Check destination is empty
+        if !self.is_empty(dest_index) {
+            return Err(CapError::SlotOccupied);
+        }
+
+        unsafe {
+            // Clone the capability from source node
+            let src_node = &*src_node_ptr;
+            let cap_copy = src_node.capability.clone();
+            let parent_ptr = src_node.parent;
+
+            // Allocate a new node for the copy
+            let new_node_ptr = alloc_cdt_node()
+                .expect("CDT allocator out of memory");
+
+            // Create new node with copied capability and same parent
+            let new_node = CapNode {
+                capability: cap_copy,
+                parent: parent_ptr,
+                first_child: None,
+                next_sibling: None,
+            };
+
+            ptr::write(new_node_ptr, new_node);
+
+            // If there's a parent, add this copy as a child (sibling to source)
+            if let Some(parent) = parent_ptr {
+                let parent_ref = &mut *parent;
+                // Insert as first child, pushing existing children down
+                let old_first = parent_ref.first_child;
+                parent_ref.first_child = Some(new_node_ptr);
+                (*new_node_ptr).next_sibling = old_first;
+            }
+
+            // Insert into destination slot
+            ptr::write(self.slots_mut().add(dest_index), Some(new_node_ptr));
+            self.count += 1;
+        }
+
+        Ok(())
+    }
+
     pub fn move_cap(&mut self, src_index: usize, dest_index: usize) -> Result<(), CapError> {
         if !self.is_valid_index(src_index) || !self.is_valid_index(dest_index) {
             return Err(CapError::InvalidOperation);

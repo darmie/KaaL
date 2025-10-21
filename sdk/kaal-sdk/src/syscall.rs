@@ -34,6 +34,9 @@ pub mod numbers {
     pub const SYS_CAP_REVOKE: usize = 0x1E;
     pub const SYS_CAP_DERIVE: usize = 0x1F;
     pub const SYS_CAP_MINT: usize = 0x20;
+    pub const SYS_CAP_COPY: usize = 0x21;
+    pub const SYS_CAP_DELETE: usize = 0x22;
+    pub const SYS_CAP_MOVE: usize = 0x23;
 
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
@@ -287,6 +290,137 @@ pub fn cap_mint(cnode_cap: usize, src_slot: usize, dest_slot: usize, badge: usiz
             src_slot = in(reg) src_slot,
             dest_slot = in(reg) dest_slot,
             badge = in(reg) badge,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
+    }
+}
+
+/// Copy a capability to another slot
+///
+/// Creates an exact copy of a capability, preserving all rights and badges.
+/// The copy shares the same parent in the CDT.
+///
+/// # Arguments
+/// * `src_cnode_cap` - Source CNode capability slot (0 = caller's CSpace)
+/// * `src_slot` - Source capability slot
+/// * `dest_cnode_cap` - Destination CNode capability slot (0 = caller's CSpace)
+/// * `dest_slot` - Destination slot (must be empty)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if CNode caps are invalid
+/// * Insufficient rights if missing READ on source or WRITE on dest CNode
+/// * Slot occupied if destination slot is not empty
+///
+/// # Security
+/// Requires CAP_CAPS permission and appropriate rights on both CNodes.
+pub fn cap_copy(src_cnode_cap: usize, src_slot: usize, dest_cnode_cap: usize, dest_slot: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {src_cnode_cap}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_cnode_cap}",
+            "mov x3, {dest_slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_COPY,
+            src_cnode_cap = in(reg) src_cnode_cap,
+            src_slot = in(reg) src_slot,
+            dest_cnode_cap = in(reg) dest_cnode_cap,
+            dest_slot = in(reg) dest_slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
+    }
+}
+
+/// Delete a capability from a slot
+///
+/// Removes a capability from the specified slot without affecting descendants.
+/// Unlike revoke, this only deletes the specific capability.
+///
+/// # Arguments
+/// * `cnode_cap` - CNode capability slot (0 = caller's CSpace)
+/// * `slot` - Capability slot to delete
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if CNode cap is invalid
+/// * Insufficient rights if missing WRITE on CNode
+/// * Not found if slot is empty
+///
+/// # Security
+/// Requires CAP_CAPS permission and WRITE rights on CNode.
+pub fn cap_delete(cnode_cap: usize, slot: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {cnode_cap}",
+            "mov x1, {slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_DELETE,
+            cnode_cap = in(reg) cnode_cap,
+            slot = in(reg) slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
+    }
+}
+
+/// Move a capability to another slot
+///
+/// Atomically moves a capability from source to destination slot within the same CNode.
+/// The source slot becomes empty. This preserves the CDT relationship.
+///
+/// # Arguments
+/// * `src_cnode_cap` - Source CNode capability slot (0 = caller's CSpace)
+/// * `src_slot` - Source capability slot
+/// * `dest_cnode_cap` - Destination CNode capability slot (must match source)
+/// * `dest_slot` - Destination slot (must be empty)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if CNode cap is invalid
+/// * Insufficient rights if missing WRITE on CNode
+/// * Slot occupied if destination slot is not empty
+/// * Invalid operation if source and dest CNodes don't match
+///
+/// # Security
+/// Requires CAP_CAPS permission and WRITE rights on CNode.
+/// Source and destination must be in the same CNode.
+pub fn cap_move(src_cnode_cap: usize, src_slot: usize, dest_cnode_cap: usize, dest_slot: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {src_cnode_cap}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_cnode_cap}",
+            "mov x3, {dest_slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_MOVE,
+            src_cnode_cap = in(reg) src_cnode_cap,
+            src_slot = in(reg) src_slot,
+            dest_cnode_cap = in(reg) dest_cnode_cap,
+            dest_slot = in(reg) dest_slot,
             result = out(reg) result,
             out("x8") _,
         );

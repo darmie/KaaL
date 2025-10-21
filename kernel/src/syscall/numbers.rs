@@ -136,6 +136,33 @@ pub const SYS_CAP_DERIVE: u64 = 0x1F;
 /// to identify the sender in IPC. Requires WRITE rights on the CNode capability.
 pub const SYS_CAP_MINT: u64 = 0x20;
 
+/// Copy a capability to another slot
+/// Args: src_cnode_cap, src_slot, dest_cnode_cap, dest_slot
+/// Returns: 0 on success, -1 on error
+///
+/// Creates an exact copy of a capability in a new slot. The copy shares the
+/// same rights and badge as the source. Both capabilities track the same parent
+/// in the CDT. Requires READ rights on source CNode and WRITE rights on dest CNode.
+pub const SYS_CAP_COPY: u64 = 0x21;
+
+/// Delete a capability from a slot
+/// Args: cnode_cap, slot
+/// Returns: 0 on success, -1 on error
+///
+/// Removes a capability from the specified slot without affecting descendants.
+/// Unlike revoke, this only deletes the specific capability.
+/// Requires WRITE rights on the CNode capability.
+pub const SYS_CAP_DELETE: u64 = 0x22;
+
+/// Move a capability to another slot
+/// Args: src_cnode_cap, src_slot, dest_cnode_cap, dest_slot
+/// Returns: 0 on success, -1 on error
+///
+/// Atomically moves a capability from source to destination slot.
+/// The source slot becomes empty. This preserves the CDT relationship.
+/// Requires WRITE rights on both source and dest CNode capabilities.
+pub const SYS_CAP_MOVE: u64 = 0x23;
+
 // Channel management syscalls
 
 /// Channel_Establish - Establish IPC channel between components

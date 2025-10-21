@@ -257,6 +257,9 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_CAP_REVOKE => sys_cap_revoke(args[0], args[1]),
         numbers::SYS_CAP_DERIVE => sys_cap_derive(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_MINT => sys_cap_mint(args[0], args[1], args[2], args[3]),
+        numbers::SYS_CAP_COPY => sys_cap_copy(args[0], args[1], args[2], args[3]),
+        numbers::SYS_CAP_DELETE => sys_cap_delete(args[0], args[1]),
+        numbers::SYS_CAP_MOVE => sys_cap_move(args[0], args[1], args[2], args[3]),
 
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
@@ -1491,6 +1494,238 @@ fn sys_cap_mint(cnode_cap: u64, src_slot: u64, dest_slot: u64, badge: u64) -> u6
             }
             Err(e) => {
                 ksyscall_debug!("[syscall] cap_mint: ✗ failed: {:?}", e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+fn sys_cap_copy(src_cnode_cap: u64, src_slot: u64, dest_cnode_cap: u64, dest_slot: u64) -> u64 {
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
+
+    ksyscall_debug!("[syscall] cap_copy: src_cnode={}, src_slot={}, dest_cnode={}, dest_slot={}",
+                  src_cnode_cap, src_slot, dest_cnode_cap, dest_slot);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_copy: caller lacks CAP_CAPS");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+
+        // Get source CNode
+        let src_cnode = if src_cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_copy: using caller's own CSpace as source");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else {
+            let cnode_capability = match caller_cspace.lookup(src_cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_copy: source CNode not found");
+                    return u64::MAX;
+                }
+            };
+
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_copy: source is not a CNode");
+                return u64::MAX;
+            }
+
+            if !cnode_capability.rights().contains(CapRights::READ) {
+                ksyscall_debug!("[syscall] cap_copy: insufficient READ rights on source CNode");
+                return u64::MAX;
+            }
+
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        };
+
+        // Get destination CNode
+        let dest_cnode = if dest_cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_copy: using caller's own CSpace as dest");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else if dest_cnode_cap == src_cnode_cap {
+            // Same CNode for source and dest
+            src_cnode
+        } else {
+            let cnode_capability = match caller_cspace.lookup(dest_cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_copy: dest CNode not found");
+                    return u64::MAX;
+                }
+            };
+
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_copy: dest is not a CNode");
+                return u64::MAX;
+            }
+
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_copy: insufficient WRITE rights on dest CNode");
+                return u64::MAX;
+            }
+
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        };
+
+        match dest_cnode.copy(src_slot as usize, dest_slot as usize) {
+            Ok(()) => {
+                ksyscall_debug!("[syscall] cap_copy: ✓ copied cap from slot {} to {}",
+                              src_slot, dest_slot);
+                0
+            }
+            Err(e) => {
+                ksyscall_debug!("[syscall] cap_copy: ✗ failed: {:?}", e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+fn sys_cap_delete(cnode_cap: u64, slot: u64) -> u64 {
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
+
+    ksyscall_debug!("[syscall] cap_delete: cnode={}, slot={}", cnode_cap, slot);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_delete: caller lacks CAP_CAPS");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+
+        // Get target CNode
+        let target_cnode = if cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_delete: using caller's own CSpace");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else {
+            let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_delete: CNode not found");
+                    return u64::MAX;
+                }
+            };
+
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_delete: not a CNode");
+                return u64::MAX;
+            }
+
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_delete: insufficient rights");
+                return u64::MAX;
+            }
+
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        };
+
+        match target_cnode.delete(slot as usize) {
+            Ok(()) => {
+                ksyscall_debug!("[syscall] cap_delete: ✓ deleted cap at slot {}", slot);
+                0
+            }
+            Err(e) => {
+                ksyscall_debug!("[syscall] cap_delete: ✗ failed: {:?}", e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+fn sys_cap_move(src_cnode_cap: u64, src_slot: u64, dest_cnode_cap: u64, dest_slot: u64) -> u64 {
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
+
+    ksyscall_debug!("[syscall] cap_move: src_cnode={}, src_slot={}, dest_cnode={}, dest_slot={}",
+                  src_cnode_cap, src_slot, dest_cnode_cap, dest_slot);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_move: caller lacks CAP_CAPS");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+
+        // For move, both source and dest must be the same CNode (or both caller's CSpace)
+        // This simplifies the implementation and is consistent with seL4
+        let target_cnode = if src_cnode_cap == 0 && dest_cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_move: using caller's own CSpace");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else if src_cnode_cap == dest_cnode_cap && src_cnode_cap != 0 {
+            let cnode_capability = match caller_cspace.lookup(src_cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_move: CNode not found");
+                    return u64::MAX;
+                }
+            };
+
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_move: not a CNode");
+                return u64::MAX;
+            }
+
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_move: insufficient rights");
+                return u64::MAX;
+            }
+
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        } else {
+            ksyscall_debug!("[syscall] cap_move: source and dest must be same CNode");
+            return u64::MAX;
+        };
+
+        match target_cnode.move_cap(src_slot as usize, dest_slot as usize) {
+            Ok(()) => {
+                ksyscall_debug!("[syscall] cap_move: ✓ moved cap from slot {} to {}",
+                              src_slot, dest_slot);
+                0
+            }
+            Err(e) => {
+                ksyscall_debug!("[syscall] cap_move: ✗ failed: {:?}", e);
                 u64::MAX
             }
         }
