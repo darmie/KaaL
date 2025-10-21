@@ -26,7 +26,8 @@
 pub mod capability;
 pub mod cdt;  // Capability Derivation Tree
 pub mod cdt_allocator;  // CDT node allocator
-pub mod cnode;
+pub mod cnode;  // Legacy CNode (raw Capability)
+pub mod cnode_cdt;  // CDT-enabled CNode (with revocation)
 pub mod endpoint;
 pub mod notification;
 pub mod tcb;
