@@ -18,6 +18,9 @@ const SYS_ENDPOINT_CREATE: u64 = 0x13;
 const SYS_CAP_REVOKE: u64 = 0x1E;
 const SYS_CAP_DERIVE: u64 = 0x1F;
 const SYS_CAP_MINT: u64 = 0x20;
+const SYS_CAP_COPY: u64 = 0x21;
+const SYS_CAP_DELETE: u64 = 0x22;
+const SYS_CAP_MOVE: u64 = 0x23;
 
 fn print(msg: &str) {
     unsafe {
@@ -144,6 +147,71 @@ fn syscall_endpoint_create() -> u64 {
     result
 }
 
+fn syscall_cap_copy(src_cnode: u64, src_slot: u64, dest_cnode: u64, dest_slot: u64) -> u64 {
+    let result: u64;
+    unsafe {
+        core::arch::asm!(
+            "mov x8, {syscall}",
+            "mov x0, {src_cnode}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_cnode}",
+            "mov x3, {dest_slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall = in(reg) SYS_CAP_COPY,
+            src_cnode = in(reg) src_cnode,
+            src_slot = in(reg) src_slot,
+            dest_cnode = in(reg) dest_cnode,
+            dest_slot = in(reg) dest_slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+    }
+    result
+}
+
+fn syscall_cap_delete(cnode: u64, slot: u64) -> u64 {
+    let result: u64;
+    unsafe {
+        core::arch::asm!(
+            "mov x8, {syscall}",
+            "mov x0, {cnode}",
+            "mov x1, {slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall = in(reg) SYS_CAP_DELETE,
+            cnode = in(reg) cnode,
+            slot = in(reg) slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+    }
+    result
+}
+
+fn syscall_cap_move(src_cnode: u64, src_slot: u64, dest_cnode: u64, dest_slot: u64) -> u64 {
+    let result: u64;
+    unsafe {
+        core::arch::asm!(
+            "mov x8, {syscall}",
+            "mov x0, {src_cnode}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_cnode}",
+            "mov x3, {dest_slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall = in(reg) SYS_CAP_MOVE,
+            src_cnode = in(reg) src_cnode,
+            src_slot = in(reg) src_slot,
+            dest_cnode = in(reg) dest_cnode,
+            dest_slot = in(reg) dest_slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+    }
+    result
+}
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     print("\n");
@@ -160,6 +228,9 @@ pub extern "C" fn _start() -> ! {
 
     // Test 3: Derive and recursive revocation (THE MAIN TEST!)
     test_derive_and_revoke();
+
+    // Test 4: Copy, Move, and Delete operations
+    test_cap_operations();
 
     print("═══════════════════════════════════════════════\n");
     print("  All tests completed!\n");
@@ -299,6 +370,81 @@ fn test_derive_and_revoke() {
         print("    ✗ FAIL: Child still exists (CDT broken)\n");
     }
 
+    print("\n");
+}
+
+/// Test 4: Cap Copy, Move, and Delete operations
+fn test_cap_operations() {
+    print("[TEST 4] Capability Copy, Move, and Delete\n");
+
+    // Test COPY: Copy an endpoint capability
+    print("  [4a] Testing CAP_COPY...\n");
+    let ep_slot = syscall_endpoint_create();
+    if ep_slot == u64::MAX {
+        print("    ✗ FAIL: Could not create endpoint\n\n");
+        return;
+    }
+
+    let copy_slot = syscall_cap_allocate();
+    if copy_slot == u64::MAX {
+        print("    ✗ FAIL: Could not allocate copy slot\n\n");
+        return;
+    }
+
+    let result = syscall_cap_copy(0, ep_slot, 0, copy_slot);
+    if result == 0 {
+        print("    ✓ Successfully copied capability\n");
+    } else {
+        print("    ✗ FAIL: Copy failed\n\n");
+        return;
+    }
+
+    // Test MOVE: Move the copy to another slot
+    print("  [4b] Testing CAP_MOVE...\n");
+    let move_slot = syscall_cap_allocate();
+    if move_slot == u64::MAX {
+        print("    ✗ FAIL: Could not allocate move slot\n\n");
+        return;
+    }
+
+    let result = syscall_cap_move(0, copy_slot, 0, move_slot);
+    if result == 0 {
+        print("    ✓ Successfully moved capability\n");
+    } else {
+        print("    ✗ FAIL: Move failed\n\n");
+        return;
+    }
+
+    // Verify source is now empty (copy from it should fail)
+    let verify_slot = syscall_cap_allocate();
+    let result = syscall_cap_copy(0, copy_slot, 0, verify_slot);
+    if result == u64::MAX {
+        print("    ✓ Source slot is now empty (move worked)\n");
+    } else {
+        print("    ✗ FAIL: Source slot still has cap (move failed)\n\n");
+        return;
+    }
+
+    // Test DELETE: Delete the moved capability
+    print("  [4c] Testing CAP_DELETE...\n");
+    let result = syscall_cap_delete(0, move_slot);
+    if result == 0 {
+        print("    ✓ Successfully deleted capability\n");
+    } else {
+        print("    ✗ FAIL: Delete failed\n\n");
+        return;
+    }
+
+    // Verify it's actually deleted (copy from it should fail)
+    let result = syscall_cap_copy(0, move_slot, 0, verify_slot);
+    if result == u64::MAX {
+        print("    ✓ Slot is now empty (delete worked)\n");
+    } else {
+        print("    ✗ FAIL: Slot still has cap (delete failed)\n\n");
+        return;
+    }
+
+    print("    ✓ All capability operations working!\n");
     print("\n");
 }
 
