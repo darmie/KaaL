@@ -96,8 +96,11 @@ def main [] {
     let cap_transfer_ops = (verify-module $verus_bin "kernel/src/verified/cap_transfer_ops.rs" "cap_transfer_ops" 23
         --details "Capability transfer: rights diminishing, badge assignment, GRANT right validation, CSpace isolation")
 
+    let tlb_ops = (verify-module $verus_bin "kernel/src/verified/tlb_ops.rs" "tlb_ops" 29
+        --details "TLB management: invalidate by VA/ASID/all, ASID allocation, context switch, barriers")
+
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops, $ipc_message_ops, $cap_transfer_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops, $ipc_message_ops, $cap_transfer_ops, $tlb_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -131,4 +134,5 @@ def main [] {
     print "   - pte_ops.rs (page table entry operations)"
     print "   - ipc_message_ops.rs (IPC message transfer operations)"
     print "   - cap_transfer_ops.rs (capability transfer operations)"
+    print "   - tlb_ops.rs (TLB management operations)"
 }

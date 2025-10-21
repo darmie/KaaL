@@ -1,7 +1,7 @@
 # Verification Coverage
 
 **Last Updated**: 2025-10-21
-**Status**: 19 modules, 335 verified items, 0 errors
+**Status**: 20 modules, 364 verified items, 0 errors
 
 ---
 
@@ -13,18 +13,18 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 
 | Category | Modules | Verified Items | Status |
 |----------|---------|----------------|--------|
-| **Memory Management** | 8 | 116 | ✅ Complete |
+| **Memory Management** | 9 | 145 | ✅ Complete |
 | **Capability System** | 5 | 96 | ✅ Complete |
 | **Scheduling & IPC** | 4 | 77 | ✅ Complete |
 | **System Invocations** | 1 | 40 | ✅ Complete |
 | **Page Tables** | 1 | 6 | ✅ Complete |
-| **TOTAL** | **19** | **335** | **✅ All Pass** |
+| **TOTAL** | **20** | **364** | **✅ All Pass** |
 
 ---
 
 ## Verified Modules
 
-### 1. Memory Management (116 items)
+### 1. Memory Management (145 items)
 
 #### Physical/Virtual Addresses
 - **[phys_addr.rs](../../kernel/src/verified/phys_addr.rs)** - 10 items
@@ -68,6 +68,16 @@ The KaaL microkernel has **17 verified modules** covering core memory management
   - Address extraction and setting
   - Permission bits: PXN, UXN, AF (Access Flag)
   - Verification: frame conditions, bit operation axioms
+
+#### TLB Management
+- **[tlb_ops.rs](../../kernel/src/verified/tlb_ops.rs)** - 29 items
+  - TLB invalidation by VA, ASID, or all entries
+  - ASID allocation and validation (8-bit, 0-255)
+  - Context switch TLB handling
+  - Virtual address bounds checking (48-bit)
+  - Page-aligned address validation
+  - TLB barriers for ordering guarantees
+  - Verification: ASID bounds, VA validity, operation safety axioms
 
 #### Page Table Operations
 - **[page_table_ops.rs](../../kernel/src/verified/page_table_ops.rs)** - 7 items
