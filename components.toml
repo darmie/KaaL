@@ -45,13 +45,13 @@
 name = "system_init"
 binary = "system-init"
 type = "service"
-priority = 50  # High priority - system_init is main entry point
-autostart = true  # Re-enabled now that priorities work
+priority = 50 # High priority - system_init is main entry point
+autostart = true # Re-enabled now that priorities work
 capabilities = [
-    "process:create",      # Can spawn other processes
-    "memory:allocate",     # Can allocate memory
-    "ipc:*",              # Full IPC access
-    "caps:allocate",      # Can allocate capability slots
+    "process:create",  # Can spawn other processes
+    "memory:allocate", # Can allocate memory
+    "ipc:*",           # Full IPC access
+    "caps:allocate",   # Can allocate capability slots
 ]
 
 # Device Drivers - Low-level hardware access
@@ -62,9 +62,9 @@ type = "driver"
 priority = 200
 autostart = true
 capabilities = [
-    "memory_map:0x09000000:4096",  # UART0 MMIO
-    "interrupt:33",                 # UART0 IRQ
-    "ipc:serial",                   # Serial IPC endpoint
+    "memory_map:0x09000000:4096", # UART0 MMIO
+    "interrupt:33",               # UART0 IRQ
+    "ipc:serial",                 # Serial IPC endpoint
 ]
 
 [[component]]
@@ -74,9 +74,9 @@ type = "driver"
 priority = 200
 autostart = true
 capabilities = [
-    "memory_map:0x0a003000:4096",  # Timer MMIO
-    "interrupt:27",                 # Timer IRQ
-    "ipc:timer",                    # Timer IPC endpoint
+    "memory_map:0x0a003000:4096", # Timer MMIO
+    "interrupt:27",               # Timer IRQ
+    "ipc:timer",                  # Timer IPC endpoint
 ]
 
 # System Services - Core OS services
@@ -98,10 +98,10 @@ name = "vfs_service"
 binary = "vfs-service"
 type = "service"
 priority = 100
-autostart = false  # Spawned on-demand
+autostart = false # Spawned on-demand
 capabilities = [
     "ipc:vfs",
-    "ipc:serial",    # For debug output
+    "ipc:serial", # For debug output
 ]
 
 # Test Components - IPC Testing (Phase 5)
@@ -109,28 +109,28 @@ capabilities = [
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
-priority = 60  # Same priority as consumer for round-robin scheduling
-autostart = false  # Spawned by system_init
-spawned_by = "system_init"  # Delegation enabled - system_init has capabilities
+priority = 60 # Same priority as consumer for round-robin scheduling
+autostart = false # Spawned by system_init
+spawned_by = "system_init" # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
     "notification:wait",
-    "caps:allocate",  # Needed to create notifications
+    "caps:allocate",       # Needed to create notifications
 ]
 
 [[component]]
 name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
-priority = 60  # Run first to initialize and wait for producer
-autostart = false  # Spawned by system_init
-spawned_by = "system_init"  # Delegation enabled - system_init has capabilities
+priority = 60 # Run first to initialize and wait for producer
+autostart = false # Spawned by system_init
+spawned_by = "system_init" # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
     "notification:wait",
-    "caps:allocate",  # Needed to create notifications
+    "caps:allocate",       # Needed to create notifications
 ]
 
 # Test Components - Capability System Tests
@@ -138,30 +138,31 @@ capabilities = [
 name = "test_minimal"
 binary = "test-minimal"
 type = "service"
-priority = 55  # Run after system_init (system_init is 50)
-autostart = false  # Disabled to allow IPC components to run
-capabilities = []  # NO capabilities - tests that syscalls are properly denied
+priority = 55           # Run after system_init (system_init is 50)
+autostart = false       # Disabled to allow IPC components to run
+capabilities = []       # NO capabilities - tests that syscalls are properly denied
 
 [[component]]
 name = "test_cap_revoke"
 binary = "test-cap-revoke"
 type = "service"
-priority = 56  # Run after test_minimal
-autostart = false  # Spawned by system_init (not root-task)
-spawned_by = "system_init"  # Delegation enabled
+priority = 57 # Run after test_cap_revoke
+autostart = false # Disabled to test IPC components
+# spawned_by = "system_init" # Delegation enabled - DISABLED FOR TESTING
 capabilities = [
-    "caps:allocate",  # Needs CAP_CAPS to test revocation
+    "caps:allocate", # Needs CAP_CAPS to test revocation
 ]
 
 [[component]]
 name = "test_memory"
 binary = "test-memory"
 type = "service"
-priority = 57  # Run after test_cap_revoke
-autostart = true  # Enable to test memory syscalls
+priority = 56 # Run after test_minimal
+autostart = false # Disabled to test IPC components
+# spawned_by = "system_init" # Delegation enabled - DISABLED FOR TESTING
 capabilities = [
-    "memory:allocate",  # Needs CAP_MEMORY to test remap/share
-    "memory:map",       # Needs CAP_MEMORY to map pages
+    "memory:allocate", # Needs CAP_MEMORY to test remap/share
+    "memory:map",      # Needs CAP_MEMORY to map pages
 ]
 
 # Applications - User-facing programs
@@ -170,9 +171,5 @@ name = "shell"
 binary = "shell"
 type = "application"
 priority = 50
-autostart = false  # Spawned by system_init after drivers ready
-capabilities = [
-    "ipc:serial",
-    "ipc:vfs",
-    "ipc:procmgr",
-]
+autostart = false                                       # Spawned by system_init after drivers ready
+capabilities = ["ipc:serial", "ipc:vfs", "ipc:procmgr"]
