@@ -37,6 +37,8 @@ pub mod numbers {
     pub const SYS_CAP_COPY: usize = 0x21;
     pub const SYS_CAP_DELETE: usize = 0x22;
     pub const SYS_CAP_MOVE: usize = 0x23;
+    pub const SYS_MEMORY_REMAP: usize = 0x24;
+    pub const SYS_MEMORY_SHARE: usize = 0x25;
 
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
@@ -506,6 +508,154 @@ pub fn memory_unmap(virt_addr: usize, size: usize) -> Result<()> {
             out("x8") _,
             out("x0") _,
             out("x1") _,
+        );
+        Error::from_syscall(result)?;
+        Ok(())
+    }
+}
+
+/// Change memory protection flags for existing mapping
+///
+/// Updates the protection flags of an already-mapped memory region.
+/// Useful for implementing guard pages, write-protecting code sections,
+/// or implementing copy-on-write semantics.
+///
+/// # Arguments
+/// * `virt_addr` - Virtual address of mapped region (must be page-aligned)
+/// * `size` - Size in bytes (must be page-aligned)
+/// * `new_permissions` - New permission flags (read=0x1, write=0x2, exec=0x4)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_MEMORY capability
+/// * Invalid address if the region is not currently mapped
+/// * Invalid argument if addresses are not page-aligned
+///
+/// # Example
+/// ```no_run
+/// use kaal_sdk::syscall::memory_remap;
+///
+/// // Make a code region read-only (no write, no exec)
+/// memory_remap(code_addr, code_size, 0x1)?;
+///
+/// // Make a data region read-write (no exec)
+/// memory_remap(data_addr, data_size, 0x3)?;
+///
+/// // Make a guard page inaccessible (no permissions)
+/// memory_remap(guard_addr, 4096, 0x0)?;
+/// ```
+///
+/// # Security
+/// Requires CAP_MEMORY permission. The region must be already mapped in the caller's
+/// address space. This performs translate→unmap→map with new flags, then flushes TLB.
+pub fn memory_remap(virt_addr: usize, size: usize, new_permissions: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {virt}",
+            "mov x1, {size}",
+            "mov x2, {perms}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_MEMORY_REMAP,
+            virt = in(reg) virt_addr,
+            size = in(reg) size,
+            perms = in(reg) new_permissions,
+            result = out(reg) result,
+            out("x8") _,
+            out("x0") _,
+            out("x1") _,
+            out("x2") _,
+        );
+        Error::from_syscall(result)?;
+        Ok(())
+    }
+}
+
+/// Share memory between processes (zero-copy IPC)
+///
+/// Maps physical pages from the caller's address space into another process's
+/// address space at a specified virtual address. This enables zero-copy shared
+/// memory IPC between processes.
+///
+/// # Arguments
+/// * `target_tcb_cap` - TCB capability slot for the target process
+/// * `source_virt_addr` - Source virtual address in caller's address space
+/// * `size` - Size in bytes (must be page-aligned)
+/// * `dest_virt_addr` - Destination virtual address in target's address space
+/// * `permissions` - Permission flags for target mapping (read=0x1, write=0x2, exec=0x4)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_MEMORY capability
+/// * Invalid capability if target_tcb_cap is not a valid TCB capability
+/// * Invalid address if source region is not mapped or dest region conflicts
+/// * Invalid argument if addresses/size are not page-aligned
+///
+/// # Example
+/// ```no_run
+/// use kaal_sdk::syscall::memory_share;
+///
+/// // Share a read-write buffer with another process
+/// let shared_buffer_vaddr = 0x100000;
+/// let target_buffer_vaddr = 0x200000;
+/// let buffer_size = 4096;
+/// memory_share(
+///     target_tcb_cap,
+///     shared_buffer_vaddr,
+///     buffer_size,
+///     target_buffer_vaddr,
+///     0x3 // read-write
+/// )?;
+/// ```
+///
+/// # Security
+/// Requires CAP_MEMORY permission and a valid TCB capability for the target process.
+/// This allows direct memory sharing without copying data. The target process can
+/// access the same physical pages at the specified virtual address.
+///
+/// # Implementation
+/// For each page in the region:
+/// 1. Translates source virtual address to physical address
+/// 2. Maps the physical address into target process at destination virtual address
+/// 3. Applies the specified permissions to the target mapping
+/// 4. Flushes TLB to ensure visibility
+pub fn memory_share(
+    target_tcb_cap: usize,
+    source_virt_addr: usize,
+    size: usize,
+    dest_virt_addr: usize,
+    permissions: usize,
+) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {target_tcb}",
+            "mov x1, {src_virt}",
+            "mov x2, {size}",
+            "mov x3, {dst_virt}",
+            "mov x4, {perms}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_MEMORY_SHARE,
+            target_tcb = in(reg) target_tcb_cap,
+            src_virt = in(reg) source_virt_addr,
+            size = in(reg) size,
+            dst_virt = in(reg) dest_virt_addr,
+            perms = in(reg) permissions,
+            result = out(reg) result,
+            out("x8") _,
+            out("x0") _,
+            out("x1") _,
+            out("x2") _,
+            out("x3") _,
+            out("x4") _,
         );
         Error::from_syscall(result)?;
         Ok(())
