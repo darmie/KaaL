@@ -105,6 +105,37 @@ pub fn kernel_entry() -> ! {
             );
         }
 
+        // Initialize CDT allocator for capability revocation
+        crate::kprintln!("[boot] Initializing CDT allocator...");
+        unsafe {
+            use crate::objects::cdt_allocator::{init_cdt_allocator, CdtAllocatorConfig};
+
+            // Allocate 4MB for CDT nodes (4MB / 56 bytes ≈ 73K nodes)
+            // This is sufficient for v1.0 since processes typically have <1000 caps
+            const CDT_POOL_SIZE: usize = 4 * 1024 * 1024; // 4MB
+
+            // Allocate physical frames for CDT pool
+            let num_frames = (CDT_POOL_SIZE + crate::memory::PAGE_SIZE - 1) / crate::memory::PAGE_SIZE;
+            let base_frame = crate::memory::alloc_frame()
+                .expect("Failed to allocate CDT allocator base frame");
+            let base_addr = base_frame.phys_addr().as_usize();
+
+            // Allocate remaining frames (simplified sequential allocation)
+            for _ in 1..num_frames {
+                crate::memory::alloc_frame()
+                    .expect("Failed to allocate CDT allocator frames");
+            }
+
+            let config = CdtAllocatorConfig {
+                base: crate::memory::PhysAddr::new(base_addr),
+                size: CDT_POOL_SIZE,
+            };
+            init_cdt_allocator(config);
+            crate::kprintln!("[boot] CDT allocator initialized: {} frames ({} KB)",
+                           num_frames, CDT_POOL_SIZE / 1024);
+        }
+        crate::kprintln!("");
+
         // Frame allocator test - See docs/chapters/CHAPTER_02_STATUS.md
         // Commented out to reduce boot verbosity. Test verified functional.
         /*
