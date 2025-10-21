@@ -200,7 +200,7 @@ Configure platforms in [build-config.toml](build-config.toml).
 ![Verification](.github/badges/verification.svg)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 20 modules, 358 items, 0 errors
+- **Verified Modules**: 22 modules, 428 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
   - Capability system (CapRights, capability derivation, rights checking, transfer operations)
   - Capability transfer (rights diminishing, badge minting, GRANT validation, CSpace isolation)
@@ -215,6 +215,8 @@ Configure platforms in [build-config.toml](build-config.toml).
   - Untyped memory (watermark allocator, child tracking, revocation safety)
   - VSpace operations (page table walking L0-L3, map/unmap 4KB/2MB/1GB pages)
   - TLB management (invalidate by VA/ASID/all, ASID allocation, context switch)
+  - Exception handling (ESR parsing, EL transitions, fault address capture, vector selection)
+  - Interrupt handling (IRQ validation, GICv2/v3 operations, priority levels, acknowledge/EOI)
   - Production bitmap (frame conditions, loop invariants)
   - Thread Control Block (TCB state machine, capability checking)
 - **Advanced Features**: State machine verification, bit-level axioms, stateful specs with `old()`, termination proofs, power-of-2 arithmetic, FIFO queue properties, priority-based scheduling, error propagation

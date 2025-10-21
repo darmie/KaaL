@@ -99,8 +99,14 @@ def main [] {
     let tlb_ops = (verify-module $verus_bin "kernel/src/verified/tlb_ops.rs" "tlb_ops" 23
         --details "TLB management: invalidate by VA/ASID/all, ASID allocation, context switch, barriers")
 
+    let exception_ops = (verify-module $verus_bin "kernel/src/verified/exception_ops.rs" "exception_ops" 38
+        --details "Exception handling: ESR parsing, EL transitions, fault address capture, vector selection")
+
+    let irq_ops = (verify-module $verus_bin "kernel/src/verified/irq_ops.rs" "irq_ops" 32
+        --details "IRQ handling: GICv2/v3 operations, priority levels, enable/disable, acknowledge/EOI")
+
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops, $ipc_message_ops, $cap_transfer_ops, $tlb_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops, $ipc_message_ops, $cap_transfer_ops, $tlb_ops, $exception_ops, $irq_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -135,4 +141,6 @@ def main [] {
     print "   - ipc_message_ops.rs (IPC message transfer operations)"
     print "   - cap_transfer_ops.rs (capability transfer operations)"
     print "   - tlb_ops.rs (TLB management operations)"
+    print "   - exception_ops.rs (exception handling operations)"
+    print "   - irq_ops.rs (interrupt handling operations)"
 }

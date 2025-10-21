@@ -1,7 +1,7 @@
 # Verification Coverage
 
 **Last Updated**: 2025-10-21
-**Status**: 20 modules, 358 verified items, 0 errors
+**Status**: 22 modules, 428 verified items, 0 errors
 
 ---
 
@@ -17,8 +17,9 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 | **Capability System** | 5 | 96 | ✅ Complete |
 | **Scheduling & IPC** | 4 | 77 | ✅ Complete |
 | **System Invocations** | 1 | 40 | ✅ Complete |
+| **Exception/Interrupt** | 2 | 70 | ✅ Complete |
 | **Page Tables** | 1 | 6 | ✅ Complete |
-| **TOTAL** | **20** | **358** | **✅ All Pass** |
+| **TOTAL** | **22** | **428** | **✅ All Pass** |
 
 ---
 
@@ -156,6 +157,36 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 
 ---
 
+### 4. Exception & Interrupt Handling (70 items)
+
+#### Exception Operations
+- **[exception_ops.rs](../../kernel/src/verified/exception_ops.rs)** - 38 items
+  - Exception syndrome register (ESR_EL1) parsing
+  - Exception class (EC) extraction and validation
+  - Exception level transitions (EL0 ↔ EL1)
+  - Fault address capture (FAR_EL1)
+  - Exception vector offset calculation
+  - Return address handling (ELR_EL1)
+  - SPSR state preservation
+  - Syscall/fault/interrupt classification
+  - Verification: ESR bit layout, EL bounds, vector offsets, fault classification
+
+#### IRQ Operations
+- **[irq_ops.rs](../../kernel/src/verified/irq_ops.rs)** - 32 items
+  - IRQ number validation (0-1023 for GICv2/v3)
+  - IRQ type classification: SGI (0-15), PPI (16-31), SPI (32-1019)
+  - IRQ enable/disable with GIC distributor access
+  - Priority level management (0-255)
+  - IRQ acknowledgment (ICC_IAR1_EL1)
+  - End-of-interrupt (ICC_EOIR1_EL1)
+  - Spurious interrupt detection (IRQ 1023)
+  - CPU target configuration for SPIs
+  - Trigger type configuration (level/edge)
+  - Pending status checking and clearing
+  - Verification: IRQ bounds, priority validity, spurious handling, GIC operation safety
+
+---
+
 ## Verification Properties
 
 ### Memory Safety Properties
@@ -274,7 +305,7 @@ nu scripts/verify.nu
 
 ## Verification Roadmap
 
-### Completed (Phase 1-2)
+### Completed (Phase 1-3)
 - ✅ Basic data structures (addresses, PFNs, bitmaps)
 - ✅ Frame allocator with no-double-allocation proof
 - ✅ Capability system (rights, derivation)
@@ -283,17 +314,17 @@ nu scripts/verify.nu
 - ✅ Scheduler with priority bitmap
 - ✅ Thread queues with FIFO properties
 - ✅ System invocation validation
-
-### In Progress (Phase 3)
-- 🚧 IPC message transfer verification
-- 🚧 Capability transfer during IPC
-- 🚧 TLB operations verification
+- ✅ IPC message transfer verification
+- ✅ Capability transfer during IPC
+- ✅ TLB operations verification
+- ✅ Exception handling verification
+- ✅ IRQ handling verification
 
 ### Planned (Phase 4-5)
-- 📋 Exception handling verification
-- 📋 IRQ handling verification
 - 📋 System initialization verification
 - 📋 End-to-end properties (isolation, security)
+- 📋 Multicore synchronization primitives
+- 📋 Device driver framework verification
 
 ---
 
