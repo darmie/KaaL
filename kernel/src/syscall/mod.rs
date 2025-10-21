@@ -318,9 +318,21 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
 
         // Pick next thread
         let next = crate::scheduler::schedule();
-        if next.is_null() || next == current {
-            // No other thread or same thread, just continue
+        if next.is_null() {
+            // No threads available - this shouldn't happen with idle thread
             (*current).set_state(crate::objects::ThreadState::Running);
+            return 0;
+        }
+
+        if next == current {
+            // Scheduler picked the same thread because:
+            // - We just enqueued current
+            // - schedule() immediately dequeued it (was head of queue)
+            // - This means current was the ONLY thread at its priority
+            // Keep it running, no context switch needed
+            (*current).set_state(crate::objects::ThreadState::Running);
+            // NOTE: thread is NO LONGER in queue after schedule() dequeued it
+            // This is correct - running thread shouldn't be in ready queue
             return 0;
         }
 

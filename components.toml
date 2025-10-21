@@ -146,9 +146,9 @@ capabilities = []       # NO capabilities - tests that syscalls are properly den
 name = "test_cap_revoke"
 binary = "test-cap-revoke"
 type = "service"
-priority = 57 # Run after test_cap_revoke
-autostart = false # Disabled to test IPC components
-# spawned_by = "system_init" # Delegation enabled - DISABLED FOR TESTING
+priority = 60 # Same as IPC components for round-robin
+autostart = false # Spawned by system_init
+spawned_by = "system_init" # Delegation enabled
 capabilities = [
     "caps:allocate", # Needs CAP_CAPS to test revocation
 ]
@@ -157,9 +157,9 @@ capabilities = [
 name = "test_memory"
 binary = "test-memory"
 type = "service"
-priority = 56 # Run after test_minimal
-autostart = false # Disabled to test IPC components
-# spawned_by = "system_init" # Delegation enabled - DISABLED FOR TESTING
+priority = 60 # Same as IPC components for round-robin
+autostart = false # Spawned by system_init
+spawned_by = "system_init" # Delegation enabled
 capabilities = [
     "memory:allocate", # Needs CAP_MEMORY to test remap/share
     "memory:map",      # Needs CAP_MEMORY to map pages
