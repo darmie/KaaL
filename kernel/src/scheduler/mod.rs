@@ -175,12 +175,10 @@ pub unsafe fn dequeue(tcb: *mut TCB) {
     scheduler().dequeue(tcb);
 }
 
-/// Pick the next thread to run (strict priority-preemptive)
+/// Pick the next thread to run
 ///
 /// Selects the highest-priority runnable thread. If no threads are ready,
 /// returns the idle thread.
-///
-/// Used for timer-based preemption to enforce strict priority ordering.
 ///
 /// # Returns
 ///
@@ -191,27 +189,6 @@ pub unsafe fn dequeue(tcb: *mut TCB) {
 /// - Scheduler must be initialized
 pub unsafe fn schedule() -> *mut TCB {
     scheduler().schedule()
-}
-
-/// Pick the next thread to run with fair round-robin across all priorities
-///
-/// This provides cooperative multitasking fairness when threads explicitly yield.
-/// Unlike schedule(), this allows lower-priority threads to run when higher-priority
-/// threads yield, ensuring progress across all priority levels.
-///
-/// # Arguments
-///
-/// * `current_priority` - Priority of the thread that is yielding
-///
-/// # Returns
-///
-/// Pointer to the TCB of the next thread to run.
-///
-/// # Safety
-///
-/// - Scheduler must be initialized
-pub unsafe fn schedule_fair(current_priority: u8) -> *mut TCB {
-    scheduler().schedule_fair(current_priority)
 }
 
 /// Yield the current thread
