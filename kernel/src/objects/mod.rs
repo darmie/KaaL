@@ -24,6 +24,8 @@
 //! - Capabilities stored in CNodes
 
 pub mod capability;
+pub mod cdt;  // Capability Derivation Tree
+pub mod cdt_allocator;  // CDT node allocator
 pub mod cnode;
 pub mod endpoint;
 pub mod notification;
@@ -37,6 +39,7 @@ mod tests;
 
 // Re-export main types
 pub use capability::{Capability, CapType, CapRights, CapError};
+pub use cdt::CapNode;
 pub use cnode::CNode;
 pub use endpoint::Endpoint;
 pub use notification::Notification;
