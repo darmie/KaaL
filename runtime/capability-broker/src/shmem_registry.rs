@@ -27,6 +27,12 @@ pub struct ShmemRegistry {
     entries: BTreeMap<String, ShmemEntry>,
 }
 
+impl Default for ShmemRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShmemRegistry {
     /// Create a new empty registry
     pub fn new() -> Self {

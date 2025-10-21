@@ -66,7 +66,7 @@ pub mod shmem_registry;
 pub use device_manager::{DeviceId, DeviceResource};
 pub use endpoint_manager::Endpoint;
 pub use memory_manager::MemoryRegion;
-pub use shmem_registry::{ShmemRegistry, ShmemEntry};
+pub use shmem_registry::{ShmemEntry, ShmemRegistry};
 
 /// Errors that can occur in the Capability Broker
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,15 +223,13 @@ impl CapabilityBroker {
         let mut endpoint = 0;
         let mut untyped = 0;
 
-        for record in &self.cap_records[..self.num_allocated_caps] {
-            if let Some(rec) = record {
-                if rec.allocated {
-                    match rec.cap_type {
-                        CapabilityType::Memory => memory += 1,
-                        CapabilityType::Device => device += 1,
-                        CapabilityType::Endpoint => endpoint += 1,
-                        CapabilityType::Untyped => untyped += 1,
-                    }
+        for rec in self.cap_records[..self.num_allocated_caps].iter().flatten() {
+            if rec.allocated {
+                match rec.cap_type {
+                    CapabilityType::Memory => memory += 1,
+                    CapabilityType::Device => device += 1,
+                    CapabilityType::Endpoint => endpoint += 1,
+                    CapabilityType::Untyped => untyped += 1,
                 }
             }
         }
@@ -340,8 +338,14 @@ impl CapabilityBroker {
     /// let endpoint = broker.create_endpoint()?;
     /// broker.register_service("printer", endpoint, 42)?;
     /// ```
-    pub fn register_service(&mut self, name: &str, endpoint: Endpoint, owner_pid: usize) -> Result<()> {
-        self.service_registry.register_service(name, endpoint, owner_pid)
+    pub fn register_service(
+        &mut self,
+        name: &str,
+        endpoint: Endpoint,
+        owner_pid: usize,
+    ) -> Result<()> {
+        self.service_registry
+            .register_service(name, endpoint, owner_pid)
     }
 
     /// Lookup a service by name
