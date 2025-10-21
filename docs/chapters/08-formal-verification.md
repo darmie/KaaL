@@ -39,7 +39,7 @@ By the end of this chapter, you will:
 
 [seL4](https://sel4.systems/) is the world's first formally verified microkernel:
 
-- **10,000 lines** of C code verified with Isabelle/HOL
+- **~8,700 lines** of C code and 600 lines of assembly verified with Isabelle/HOL
 - **200,000 lines** of proof code
 - **Proven properties**:
   - Memory safety (no buffer overflows)
@@ -48,7 +48,7 @@ By the end of this chapter, you will:
 
 **Result**: Zero security vulnerabilities in 15+ years of deployment
 
-**Trade-off**: Verification took 20 person-years
+**Trade-off**: Verification proof took ~20 person-years (total project ~25 person-years including new research, tools, and frameworks)
 
 ### KaaL's Approach: Selective Verification
 
@@ -919,7 +919,7 @@ verus --crate-type=lib kernel/src/verified/tcb.rs
 
 ### Other Verified Systems
 - [seL4](https://sel4.systems/) - Verified microkernel (Isabelle/HOL)
-- [Asterinas](https://github.com/asterinas/asterinas) - Verified Unix kernel (Verus)
+- [Asterinas](https://github.com/asterinas/asterinas) - Linux-compatible kernel with ongoing Verus verification
 - [IronClad](https://github.com/Microsoft/Ironclad) - Verified app framework (Dafny)
 
 ---
