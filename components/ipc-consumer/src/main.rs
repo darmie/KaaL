@@ -138,16 +138,40 @@ impl Component for IpcConsumer {
                 syscall::print("  IPC COMMUNICATION SUCCESSFUL! ✓\n");
                 syscall::print("═══════════════════════════════════════════════════════════\n");
                 syscall::print("\n");
+
+                // Block waiting for more messages - this REMOVES us from ready queue
+                // allowing lower-priority components (tests at priority 200) to run
+                syscall::print("[consumer] Blocking on notification (releases CPU)...\n");
+                syscall::print("\n");
+
+                // Wait for producer to signal us
+                // This puts thread in BlockedOnReceive state → removed from ready queue
+                if channel_config.notification_cap != 0 {
+                    loop {
+                        match syscall::wait(channel_config.notification_cap) {
+                            Ok(signals) => {
+                                syscall::print("[consumer] Received signal, but no more messages to read\n");
+                                // Continue blocking
+                            }
+                            Err(_) => {
+                                syscall::print("[consumer] Wait failed, yielding\n");
+                                syscall::yield_now();
+                            }
+                        }
+                    }
+                } else {
+                    // No notification cap - just yield forever (shouldn't happen)
+                    loop {
+                        syscall::yield_now();
+                    }
+                }
             } else {
                 syscall::print("[consumer] Warning: No valid shared memory buffer!\n");
                 syscall::print("[consumer] Channel establishment may have failed.\n");
-            }
-        }
-
-        // Continue yielding
-        loop {
-            unsafe {
-                syscall::yield_now();
+                // Yield forever on error
+                loop {
+                    syscall::yield_now();
+                }
             }
         }
     }

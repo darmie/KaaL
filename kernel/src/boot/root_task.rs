@@ -376,6 +376,11 @@ pub unsafe fn create_and_start_root_task() -> ! {
     // Set state to Running (root-task will start executing immediately)
     (*root_tcb_ptr).set_state(crate::objects::ThreadState::Running);
 
+    crate::kprintln!("  Setting priority to 255 (lowest)...");
+    // Root-task should have lowest priority (255) so it only runs when nothing else can run
+    // This ensures spawned components at priority 200 (test) or 100 (IPC) run before root-task
+    (*root_tcb_ptr).set_priority(255);
+
     crate::kprintln!("  Setting saved_ttbr0...");
     // Set saved_ttbr0 for context switching
     (*root_tcb_ptr).context_mut().saved_ttbr0 = user_page_table_phys.as_usize() as u64;

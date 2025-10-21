@@ -796,10 +796,11 @@ pub extern "C" fn _start() -> ! {
     }
     */
 
-    // Idle loop - wait for interrupts
+    // Idle loop - yield to allow lower-priority components to run
+    // Note: Using yield instead of wfi because wfi doesn't release scheduler priority
     loop {
         unsafe {
-            core::arch::asm!("wfi"); // Wait for interrupt
+            sys_yield(); // Yield to scheduler - allows lower priorities to run
         }
     }
 }
