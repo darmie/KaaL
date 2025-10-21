@@ -31,6 +31,7 @@ pub mod numbers {
     pub const SYS_MEMORY_MAP_INTO: usize = 0x1B;
     pub const SYS_CAP_INSERT_INTO: usize = 0x1C;
     pub const SYS_CAP_INSERT_SELF: usize = 0x1D;
+    pub const SYS_CAP_REVOKE: usize = 0x1E;
 
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
@@ -136,6 +137,52 @@ pub fn cap_allocate() -> Result<usize> {
             out("x8") _,
         );
         Error::from_syscall(result)
+    }
+}
+
+/// Revoke capability and all its descendants (seL4-style CDT revocation)
+///
+/// Recursively deletes the capability at the specified slot along with all
+/// capabilities derived from it. Implements seL4's capability revocation using
+/// the CDT (Capability Derivation Tree).
+///
+/// # Arguments
+/// * `cnode_cap` - Capability slot containing the CNode capability
+/// * `slot` - Slot number within the CNode to revoke
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if cnode_cap is not a valid CNode
+/// * Insufficient rights if CNode doesn't have WRITE rights
+/// * Not found if slot is invalid or empty
+///
+/// # Example
+/// ```no_run
+/// // Revoke capability at slot 5 in current CSpace (cnode_cap=0 means current)
+/// kaal_sdk::syscall::cap_revoke(0, 5)?;
+/// ```
+///
+/// # Security
+/// Requires CAP_CAPS permission and WRITE rights on the target CNode.
+pub fn cap_revoke(cnode_cap: usize, slot: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {cnode_cap}",
+            "mov x1, {slot}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_REVOKE,
+            cnode_cap = in(reg) cnode_cap,
+            slot = in(reg) slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
     }
 }
 

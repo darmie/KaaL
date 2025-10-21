@@ -1239,6 +1239,7 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
 /// - Recursively removes entire derivation subtree
 fn sys_cap_revoke(cnode_cap: u64, slot: u64) -> u64 {
     use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
 
     ksyscall_debug!("[syscall] cap_revoke: cnode_cap={}, slot={}", cnode_cap, slot);
 
@@ -1262,18 +1263,36 @@ fn sys_cap_revoke(cnode_cap: u64, slot: u64) -> u64 {
             return u64::MAX;
         }
 
-        // TODO: For full seL4 compatibility, we should:
-        // 1. Look up cnode_cap from caller's CSpace
-        // 2. Verify it's a CNode capability with WRITE rights
-        // 3. Cast to CNodeCdt and call revoke on that CNode
-        //
-        // For now, we operate on caller's CSpace root directly.
-        // This is sufficient for v1.0 since processes typically only have one CSpace.
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
 
-        let cnode_cdt = &mut *(cspace_root as *mut CNodeCdt);
+        // ✅ seL4-style implementation: Lookup CNode capability with proper validation
+        // 1. Lookup the CNode capability from caller's CSpace
+        let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
+            Some(cap) => cap,
+            None => {
+                ksyscall_debug!("[syscall] cap_revoke: CNode capability not found at slot {}", cnode_cap);
+                return u64::MAX;
+            }
+        };
 
-        // Revoke the capability at the specified slot
-        match cnode_cdt.revoke(slot as usize) {
+        // 2. Verify it's a CNode capability
+        if cnode_capability.cap_type() != CapType::CNode {
+            ksyscall_debug!("[syscall] cap_revoke: slot {} is not a CNode (type={:?})",
+                          cnode_cap, cnode_capability.cap_type());
+            return u64::MAX;
+        }
+
+        // 3. Verify WRITE rights on the CNode
+        if !cnode_capability.rights().contains(CapRights::WRITE) {
+            ksyscall_debug!("[syscall] cap_revoke: insufficient rights on CNode (need WRITE)");
+            return u64::MAX;
+        }
+
+        // 4. Get the target CNode object and perform revocation
+        let target_cnode = &mut *(cnode_capability.object_ptr() as *mut CNodeCdt);
+
+        // Revoke the capability at the specified slot in the TARGET CNode
+        match target_cnode.revoke(slot as usize) {
             Ok(()) => {
                 ksyscall_debug!("[syscall] cap_revoke: ✓ revoked slot {} and all descendants", slot);
                 0
