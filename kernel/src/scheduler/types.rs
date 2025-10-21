@@ -110,10 +110,12 @@ impl Scheduler {
         }
     }
 
-    /// Pick the next thread to run
+    /// Pick the next thread to run (strict priority-preemptive)
     ///
     /// Returns the highest-priority runnable thread, or the idle thread
     /// if no threads are ready.
+    ///
+    /// Used for timer-based preemption to enforce strict priority order.
     pub unsafe fn schedule(&mut self) -> *mut TCB {
         // Debug: show what's available to schedule (commented out to reduce noise)
         // crate::kprintln!("[sched] schedule: looking for next thread");
@@ -134,6 +136,60 @@ impl Scheduler {
         }
 
         crate::ksched_debug!("[sched] schedule: no ready threads, returning idle TCB 0");
+        // No runnable threads, return idle
+        self.idle
+    }
+
+    /// Pick the next thread to run with fair round-robin across all priorities
+    ///
+    /// This provides cooperative multitasking fairness when threads explicitly yield.
+    /// The strategy:
+    /// 1. First try round-robin at current priority (same-priority fairness)
+    /// 2. Then check higher priorities (preemption by higher priority)
+    /// 3. Finally scan lower priorities (allow progress even if lower priority)
+    ///
+    /// This ensures that yield_now() actually allows ALL threads to make progress,
+    /// not just higher-priority ones.
+    ///
+    /// # Arguments
+    /// * `current_priority` - Priority of the thread that is yielding
+    pub unsafe fn schedule_fair(&mut self, current_priority: u8) -> *mut TCB {
+        // Step 1: Try same priority first (true round-robin at this level)
+        if !self.ready_queues[current_priority as usize].is_empty() {
+            if let Some(tcb) = self.ready_queues[current_priority as usize].dequeue_head() {
+                if self.ready_queues[current_priority as usize].is_empty() {
+                    self.clear_priority_bit(current_priority);
+                }
+                return tcb;
+            }
+        }
+
+        // Step 2: Check higher priority (0 to current_priority - 1)
+        // Higher priority should still preempt even on yield
+        for priority in 0..current_priority {
+            if !self.ready_queues[priority as usize].is_empty() {
+                if let Some(tcb) = self.ready_queues[priority as usize].dequeue_head() {
+                    if self.ready_queues[priority as usize].is_empty() {
+                        self.clear_priority_bit(priority);
+                    }
+                    return tcb;
+                }
+            }
+        }
+
+        // Step 3: Check lower priorities (current_priority + 1 to 255)
+        // This is the KEY difference - allow lower priority threads to run when yielding
+        for priority in (current_priority + 1)..=255 {
+            if !self.ready_queues[priority as usize].is_empty() {
+                if let Some(tcb) = self.ready_queues[priority as usize].dequeue_head() {
+                    if self.ready_queues[priority as usize].is_empty() {
+                        self.clear_priority_bit(priority);
+                    }
+                    return tcb;
+                }
+            }
+        }
+
         // No runnable threads, return idle
         self.idle
     }

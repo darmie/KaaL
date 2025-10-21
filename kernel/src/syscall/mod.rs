@@ -305,19 +305,30 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
     unsafe {
         let current = crate::scheduler::current_thread();
         if current.is_null() {
-            return u64::MAX; // Error: no current thread
+            // No current thread - use strict priority scheduling as fallback
+            let next = crate::scheduler::schedule();
+            if !next.is_null() {
+                (*next).set_state(crate::objects::ThreadState::Running);
+                crate::scheduler::test_set_current_thread(next);
+                *tf = *(*next).context();
+            }
+            return 0;
         }
 
         // Save current thread's full context to its TCB
         // The TrapFrame passed to us contains the saved userspace registers
         *(*current).context_mut() = *tf;
 
+        // Get current thread's priority for fair scheduling
+        let current_priority = (*current).priority();
+
         // Mark current thread as runnable and re-enqueue
         (*current).set_state(crate::objects::ThreadState::Runnable);
         crate::scheduler::enqueue(current);
 
-        // Pick next thread
-        let next = crate::scheduler::schedule();
+        // Pick next thread using FAIR scheduler
+        // This allows lower-priority threads to run when higher-priority threads yield
+        let next = crate::scheduler::schedule_fair(current_priority);
         if next.is_null() {
             // No threads available - this shouldn't happen with idle thread
             (*current).set_state(crate::objects::ThreadState::Running);
@@ -327,11 +338,11 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         if next == current {
             // Scheduler picked the same thread because:
             // - We just enqueued current
-            // - schedule() immediately dequeued it (was head of queue)
-            // - This means current was the ONLY thread at its priority
+            // - schedule_fair() immediately dequeued it (was head of queue)
+            // - This means current was the ONLY runnable thread across ALL priorities
             // Keep it running, no context switch needed
             (*current).set_state(crate::objects::ThreadState::Running);
-            // NOTE: thread is NO LONGER in queue after schedule() dequeued it
+            // NOTE: thread is NO LONGER in queue after schedule_fair() dequeued it
             // This is correct - running thread shouldn't be in ready queue
             return 0;
         }
