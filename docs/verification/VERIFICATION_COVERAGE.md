@@ -1,7 +1,7 @@
 # Verification Coverage
 
 **Last Updated**: 2025-10-21
-**Status**: 20 modules, 364 verified items, 0 errors
+**Status**: 20 modules, 358 verified items, 0 errors
 
 ---
 
@@ -13,18 +13,18 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 
 | Category | Modules | Verified Items | Status |
 |----------|---------|----------------|--------|
-| **Memory Management** | 9 | 145 | ✅ Complete |
+| **Memory Management** | 9 | 139 | ✅ Complete |
 | **Capability System** | 5 | 96 | ✅ Complete |
 | **Scheduling & IPC** | 4 | 77 | ✅ Complete |
 | **System Invocations** | 1 | 40 | ✅ Complete |
 | **Page Tables** | 1 | 6 | ✅ Complete |
-| **TOTAL** | **20** | **364** | **✅ All Pass** |
+| **TOTAL** | **20** | **358** | **✅ All Pass** |
 
 ---
 
 ## Verified Modules
 
-### 1. Memory Management (145 items)
+### 1. Memory Management (139 items)
 
 #### Physical/Virtual Addresses
 - **[phys_addr.rs](../../kernel/src/verified/phys_addr.rs)** - 10 items
@@ -70,7 +70,7 @@ The KaaL microkernel has **17 verified modules** covering core memory management
   - Verification: frame conditions, bit operation axioms
 
 #### TLB Management
-- **[tlb_ops.rs](../../kernel/src/verified/tlb_ops.rs)** - 29 items
+- **[tlb_ops.rs](../../kernel/src/verified/tlb_ops.rs)** - 23 items
   - TLB invalidation by VA, ASID, or all entries
   - ASID allocation and validation (8-bit, 0-255)
   - Context switch TLB handling

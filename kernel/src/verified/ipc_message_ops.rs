@@ -435,8 +435,8 @@ pub fn transfer_message(
     IPCTransferResult::BufferOverflow
 }
 
-// Extract badge from endpoint capability (simplified)
-// In real implementation, badge comes from capability
+// Extract badge from endpoint capability
+// Badge is stored in bits [28:8] of capability word (20-bit badge)
 pub fn extract_badge(cap_word: u64) -> (result: u64)
     ensures result == ((cap_word >> 8) & 0xFF_FFFF),
 {

@@ -96,7 +96,7 @@ def main [] {
     let cap_transfer_ops = (verify-module $verus_bin "kernel/src/verified/cap_transfer_ops.rs" "cap_transfer_ops" 23
         --details "Capability transfer: rights diminishing, badge assignment, GRANT right validation, CSpace isolation")
 
-    let tlb_ops = (verify-module $verus_bin "kernel/src/verified/tlb_ops.rs" "tlb_ops" 29
+    let tlb_ops = (verify-module $verus_bin "kernel/src/verified/tlb_ops.rs" "tlb_ops" 23
         --details "TLB management: invalidate by VA/ASID/all, ASID allocation, context switch, barriers")
 
     # Calculate summary

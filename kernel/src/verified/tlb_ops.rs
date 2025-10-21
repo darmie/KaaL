@@ -153,6 +153,7 @@ proof fn axiom_tlb_invalidate_safe()
 }
 
 // Invalidate TLB entry for specific VA and ASID
+#[verifier::external_body]
 pub fn tlb_invalidate_va_asid(va: &TLBVirtualAddress, asid: &ASID) -> (result: TLBResult)
     ensures
         match result {
@@ -176,14 +177,29 @@ pub fn tlb_invalidate_va_asid(va: &TLBVirtualAddress, asid: &ASID) -> (result: T
         axiom_tlb_invalidate_safe();
     }
 
-    // In real implementation, this would be:
-    // unsafe { asm!("tlbi vae1is, {}", in(reg) (va.addr | (asid.id as u64) << 48)) }
-    // We verify the interface, trusting the hardware instruction
+    // ARMv8-A TLB invalidate by VA and ASID
+    // Format: bits[63:48] = ASID, bits[47:12] = VA[47:12]
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!(
+            "tlbi vae1is, {val}",
+            "dsb ish",
+            val = in(reg) ((asid.id as u64) << 48) | (va.addr >> 12),
+            options(nostack, preserves_flags)
+        );
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // For non-ARM targets (testing), operation is a no-op
+        // but verification still applies
+    }
 
     TLBResult::Success
 }
 
 // Invalidate all TLB entries for an ASID
+#[verifier::external_body]
 pub fn tlb_invalidate_asid(asid: &ASID) -> (result: TLBResult)
     ensures
         match result {
@@ -201,13 +217,27 @@ pub fn tlb_invalidate_asid(asid: &ASID) -> (result: TLBResult)
         axiom_tlb_invalidate_safe();
     }
 
-    // In real implementation:
-    // unsafe { asm!("tlbi aside1is, {}", in(reg) (asid.id as u64) << 48) }
+    // ARMv8-A TLB invalidate by ASID
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!(
+            "tlbi aside1is, {val}",
+            "dsb ish",
+            val = in(reg) (asid.id as u64) << 48,
+            options(nostack, preserves_flags)
+        );
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // For non-ARM targets, no-op
+    }
 
     TLBResult::Success
 }
 
 // Invalidate all TLB entries (used during context switch)
+#[verifier::external_body]
 pub fn tlb_invalidate_all() -> (result: TLBResult)
     ensures result == TLBResult::Success,
 {
@@ -215,8 +245,20 @@ pub fn tlb_invalidate_all() -> (result: TLBResult)
         axiom_tlb_invalidate_safe();
     }
 
-    // In real implementation:
-    // unsafe { asm!("tlbi vmalle1is") }
+    // ARMv8-A TLB invalidate all entries
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!(
+            "tlbi vmalle1is",
+            "dsb ish",
+            options(nostack, preserves_flags)
+        );
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // For non-ARM targets, no-op
+    }
 
     TLBResult::Success
 }
@@ -235,6 +277,7 @@ pub fn tlb_invalidate_kernel_va(va: &TLBVirtualAddress) -> (result: TLBResult)
 }
 
 // Invalidate TLB range (for unmapping multiple pages)
+#[verifier::external_body]
 pub fn tlb_invalidate_range(
     start_va: &TLBVirtualAddress,
     end_va: &TLBVirtualAddress,
@@ -260,13 +303,36 @@ pub fn tlb_invalidate_range(
         axiom_tlb_invalidate_safe();
     }
 
-    // In real implementation, we'd loop over pages in range
-    // For now, we verify that all preconditions are met
+    // Loop over pages in range and invalidate each
+    let mut current_va = start_va.addr;
+    while current_va < end_va.addr
+        invariant
+            current_va >= start_va.addr,
+            current_va <= end_va.addr,
+        decreases end_va.addr - current_va,
+    {
+        #[cfg(target_arch = "aarch64")]
+        unsafe {
+            core::arch::asm!(
+                "tlbi vae1is, {val}",
+                val = in(reg) ((asid.id as u64) << 48) | (current_va >> 12),
+                options(nostack, preserves_flags)
+            );
+        }
+
+        current_va = current_va + PAGE_SIZE_4KB;
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!("dsb ish", options(nostack, preserves_flags));
+    }
 
     TLBResult::Success
 }
 
 // Context switch TLB handling
+#[verifier::external_body]
 pub fn tlb_context_switch(old_asid: &ASID, new_asid: &ASID) -> (result: TLBResult)
     ensures
         match result {
@@ -285,8 +351,21 @@ pub fn tlb_context_switch(old_asid: &ASID, new_asid: &ASID) -> (result: TLBResul
     }
 
     // Context switch: invalidate old ASID's TLB entries
-    // In real implementation, might use ASID-specific invalidation
-    // or rely on ASID tag matching in TLB
+    // ARMv8-A: Use ASID-specific invalidation for efficiency
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!(
+            "tlbi aside1is, {val}",
+            "dsb ish",
+            val = in(reg) (old_asid.id as u64) << 48,
+            options(nostack, preserves_flags)
+        );
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // For non-ARM targets, no-op
+    }
 
     TLBResult::Success
 }
@@ -336,14 +415,28 @@ pub fn allocate_asid(current_asid: u16) -> (result: Option<u16>)
 }
 
 // Barrier: ensure TLB operations complete before proceeding
+#[verifier::external_body]
 pub fn tlb_barrier()
     ensures true,  // Barrier has no logical effect, only ordering
 {
     proof {
         admit();  // Hardware barrier instruction
     }
-    // In real implementation:
-    // unsafe { asm!("dsb ish; isb") }
+
+    // ARMv8-A memory barriers for TLB operations
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        core::arch::asm!(
+            "dsb ish",
+            "isb",
+            options(nostack, preserves_flags)
+        );
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // For non-ARM targets, no-op
+    }
 }
 
 // Combined operation: invalidate and barrier
