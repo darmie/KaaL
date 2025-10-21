@@ -130,7 +130,7 @@ impl CNodeCdt {
     /// Returns None if the index is out of bounds or the slot is empty.
     pub fn lookup(&self, index: usize) -> Option<&Capability> {
         self.lookup_node(index).map(|node_ptr| unsafe {
-            &(*node_ptr).capability()
+            &(*node_ptr).capability
         })
     }
 
@@ -172,7 +172,7 @@ impl CNodeCdt {
 
         // Allocate CDT node
         let node_ptr = alloc_cdt_node()
-            .ok_or(CapError::OutOfMemory)?;
+            .ok_or(CapError::InsufficientMemory)?;
 
         // Initialize the node as a root (no parent)
         unsafe {

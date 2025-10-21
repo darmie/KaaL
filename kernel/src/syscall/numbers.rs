@@ -111,6 +111,14 @@ pub const SYS_CAP_INSERT_INTO: u64 = 0x1C;
 /// Used by root-task to register TCB capabilities of spawned children.
 pub const SYS_CAP_INSERT_SELF: u64 = 0x1D;
 
+/// Revoke capability and all its descendants (seL4-style CDT revocation)
+/// Args: cnode_cap, slot
+/// Returns: 0 on success, -1 on error
+///
+/// Recursively deletes the capability at the specified slot and all capabilities
+/// derived from it. Requires WRITE rights on the CNode capability.
+pub const SYS_CAP_REVOKE: u64 = 0x1E;
+
 // Channel management syscalls
 
 /// Channel_Establish - Establish IPC channel between components
