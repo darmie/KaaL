@@ -123,7 +123,7 @@ impl UntypedMemory {
 
         // Check alignment: paddr must be aligned to 2^size_bits
         let size = 1usize << size_bits;
-        if paddr.as_u64() as usize % size != 0 {
+        if !(paddr.as_u64() as usize).is_multiple_of(size) {
             return Err(CapError::InvalidArgument);
         }
 

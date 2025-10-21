@@ -55,7 +55,7 @@ pub fn test_capability_rights() -> bool {
 // ========================================================================
 
 pub fn test_cnode_creation() -> bool {
-    let mut memory = [Capability::null(); 16];
+    let memory = [Capability::null(); 16];
     let paddr = PhysAddr::new(&memory[0] as *const _ as usize);
 
     unsafe {
@@ -67,7 +67,7 @@ pub fn test_cnode_creation() -> bool {
 }
 
 pub fn test_cnode_insert_lookup() -> bool {
-    let mut memory = [Capability::null(); 16];
+    let memory = [Capability::null(); 16];
     let paddr = PhysAddr::new(&memory[0] as *const _ as usize);
 
     unsafe {
@@ -90,7 +90,7 @@ pub fn test_cnode_insert_lookup() -> bool {
 }
 
 pub fn test_cnode_copy_move() -> bool {
-    let mut memory = [Capability::null(); 16];
+    let memory = [Capability::null(); 16];
     let paddr = PhysAddr::new(&memory[0] as *const _ as usize);
 
     unsafe {

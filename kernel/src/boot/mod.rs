@@ -7,7 +7,6 @@
 //! 4. Setting up memory regions
 
 use core::arch::asm;
-use crate::memory::VirtAddr;
 
 pub mod dtb;
 pub mod bootinfo;
@@ -115,7 +114,7 @@ pub fn kernel_entry() -> ! {
             const CDT_POOL_SIZE: usize = 4 * 1024 * 1024; // 4MB
 
             // Allocate physical frames for CDT pool
-            let num_frames = (CDT_POOL_SIZE + crate::memory::PAGE_SIZE - 1) / crate::memory::PAGE_SIZE;
+            let num_frames = CDT_POOL_SIZE.div_ceil(crate::memory::PAGE_SIZE);
             let base_frame = crate::memory::alloc_frame()
                 .expect("Failed to allocate CDT allocator base frame");
             let base_addr = base_frame.phys_addr().as_usize();

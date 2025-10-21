@@ -62,7 +62,7 @@ static mut SHMEM_REGISTRY: [ShmemEntry; 16] = [ShmemEntry::new(); 16];
 /// - capability not found in CSpace
 /// - capability is not an Endpoint type
 unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
-    use crate::objects::{CNode, CapType};
+    use crate::objects::CapType;
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -472,7 +472,7 @@ fn sys_memory_allocate(size: u64) -> u64 {
     }
 
     let page_size = PAGE_SIZE as u64;
-    let pages_needed = ((size + page_size - 1) / page_size) as usize;
+    let pages_needed = size.div_ceil(page_size) as usize;
 
     // Allocate the first frame
     let first_pfn = match alloc_frame() {
@@ -514,7 +514,9 @@ fn sys_memory_allocate(size: u64) -> u64 {
 fn sys_device_request(device_id: u64) -> u64 {
     use crate::generated::memory_config::*;
 
-    let mmio_base = match device_id {
+    
+
+    match device_id {
         DEVICE_UART0 => UART0_BASE,
         DEVICE_UART1 => UART1_BASE,
         DEVICE_RTC => RTC_BASE,
@@ -523,9 +525,7 @@ fn sys_device_request(device_id: u64) -> u64 {
             ksyscall_debug!("[syscall] device_request: unknown device {}", device_id);
             return u64::MAX; // Error: unknown device
         }
-    };
-
-    mmio_base
+    }
 }
 
 /// Create IPC endpoint
@@ -706,7 +706,7 @@ fn sys_process_create(
         entry_point, code_phys, code_vaddr, code_size);
 
     let code_virt_base = code_vaddr as usize;
-    let code_pages = ((code_size as usize) + PAGE_SIZE - 1) / PAGE_SIZE;
+    let code_pages = (code_size as usize).div_ceil(PAGE_SIZE);
 
     ksyscall_debug!("[syscall] process_create: mapping {} code pages at virt={:#x} -> phys={:#x}",
         code_pages, code_virt_base, code_phys);
@@ -879,7 +879,7 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
-    let num_pages = ((size + page_size - 1) / page_size) as usize;
+    let num_pages = size.div_ceil(page_size) as usize;
     let aligned_size = num_pages as u64 * page_size;
 
     // Get caller's page table from TrapFrame (saved during exception entry)
@@ -971,7 +971,7 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
-    let num_pages = ((size + page_size - 1) / page_size) as usize;
+    let num_pages = size.div_ceil(page_size) as usize;
 
     // Get caller's page table from current TCB
 
@@ -1021,14 +1021,14 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr: u64, permissions: u64) -> u64 {
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
-    use crate::objects::{CNode, CapType};
+    use crate::objects::CapType;
 
     crate::kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, virt={:#x}, perms={:#x}",
               target_tcb_cap, phys_addr, size, virt_addr, permissions);
 
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
-    let num_pages = ((size + page_size - 1) / page_size) as usize;
+    let num_pages = size.div_ceil(page_size) as usize;
     let aligned_size = num_pages as u64 * page_size;
 
     // Look up target TCB capability from caller's CSpace
@@ -1134,7 +1134,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr
 /// TCB capability for the target process. This is used to pass notification
 /// capabilities and other resources to spawned components.
 fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
-    use crate::objects::{CNode, Capability, CapType};
+    use crate::objects::{Capability, CapType};
 
     ksyscall_debug!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
               target_tcb_cap, target_slot, cap_type, object_ptr);
@@ -1510,7 +1510,7 @@ fn sys_cap_mint(cnode_cap: u64, src_slot: u64, dest_slot: u64, badge: u64) -> u6
 /// # Returns
 /// 0 on success, u64::MAX on error
 fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
-    use crate::objects::{CNode, Capability, CapType};
+    use crate::objects::{Capability, CapType};
 
     crate::kprintln!("[syscall] cap_insert_self: slot={}, type={}, obj={:#x}",
               cap_slot, cap_type, object_ptr);
@@ -1884,7 +1884,7 @@ fn sys_notification_create() -> u64 {
 
 /// Insert a notification capability into the current thread's CSpace
 unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Notification) -> bool {
-    use crate::objects::{CNode, Capability, CapType};
+    use crate::objects::{Capability, CapType};
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -1918,7 +1918,7 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
 
 /// Look up a notification capability from the current thread's CSpace
 unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
-    use crate::objects::{CNode, CapType, Notification};
+    use crate::objects::{CapType, Notification};
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -2142,8 +2142,8 @@ fn sys_shmem_query(tf: &TrapFrame, name_ptr: u64, name_len: u64) -> u64 {
     // Search for matching entry
     unsafe {
         for entry in SHMEM_REGISTRY.iter() {
-            if entry.valid && entry.name_len == name_len as usize {
-                if &entry.name[..entry.name_len] == &name_buf[..name_len as usize] {
+            if entry.valid && entry.name_len == name_len as usize
+                && entry.name[..entry.name_len] == name_buf[..name_len as usize] {
                     // Found it - return phys_addr in lower 32 bits, size in upper 32 bits
                     // Actually, let's just return phys_addr and use a separate syscall for size
                     kprintln!("[syscall] shmem_query: found '{}' at phys={:#x}, size={:#x}",
@@ -2151,7 +2151,6 @@ fn sys_shmem_query(tf: &TrapFrame, name_ptr: u64, name_len: u64) -> u64 {
                              entry.phys_addr, entry.size);
                     return entry.phys_addr as u64;
                 }
-            }
         }
     }
 

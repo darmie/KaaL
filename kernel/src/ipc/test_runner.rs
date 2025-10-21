@@ -174,7 +174,7 @@ unsafe fn get_test_tcb(index: usize) -> *mut TCB {
 
 pub fn test_message_creation() -> bool {
     let msg = Message::with_label(0x1234);
-    msg.label() == 0x1234 && msg.len() == 0
+    msg.label() == 0x1234 && msg.is_empty()
 }
 
 pub fn test_message_set_reg() -> bool {

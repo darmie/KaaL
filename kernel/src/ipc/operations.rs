@@ -31,7 +31,6 @@
 //! ```
 
 use super::message::{Message, IpcBuffer, IpcError, FAST_PATH_REGS, MAX_CAPS};
-use super::cap_transfer::{TransferMode, transfer_capabilities, encode_transfer_mode, decode_transfer_mode};
 use crate::objects::{Capability, CapType, CapRights, TCB, Endpoint, ThreadState};
 
 /// Send a message to an endpoint (blocking)

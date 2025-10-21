@@ -54,7 +54,7 @@ impl TcrFlags {
 
     /// Convert to TCR_EL1 register value
     pub const fn to_register(&self) -> u64 {
-        (self.t0sz << 0)       // T0SZ [5:0]
+        self.t0sz       // T0SZ [5:0]
             | (self.t1sz << 16)    // T1SZ [21:16]
             | (self.tg0 << 14)     // TG0 [15:14]
             | (self.tg1 << 30)     // TG1 [31:30]
@@ -85,7 +85,7 @@ pub struct MmuConfig {
 pub unsafe fn init_mmu(config: MmuConfig) {
     // Setup MAIR_EL1 (Memory Attribute Indirection Register)
     let mair_value =
-        (MemoryAttribute::Normal as u64) << 0 |   // Attr0: Normal memory
+        ((MemoryAttribute::Normal as u64)) |   // Attr0: Normal memory
         (MemoryAttribute::Device as u64) << 8;    // Attr1: Device memory
 
     asm!(
@@ -147,7 +147,7 @@ pub unsafe fn init_mmu(config: MmuConfig) {
     sctlr &= !(1 << 12);  // Clear I bit (instruction cache)
 
     // Now enable ONLY the MMU
-    sctlr |= (1 << 0);    // Set M bit (MMU enable)
+    sctlr |= 1 << 0;    // Set M bit (MMU enable)
 
     asm!(
         "msr sctlr_el1, {sctlr}",

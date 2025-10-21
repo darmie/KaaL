@@ -12,8 +12,6 @@
 use linked_list_allocator::LockedHeap;
 
 extern crate alloc;
-use alloc::vec::Vec;
-use alloc::boxed::Box;
 
 #[path = "../generated/memory_config.rs"]
 mod memory_config;

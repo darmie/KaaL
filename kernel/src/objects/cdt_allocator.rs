@@ -15,7 +15,7 @@
 //! - Capacity: Configurable at init (default: 4096 nodes = 224 KB)
 
 use super::cdt::CapNode;
-use crate::memory::{PhysAddr, PageFrameNumber};
+use crate::memory::PhysAddr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// CDT allocator configuration

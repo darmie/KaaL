@@ -59,7 +59,7 @@ impl CNode {
     /// - Memory at `paddr` must be valid and large enough for 2^size_bits capabilities
     /// - Memory must remain valid for the lifetime of the CNode
     pub unsafe fn new(size_bits: u8, paddr: PhysAddr) -> Result<Self, CapError> {
-        if size_bits < Self::MIN_SIZE_BITS || size_bits > Self::MAX_SIZE_BITS {
+        if !(Self::MIN_SIZE_BITS..=Self::MAX_SIZE_BITS).contains(&size_bits) {
             return Err(CapError::InvalidOperation);
         }
 
@@ -304,7 +304,7 @@ impl CNode {
     }
 
     /// Iterate over all capabilities in this CNode
-    pub fn iter(&self) -> CNodeIterator {
+    pub fn iter(&self) -> CNodeIterator<'_> {
         CNodeIterator {
             cnode: self,
             index: 0,
@@ -315,12 +315,7 @@ impl CNode {
     ///
     /// Returns None if all slots are occupied.
     pub fn find_empty(&self) -> Option<usize> {
-        for i in 0..self.num_slots() {
-            if self.is_empty(i) {
-                return Some(i);
-            }
-        }
-        None
+        (0..self.num_slots()).find(|&i| self.is_empty(i))
     }
 }
 

@@ -73,7 +73,7 @@ impl PhysAddr {
     /// With `--features verification`, formally verified to return true iff
     /// address is evenly divisible by alignment.
     pub const fn is_aligned(self, align: usize) -> bool {
-        self.0 % align == 0
+        self.0.is_multiple_of(align)
     }
 
     /// Align address down to the given alignment
@@ -193,7 +193,7 @@ impl VirtAddr {
 
     /// Check if address is page-aligned (4KB)
     pub const fn is_aligned(self, align: usize) -> bool {
-        self.0 % align == 0
+        self.0.is_multiple_of(align)
     }
 
     /// Align address down to the given alignment

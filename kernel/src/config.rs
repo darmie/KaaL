@@ -3,7 +3,7 @@
 //! This module handles compile-time kernel configuration and component
 //! composition based on cargo features.
 
-use crate::components::console::{Console, pl011::{Pl011Console, Pl011Config}, null::{NullConsole, NullConfig}};
+use crate::components::console::{Console, pl011::{Pl011Console, Pl011Config}};
 
 /// Console component selection (compile-time)
 ///

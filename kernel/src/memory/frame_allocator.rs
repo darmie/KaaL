@@ -90,7 +90,7 @@ impl FrameAllocator {
     pub fn reserve_region(&mut self, start: PhysAddr, size: usize) {
         // Convert to frame numbers relative to ram_base
         let start_frame = (start.as_usize() - self.ram_base) / PAGE_SIZE;
-        let num_frames = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+        let num_frames = size.div_ceil(PAGE_SIZE);
         let end_frame = start_frame + num_frames;
 
         for frame in start_frame..end_frame {

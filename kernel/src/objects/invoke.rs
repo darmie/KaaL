@@ -60,7 +60,6 @@
 //! ```
 
 use super::{Capability, CapType, CapRights, CapError, TCB, CNode, Endpoint, UntypedMemory};
-use crate::memory::PhysAddr;
 
 /// Invocation arguments passed from syscall
 #[derive(Debug, Clone)]

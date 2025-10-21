@@ -4,7 +4,6 @@
 
 use crate::objects::TCB;
 use core::ptr;
-use crate::ksched_debug;
 
 /// Number of priority levels (0 = highest, 255 = lowest)
 pub const NUM_PRIORITIES: usize = 256;

@@ -42,8 +42,6 @@
 //! ```
 
 use crate::objects::TCB;
-use core::ptr;
-use crate::ksched_debug;
 
 mod types;
 pub mod timer;

@@ -19,8 +19,6 @@
 //! - Printing kernel banner
 
 #![no_std]
-#![feature(naked_functions)]
-#![feature(asm_const)]
 #![feature(alloc_error_handler)]
 
 // Enable the alloc crate for heap allocation

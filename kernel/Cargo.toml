@@ -49,3 +49,6 @@ console-null = []   # No console output (production builds)
 
 # Testing support
 testing = []  # Enable test functions for unit testing
+
+# Verification support (for formal verification builds)
+verification = []

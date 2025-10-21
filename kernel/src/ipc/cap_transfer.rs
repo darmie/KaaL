@@ -100,11 +100,11 @@ pub unsafe fn grant_capability(
     // Copy capability to receiver
     let cap_copy = *cap;
     (*receiver_cspace).insert(dest_slot, cap_copy)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     // Delete from sender (grant = move)
     (*sender_cspace).delete(src_slot)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     Ok(())
 }
@@ -153,11 +153,11 @@ pub unsafe fn mint_capability(
 
     // Mint badged capability
     let badged_cap = cap.mint(badge)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     // Insert into receiver's CSpace
     (*receiver_cspace).insert(dest_slot, badged_cap)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     Ok(())
 }
@@ -205,11 +205,11 @@ pub unsafe fn derive_capability(
 
     // Derive capability with reduced rights
     let derived_cap = cap.derive(new_rights)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     // Insert into receiver's CSpace
     (*receiver_cspace).insert(dest_slot, derived_cap)
-        .map_err(|e| IpcError::CapError(e))?;
+        .map_err(IpcError::CapError)?;
 
     Ok(())
 }

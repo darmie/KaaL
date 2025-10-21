@@ -141,6 +141,12 @@ impl Bitmap {
 
 // ==== NON-VERIFIED IMPLEMENTATION (default) ====
 #[cfg(not(feature = "verification"))]
+impl Default for Bitmap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bitmap {
     pub const fn new() -> Self {
         Bitmap { chunks: [0u64; CHUNKS] }
@@ -168,10 +174,7 @@ impl Bitmap {
     }
 
     pub fn find_first_unset(&self, max: usize) -> Option<usize> {
-        for idx in 0..max {
-            if !self.is_set(idx) { return Some(idx); }
-        }
-        None
+        (0..max).find(|&idx| !self.is_set(idx))
     }
 }
 

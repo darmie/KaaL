@@ -53,7 +53,7 @@ impl CNodeCdt {
     /// - Memory must remain valid for the lifetime of the CNode
     /// - Each slot needs 8 bytes (pointer size)
     pub unsafe fn new(size_bits: u8, paddr: PhysAddr) -> Result<Self, CapError> {
-        if size_bits < Self::MIN_SIZE_BITS || size_bits > Self::MAX_SIZE_BITS {
+        if !(Self::MIN_SIZE_BITS..=Self::MAX_SIZE_BITS).contains(&size_bits) {
             return Err(CapError::InvalidOperation);
         }
 

@@ -8,9 +8,9 @@
 //! - Support for different page sizes (4KB, 2MB, 1GB)
 
 use crate::arch::aarch64::page_table::{
-    PageTable, PageTableEntry, PageTableFlags, PageTableLevel, ENTRIES_PER_TABLE,
+    PageTable, PageTableFlags, PageTableLevel,
 };
-use crate::memory::{PhysAddr, VirtAddr, PageFrameNumber, alloc_frame, dealloc_frame};
+use crate::memory::{PhysAddr, VirtAddr, alloc_frame};
 use crate::memory::{PAGE_SIZE, LARGE_PAGE_SIZE, HUGE_PAGE_SIZE};
 
 /// Page mapping error
@@ -344,11 +344,11 @@ pub fn identity_map_region(
         let paddr = PhysAddr::new(addr);
 
         // Try to use large pages when possible
-        if addr % HUGE_PAGE_SIZE == 0 && (end - addr) >= HUGE_PAGE_SIZE {
+        if addr.is_multiple_of(HUGE_PAGE_SIZE) && (end - addr) >= HUGE_PAGE_SIZE {
             // Use 1GB page
             mapper.map(vaddr, paddr, flags, PageSize::Size1GB)?;
             addr += HUGE_PAGE_SIZE;
-        } else if addr % LARGE_PAGE_SIZE == 0 && (end - addr) >= LARGE_PAGE_SIZE {
+        } else if addr.is_multiple_of(LARGE_PAGE_SIZE) && (end - addr) >= LARGE_PAGE_SIZE {
             // Use 2MB page
             mapper.map(vaddr, paddr, flags, PageSize::Size2MB)?;
             addr += LARGE_PAGE_SIZE;

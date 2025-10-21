@@ -6,10 +6,9 @@
 //! - Query channel information
 //! - Close channels
 
-use crate::objects::{TCB, Capability, CapType};
-use crate::memory::{PhysAddr, VirtAddr, alloc_frame};
+use crate::memory::alloc_frame;
 use crate::arch::aarch64::context::TrapFrame;
-use crate::{kprintln, ksyscall_debug};
+use crate::ksyscall_debug;
 
 /// Establish an IPC channel between two components
 ///
