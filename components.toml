@@ -147,7 +147,7 @@ name = "test_cap_revoke"
 binary = "test-cap-revoke"
 type = "service"
 priority = 56  # Run after test_minimal
-autostart = false  # Can be enabled for testing
+autostart = true  # ← ENABLED FOR TESTING
 spawned_by = "system_init"  # Delegation enabled
 capabilities = [
     "caps:allocate",  # Needs CAP_CAPS to test revocation
