@@ -16,30 +16,37 @@ pub struct ComponentDescriptor {
 pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "ipc_producer",
-        priority: 60,
+        priority: 100,
         autostart: true,
         capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer"),
     },
     ComponentDescriptor {
         name: "ipc_consumer",
-        priority: 60,
+        priority: 100,
         autostart: true,
         capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer"),
     },
     ComponentDescriptor {
         name: "test_minimal",
-        priority: 55,
+        priority: 200,
         autostart: false,
         capabilities_bitmask: 0,
         binary_data: include_bytes!("../../../../components/test-minimal/target/aarch64-unknown-none/release/test-minimal"),
     },
     ComponentDescriptor {
         name: "test_cap_revoke",
-        priority: 56,
+        priority: 200,
         autostart: true,
         capabilities_bitmask: 8,
         binary_data: include_bytes!("../../../../components/test-cap-revoke/target/aarch64-unknown-none/release/test-cap-revoke"),
+    },
+    ComponentDescriptor {
+        name: "test_memory",
+        priority: 200,
+        autostart: true,
+        capabilities_bitmask: 1,
+        binary_data: include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory"),
     },
 ];

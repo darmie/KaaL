@@ -1,0 +1,71 @@
+══════════════════════════════════════════════════════════
+  KaaL Build System (Modular Nushell)
+══════════════════════════════════════════════════════════
+Platform: QEMU virt (ARM64)
+Target:   aarch64
+
+🔍 Discovered 11 components from components.toml:
+  [✓] system_init
+      Type: service, Priority: 0, Caps: 4
+  [✓] serial_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] timer_driver
+      Type: driver, Priority: 200, Caps: 3
+  [✓] process_manager
+      Type: service, Priority: 150, Caps: 4
+  [ ] vfs_service
+      Type: service, Priority: 100, Caps: 2
+  [ ] ipc_producer
+      Type: service, Priority: 60, Caps: 4
+  [ ] ipc_consumer
+      Type: service, Priority: 60, Caps: 4
+  [ ] test_minimal
+      Type: service, Priority: 55, Caps: 0
+  [ ] test_cap_revoke
+      Type: service, Priority: 60, Caps: 1
+  [ ] test_memory
+      Type: service, Priority: 60, Caps: 2
+  [ ] shell
+      Type: application, Priority: 50, Caps: 3
+
+✓ Component manifest validation passed
+
+Generating component linker scripts...
+  Skipping serial_driver - not a Rust component
+  Skipping timer_driver - not a Rust component
+  Skipping process_manager - not a Rust component
+  Skipping vfs_service - not a Rust component
+  Skipping shell - not a Rust component
+
+Building components (excluding system_init)...
+  → Building ipc_producer...
+  → Building ipc_consumer...
+  → Building test_minimal...
+  → Building test_cap_revoke...
+  → Building test_memory...
+✓ Components built (except system_init)
+
+Generating component registry...
+✓ Generated root-task registry with 11 components
+Generating system_init component registry...
+
+Building system_init (with generated registry)...
+✓ system_init built
+Generating kernel memory configuration...
+
+[1/4] Building kernel...
+Generating kernel linker script...
+     Removed 112 files, 112.3MiB total
+✓ Kernel: 159.7 kB
+
+[2/4] Building root-task...
+Generating root-task memory configuration...
+Generating root-task linker script...
+✓ Root-task: 888.0 kB
+
+[3/4] Creating embeddable objects...
+✓ kernel.o: 160.3 kB
+✓ roottask.o: 888.7 kB
+
+[4/4] Building elfloader...
+     Removed 291 files, 153.3MiB total

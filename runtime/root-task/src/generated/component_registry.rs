@@ -11,7 +11,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "system_init",
         binary: "system-init",
         component_type: ComponentType::Service,
-        priority: 50,
+        priority: 10,
         autostart: true,
         capabilities:     &[
         "process:create",
@@ -82,7 +82,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "ipc_producer",
         binary: "ipc-producer",
         component_type: ComponentType::Service,
-        priority: 60,
+        priority: 100,
         autostart: false,
         capabilities:     &[
         "memory:map",
@@ -97,7 +97,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "ipc_consumer",
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
-        priority: 60,
+        priority: 100,
         autostart: false,
         capabilities:     &[
         "memory:map",
@@ -112,7 +112,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "test_minimal",
         binary: "test-minimal",
         component_type: ComponentType::Service,
-        priority: 55,
+        priority: 200,
         autostart: false,
         capabilities:     &[],
         capabilities_bitmask: 0,
@@ -122,7 +122,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "test_cap_revoke",
         binary: "test-cap-revoke",
         component_type: ComponentType::Service,
-        priority: 56,
+        priority: 200,
         autostart: false,
         capabilities:     &[
         "caps:allocate"
@@ -131,10 +131,23 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: Some(include_bytes!("../../../../components/test-cap-revoke/target/aarch64-unknown-none/release/test-cap-revoke")),
     },
     ComponentDescriptor {
+        name: "test_memory",
+        binary: "test-memory",
+        component_type: ComponentType::Service,
+        priority: 200,
+        autostart: false,
+        capabilities:     &[
+        "memory:allocate",
+        "memory:map"
+    ],
+        capabilities_bitmask: 1,
+        binary_data: Some(include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory")),
+    },
+    ComponentDescriptor {
         name: "shell",
         binary: "shell",
         component_type: ComponentType::Application,
-        priority: 50,
+        priority: 120,
         autostart: false,
         capabilities:     &[
         "ipc:serial",
@@ -157,4 +170,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 10;
+pub const COMPONENT_COUNT: usize = 11;
