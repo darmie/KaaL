@@ -163,6 +163,22 @@ pub const SYS_CAP_DELETE: u64 = 0x22;
 /// Requires WRITE rights on both source and dest CNode capabilities.
 pub const SYS_CAP_MOVE: u64 = 0x23;
 
+/// Change memory protection flags for existing mapping
+/// Args: virtual_addr, size, new_permissions (read=1, write=2, exec=4)
+/// Returns: 0 on success, -1 on error
+///
+/// Updates the protection flags of an already-mapped memory region.
+/// Useful for implementing guard pages, code/data separation, etc.
+pub const SYS_MEMORY_REMAP: u64 = 0x24;
+
+/// Share memory between processes
+/// Args: target_tcb_cap, source_virt_addr, size, dest_virt_addr, permissions
+/// Returns: 0 on success, -1 on error
+///
+/// Maps the same physical pages into another process's address space.
+/// Enables zero-copy shared memory IPC. Requires TCB capability for target process.
+pub const SYS_MEMORY_SHARE: u64 = 0x25;
+
 // Channel management syscalls
 
 /// Channel_Establish - Establish IPC channel between components

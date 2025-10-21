@@ -251,6 +251,8 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         ),
         numbers::SYS_MEMORY_MAP => sys_memory_map(tf, args[0], args[1], args[2]),
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
+        numbers::SYS_MEMORY_REMAP => sys_memory_remap(args[0], args[1], args[2]),
+        numbers::SYS_MEMORY_SHARE => sys_memory_share(args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_INSERT_SELF => sys_cap_insert_self(args[0], args[1], args[2]),
@@ -1005,6 +1007,228 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
 
     ksyscall_debug!("[syscall] memory_unmap -> success ({} pages)", num_pages);
     0
+}
+
+/// Change memory protection flags for existing mapping
+///
+/// Args:
+/// - virt_addr: Virtual address of the region
+/// - size: Size in bytes
+/// - new_permissions: New permission bits (read=1, write=2, exec=4)
+///
+/// Returns: 0 on success, u64::MAX on error
+fn sys_memory_remap(virt_addr: u64, size: u64, new_permissions: u64) -> u64 {
+    use crate::memory::{PAGE_SIZE, VirtAddr, PageSize, PageMapper};
+    use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
+
+    ksyscall_debug!("[syscall] memory_remap: virt={:#x}, size={:#x}, perms={:#x}",
+                   virt_addr, size, new_permissions);
+
+    // Check if caller has memory mapping capability
+    let current_tcb = unsafe { crate::scheduler::current_thread() };
+    if current_tcb.is_null() {
+        ksyscall_debug!("[syscall] memory_remap: no current thread");
+        return u64::MAX;
+    }
+
+    unsafe {
+        if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
+            ksyscall_debug!("[syscall] memory_remap: caller lacks CAP_MEMORY capability");
+            return u64::MAX;
+        }
+    }
+
+    // Round size up to page boundary
+    let page_size = PAGE_SIZE as u64;
+    let num_pages = size.div_ceil(page_size) as usize;
+
+    // Get caller's page table from current TCB
+    let page_table_phys = unsafe { (*current_tcb).vspace_root() };
+    let page_table = page_table_phys as *mut PageTable;
+
+    // Create mapper for caller's page table
+    let mut mapper = unsafe { PageMapper::new(&mut *page_table) };
+
+    // Determine new flags based on permissions
+    let mut flags = PageTableFlags::VALID | PageTableFlags::ACCESSED | PageTableFlags::TABLE_OR_PAGE;
+
+    // Add permission flags
+    if new_permissions & 0x1 != 0 { // Read
+        flags |= PageTableFlags::AP_RW_ALL; // Allow all ELs access
+    }
+    if new_permissions & 0x2 == 0 { // NOT Write (read-only)
+        flags |= PageTableFlags::AP_RO_ALL; // Make read-only
+    }
+    if new_permissions & 0x4 == 0 { // NOT Execute
+        flags |= PageTableFlags::UXN; // User execute never
+        flags |= PageTableFlags::PXN; // Privileged execute never
+    }
+
+    // Add default flags for userspace
+    flags |= PageTableFlags::INNER_SHARE | PageTableFlags::NORMAL | PageTableFlags::NOT_GLOBAL;
+
+    ksyscall_debug!("[syscall] memory_remap: new flags = {:#x}", flags.bits());
+
+    // Remap each page with new permissions
+    // Since PageMapper doesn't have remap(), we unmap and remap
+    for i in 0..num_pages {
+        let virt = VirtAddr::new(virt_addr as usize + (i * PAGE_SIZE));
+
+        // Get physical address before unmapping
+        let phys = match mapper.translate(virt) {
+            Some(paddr) => paddr,
+            None => {
+                ksyscall_debug!("[syscall] memory_remap: page {} not mapped", i);
+                return u64::MAX;
+            }
+        };
+
+        // Unmap the page
+        if let Err(e) = mapper.unmap(virt, PageSize::Size4KB) {
+            ksyscall_debug!("[syscall] memory_remap: failed to unmap page {}: {:?}", i, e);
+            return u64::MAX;
+        }
+
+        // Remap with new permissions
+        if let Err(e) = mapper.map(virt, phys, flags, PageSize::Size4KB) {
+            ksyscall_debug!("[syscall] memory_remap: failed to map page {} with new perms: {:?}", i, e);
+            return u64::MAX;
+        }
+    }
+
+    // Flush TLB to ensure new permissions take effect
+    unsafe {
+        core::arch::asm!(
+            "dsb ishst",           // Ensure page table writes complete
+            "tlbi vmalle1is",      // Invalidate all TLB entries for EL1
+            "dsb ish",             // Ensure TLB invalidation completes
+            "isb",                 // Synchronize context
+        );
+    }
+
+    ksyscall_debug!("[syscall] memory_remap -> success ({} pages)", num_pages);
+    0
+}
+
+/// Share memory between processes
+///
+/// Args:
+/// - target_tcb_cap: Capability slot for target process's TCB
+/// - source_virt_addr: Virtual address in caller's address space
+/// - size: Size in bytes
+/// - dest_virt_addr: Virtual address in target's address space
+/// - permissions: Permission bits for target (read=1, write=2, exec=4)
+///
+/// Returns: 0 on success, u64::MAX on error
+fn sys_memory_share(target_tcb_cap: u64, source_virt_addr: u64, size: u64,
+                    dest_virt_addr: u64, permissions: u64) -> u64 {
+    use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize, PageMapper};
+    use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::CapType;
+
+    ksyscall_debug!("[syscall] memory_share: target_cap={}, src_virt={:#x}, size={:#x}, dest_virt={:#x}, perms={:#x}",
+                   target_tcb_cap, source_virt_addr, size, dest_virt_addr, permissions);
+
+    // Check if caller has memory mapping capability
+    let current_tcb = unsafe { crate::scheduler::current_thread() };
+    if current_tcb.is_null() {
+        ksyscall_debug!("[syscall] memory_share: no current thread");
+        return u64::MAX;
+    }
+
+    unsafe {
+        if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
+            ksyscall_debug!("[syscall] memory_share: caller lacks CAP_MEMORY capability");
+            return u64::MAX;
+        }
+
+        // Lookup target TCB capability
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            ksyscall_debug!("[syscall] memory_share: no CSpace root");
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+        let tcb_capability = match caller_cspace.lookup(target_tcb_cap as usize) {
+            Some(cap) => cap,
+            None => {
+                ksyscall_debug!("[syscall] memory_share: TCB capability not found");
+                return u64::MAX;
+            }
+        };
+
+        // Verify it's a TCB capability
+        if tcb_capability.cap_type() != CapType::Tcb {
+            ksyscall_debug!("[syscall] memory_share: not a TCB capability");
+            return u64::MAX;
+        }
+
+        // Get target TCB
+        let target_tcb = tcb_capability.object_ptr() as *mut TCB;
+        if target_tcb.is_null() {
+            ksyscall_debug!("[syscall] memory_share: target TCB is null");
+            return u64::MAX;
+        }
+
+        // Get source and target page tables
+        let source_page_table = (*current_tcb).vspace_root() as *mut PageTable;
+        let target_page_table = (*target_tcb).vspace_root() as *mut PageTable;
+
+        let mut source_mapper = PageMapper::new(&mut *source_page_table);
+        let mut target_mapper = PageMapper::new(&mut *target_page_table);
+
+        // Calculate number of pages
+        let page_size = PAGE_SIZE as u64;
+        let num_pages = size.div_ceil(page_size) as usize;
+
+        // Build flags for target mapping
+        let mut flags = PageTableFlags::USER_DATA;
+        if permissions & 0x2 == 0 { // NOT Write (read-only)
+            flags |= PageTableFlags::AP_RO_ALL;
+        }
+        if permissions & 0x4 == 0 { // NOT Execute
+            flags |= PageTableFlags::UXN;
+            flags |= PageTableFlags::PXN;
+        }
+
+        // For each page, translate source virt -> phys, then map into target
+        for i in 0..num_pages {
+            let src_virt = VirtAddr::new(source_virt_addr as usize + (i * PAGE_SIZE));
+            let dest_virt = VirtAddr::new(dest_virt_addr as usize + (i * PAGE_SIZE));
+
+            // Translate source virtual address to physical
+            let phys_addr = match source_mapper.translate(src_virt) {
+                Some(paddr) => paddr,
+                None => {
+                    ksyscall_debug!("[syscall] memory_share: failed to translate src virt={:#x}",
+                                   src_virt.as_usize());
+                    return u64::MAX;
+                }
+            };
+
+            // Map into target's address space
+            if let Err(e) = target_mapper.map(dest_virt, phys_addr, flags, PageSize::Size4KB) {
+                ksyscall_debug!("[syscall] memory_share: failed to map page {} into target: {:?}", i, e);
+                return u64::MAX;
+            }
+
+            ksyscall_debug!("[syscall] memory_share: shared page {} src={:#x} -> phys={:#x} -> dest={:#x}",
+                           i, src_virt.as_usize(), phys_addr.as_usize(), dest_virt.as_usize());
+        }
+
+        // Flush TLB for target process
+        core::arch::asm!(
+            "dsb ishst",
+            "tlbi vmalle1is",
+            "dsb ish",
+            "isb",
+        );
+
+        ksyscall_debug!("[syscall] memory_share -> success ({} pages)", num_pages);
+        0
+    }
 }
 
 /// Map physical memory into target process's virtual address space (Phase 5)
