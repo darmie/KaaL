@@ -32,6 +32,8 @@ pub mod numbers {
     pub const SYS_CAP_INSERT_INTO: usize = 0x1C;
     pub const SYS_CAP_INSERT_SELF: usize = 0x1D;
     pub const SYS_CAP_REVOKE: usize = 0x1E;
+    pub const SYS_CAP_DERIVE: usize = 0x1F;
+    pub const SYS_CAP_MINT: usize = 0x20;
 
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
@@ -179,6 +181,112 @@ pub fn cap_revoke(cnode_cap: usize, slot: usize) -> Result<()> {
             syscall_num = in(reg) numbers::SYS_CAP_REVOKE,
             cnode_cap = in(reg) cnode_cap,
             slot = in(reg) slot,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
+    }
+}
+
+/// Derive a capability with reduced rights
+///
+/// Creates a child capability in the CDT with equal or reduced rights.
+/// The child is tracked as a descendant and will be revoked when parent is revoked.
+///
+/// # Arguments
+/// * `cnode_cap` - Capability slot containing the CNode capability
+/// * `src_slot` - Source capability slot
+/// * `dest_slot` - Destination slot (must be empty)
+/// * `new_rights` - New rights for derived capability (must be <= source rights)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if cnode_cap is not a valid CNode
+/// * Insufficient rights if CNode doesn't have WRITE rights or new_rights > source rights
+/// * Slot occupied if destination slot is not empty
+///
+/// # Example
+/// ```no_run
+/// use kaal_sdk::syscall::{cap_derive, CapRights};
+///
+/// // Derive a read-only capability from slot 3 to slot 5
+/// cap_derive(0, 3, 5, CapRights::READ.bits())?;
+/// ```
+///
+/// # Security
+/// Requires CAP_CAPS permission, WRITE rights on CNode, and enforces authority monotonicity.
+pub fn cap_derive(cnode_cap: usize, src_slot: usize, dest_slot: usize, new_rights: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {cnode_cap}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_slot}",
+            "mov x3, {new_rights}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_DERIVE,
+            cnode_cap = in(reg) cnode_cap,
+            src_slot = in(reg) src_slot,
+            dest_slot = in(reg) dest_slot,
+            new_rights = in(reg) new_rights,
+            result = out(reg) result,
+            out("x8") _,
+        );
+        Error::from_syscall(result).map(|_| ())
+    }
+}
+
+/// Mint a badged endpoint capability
+///
+/// Creates a badged child capability for IPC endpoint identification.
+/// The badge allows the receiver to identify which endpoint was used in IPC.
+///
+/// # Arguments
+/// * `cnode_cap` - Capability slot containing the CNode capability
+/// * `src_slot` - Source endpoint capability slot
+/// * `dest_slot` - Destination slot (must be empty)
+/// * `badge` - Badge value (non-zero, identifies the sender)
+///
+/// # Returns
+/// `Ok(())` on success
+///
+/// # Errors
+/// * Permission denied if caller lacks CAP_CAPS capability
+/// * Invalid capability if cnode_cap is not a valid CNode or src is not an endpoint
+/// * Insufficient rights if CNode doesn't have WRITE rights
+/// * Slot occupied if destination slot is not empty
+///
+/// # Example
+/// ```no_run
+/// use kaal_sdk::syscall::cap_mint;
+///
+/// // Mint a badged endpoint from slot 2 to slot 6 with badge 0x1234
+/// cap_mint(0, 2, 6, 0x1234)?;
+/// ```
+///
+/// # Security
+/// Requires CAP_CAPS permission and WRITE rights on CNode. Source must be an endpoint.
+pub fn cap_mint(cnode_cap: usize, src_slot: usize, dest_slot: usize, badge: usize) -> Result<()> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "mov x0, {cnode_cap}",
+            "mov x1, {src_slot}",
+            "mov x2, {dest_slot}",
+            "mov x3, {badge}",
+            "svc #0",
+            "mov {result}, x0",
+            syscall_num = in(reg) numbers::SYS_CAP_MINT,
+            cnode_cap = in(reg) cnode_cap,
+            src_slot = in(reg) src_slot,
+            dest_slot = in(reg) dest_slot,
+            badge = in(reg) badge,
             result = out(reg) result,
             out("x8") _,
         );

@@ -119,6 +119,23 @@ pub const SYS_CAP_INSERT_SELF: u64 = 0x1D;
 /// derived from it. Requires WRITE rights on the CNode capability.
 pub const SYS_CAP_REVOKE: u64 = 0x1E;
 
+/// Derive a capability with reduced rights
+/// Args: cnode_cap, src_slot, dest_slot, new_rights
+/// Returns: 0 on success, -1 on error
+///
+/// Creates a child capability with equal or reduced rights in the CDT.
+/// The new capability is tracked as a descendant of the source.
+/// Requires WRITE rights on the CNode capability.
+pub const SYS_CAP_DERIVE: u64 = 0x1F;
+
+/// Mint a badged capability (for endpoints)
+/// Args: cnode_cap, src_slot, dest_slot, badge
+/// Returns: 0 on success, -1 on error
+///
+/// Creates a badged endpoint capability in the CDT. The badge is used
+/// to identify the sender in IPC. Requires WRITE rights on the CNode capability.
+pub const SYS_CAP_MINT: u64 = 0x20;
+
 // Channel management syscalls
 
 /// Channel_Establish - Establish IPC channel between components

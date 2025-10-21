@@ -102,7 +102,8 @@ unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
 ///
 /// Returns true on success, false on error
 unsafe fn insert_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -> bool {
-    use crate::objects::{CNode, Capability, CapType};
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{Capability, CapType};
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -120,9 +121,9 @@ unsafe fn insert_endpoint_capability(cap_slot: usize, endpoint: *mut Endpoint) -
     // Create Endpoint capability
     let cap = Capability::new(CapType::Endpoint, endpoint as usize);
 
-    // Insert into CSpace
-    let cnode = &mut *cspace_root;
-    match cnode.insert(cap_slot, cap) {
+    // Insert into CSpace using CNodeCdt (insert_root for root capabilities)
+    let cnode = &mut *(cspace_root as *mut CNodeCdt);
+    match cnode.insert_root(cap_slot, cap) {
         Ok(()) => {
             ksyscall_debug!("[syscall] insert_endpoint: cap_slot {} -> endpoint {:p}", cap_slot, endpoint);
             true
@@ -254,6 +255,8 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_INSERT_SELF => sys_cap_insert_self(args[0], args[1], args[2]),
         numbers::SYS_CAP_REVOKE => sys_cap_revoke(args[0], args[1]),
+        numbers::SYS_CAP_DERIVE => sys_cap_derive(args[0], args[1], args[2], args[3]),
+        numbers::SYS_CAP_MINT => sys_cap_mint(args[0], args[1], args[2], args[3]),
 
         // Chapter 9 Phase 2: Notification syscalls for shared memory IPC
         numbers::SYS_NOTIFICATION_CREATE => sys_notification_create(),
@@ -1265,31 +1268,38 @@ fn sys_cap_revoke(cnode_cap: u64, slot: u64) -> u64 {
 
         let caller_cspace = &*(cspace_root as *const CNodeCdt);
 
-        // ✅ seL4-style implementation: Lookup CNode capability with proper validation
-        // 1. Lookup the CNode capability from caller's CSpace
-        let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
-            Some(cap) => cap,
-            None => {
-                ksyscall_debug!("[syscall] cap_revoke: CNode capability not found at slot {}", cnode_cap);
+        // Special case: cnode_cap == 0 means "use caller's CSpace root directly"
+        // This allows userspace to operate on its own CSpace without needing a capability to it
+        let target_cnode = if cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_revoke: using caller's own CSpace (cnode_cap=0)");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else {
+            // ✅ seL4-style implementation: Lookup CNode capability with proper validation
+            // 1. Lookup the CNode capability from caller's CSpace
+            let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_revoke: CNode capability not found at slot {}", cnode_cap);
+                    return u64::MAX;
+                }
+            };
+
+            // 2. Verify it's a CNode capability
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_revoke: slot {} is not a CNode (type={:?})",
+                              cnode_cap, cnode_capability.cap_type());
                 return u64::MAX;
             }
+
+            // 3. Verify WRITE rights on the CNode
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_revoke: insufficient rights on CNode (need WRITE)");
+                return u64::MAX;
+            }
+
+            // 4. Get the target CNode object
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
         };
-
-        // 2. Verify it's a CNode capability
-        if cnode_capability.cap_type() != CapType::CNode {
-            ksyscall_debug!("[syscall] cap_revoke: slot {} is not a CNode (type={:?})",
-                          cnode_cap, cnode_capability.cap_type());
-            return u64::MAX;
-        }
-
-        // 3. Verify WRITE rights on the CNode
-        if !cnode_capability.rights().contains(CapRights::WRITE) {
-            ksyscall_debug!("[syscall] cap_revoke: insufficient rights on CNode (need WRITE)");
-            return u64::MAX;
-        }
-
-        // 4. Get the target CNode object and perform revocation
-        let target_cnode = &mut *(cnode_capability.object_ptr() as *mut CNodeCdt);
 
         // Revoke the capability at the specified slot in the TARGET CNode
         match target_cnode.revoke(slot as usize) {
@@ -1299,6 +1309,188 @@ fn sys_cap_revoke(cnode_cap: u64, slot: u64) -> u64 {
             }
             Err(e) => {
                 ksyscall_debug!("[syscall] cap_revoke: ✗ failed to revoke slot {}: {:?}", slot, e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+/// Derive a capability with reduced rights
+///
+/// Creates a child capability in the CDT with equal or reduced rights.
+/// The child is tracked as a descendant and will be revoked when parent is revoked.
+///
+/// # Arguments
+/// - cnode_cap: CNode capability slot
+/// - src_slot: Source capability slot
+/// - dest_slot: Destination slot (must be empty)
+/// - new_rights: New rights for derived capability (must be <= source rights)
+///
+/// # Returns
+/// 0 on success, u64::MAX on error
+///
+/// # Security
+/// - Requires CAP_CAPS permission
+/// - Requires WRITE rights on CNode capability
+/// - new_rights must not exceed source capability rights (authority monotonicity)
+fn sys_cap_derive(cnode_cap: u64, src_slot: u64, dest_slot: u64, new_rights: u64) -> u64 {
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
+
+    ksyscall_debug!("[syscall] cap_derive: cnode={}, src={}, dest={}, rights={:#x}",
+                  cnode_cap, src_slot, dest_slot, new_rights);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_derive: caller lacks CAP_CAPS");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+
+        // Special case: cnode_cap == 0 means "use caller's CSpace root directly"
+        // This allows userspace to operate on its own CSpace without needing a capability to it
+        let target_cnode = if cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_derive: using caller's own CSpace (cnode_cap=0)");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else {
+            // Lookup CNode capability with validation
+            let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_derive: CNode not found at slot {}", cnode_cap);
+                    return u64::MAX;
+                }
+            };
+
+            // Verify it's a CNode capability
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_derive: slot {} is not a CNode", cnode_cap);
+                return u64::MAX;
+            }
+
+            // Verify WRITE rights on the CNode
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_derive: insufficient rights on CNode");
+                return u64::MAX;
+            }
+
+            // Get target CNode
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        };
+
+        // Convert u64 to CapRights
+        let rights = CapRights::from_bits(new_rights as u8);
+
+        match target_cnode.derive(src_slot as usize, dest_slot as usize, rights) {
+            Ok(()) => {
+                ksyscall_debug!("[syscall] cap_derive: ✓ derived cap from slot {} to {}",
+                              src_slot, dest_slot);
+                0
+            }
+            Err(e) => {
+                ksyscall_debug!("[syscall] cap_derive: ✗ failed: {:?}", e);
+                u64::MAX
+            }
+        }
+    }
+}
+
+/// Mint a badged endpoint capability
+///
+/// Creates a badged child capability for IPC endpoint identification.
+/// The badge allows the receiver to identify which endpoint was used.
+///
+/// # Arguments
+/// - cnode_cap: CNode capability slot
+/// - src_slot: Source endpoint capability slot
+/// - dest_slot: Destination slot (must be empty)
+/// - badge: Badge value (non-zero)
+///
+/// # Returns
+/// 0 on success, u64::MAX on error
+///
+/// # Security
+/// - Requires CAP_CAPS permission
+/// - Requires WRITE rights on CNode capability
+/// - Source must be an endpoint capability
+fn sys_cap_mint(cnode_cap: u64, src_slot: u64, dest_slot: u64, badge: u64) -> u64 {
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::objects::{CapType, CapRights};
+
+    ksyscall_debug!("[syscall] cap_mint: cnode={}, src={}, dest={}, badge={:#x}",
+                  cnode_cap, src_slot, dest_slot, badge);
+
+    unsafe {
+        // Get current thread's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            return u64::MAX;
+        }
+
+        // Check if caller has capability management capability
+        if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
+            ksyscall_debug!("[syscall] cap_mint: caller lacks CAP_CAPS");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        let caller_cspace = &*(cspace_root as *const CNodeCdt);
+
+        // Special case: cnode_cap == 0 means "use caller's CSpace root directly"
+        let target_cnode = if cnode_cap == 0 {
+            ksyscall_debug!("[syscall] cap_mint: using caller's own CSpace (cnode_cap=0)");
+            &mut *(cspace_root as *mut CNodeCdt)
+        } else {
+            // Lookup CNode capability with validation
+            let cnode_capability = match caller_cspace.lookup(cnode_cap as usize) {
+                Some(cap) => cap,
+                None => {
+                    ksyscall_debug!("[syscall] cap_mint: CNode not found at slot {}", cnode_cap);
+                    return u64::MAX;
+                }
+            };
+
+            // Verify it's a CNode capability
+            if cnode_capability.cap_type() != CapType::CNode {
+                ksyscall_debug!("[syscall] cap_mint: slot {} is not a CNode", cnode_cap);
+                return u64::MAX;
+            }
+
+            // Verify WRITE rights on the CNode
+            if !cnode_capability.rights().contains(CapRights::WRITE) {
+                ksyscall_debug!("[syscall] cap_mint: insufficient rights on CNode");
+                return u64::MAX;
+            }
+
+            // Get target CNode
+            &mut *(cnode_capability.object_ptr() as *mut CNodeCdt)
+        };
+
+        match target_cnode.mint(src_slot as usize, dest_slot as usize, badge) {
+            Ok(()) => {
+                ksyscall_debug!("[syscall] cap_mint: ✓ minted cap from slot {} to {} with badge {:#x}",
+                              src_slot, dest_slot, badge);
+                0
+            }
+            Err(e) => {
+                ksyscall_debug!("[syscall] cap_mint: ✗ failed: {:?}", e);
                 u64::MAX
             }
         }
