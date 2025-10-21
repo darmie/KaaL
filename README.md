@@ -200,11 +200,12 @@ Configure platforms in [build-config.toml](build-config.toml).
 ![Verification](.github/badges/verification.svg)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 16 modules, 234 items, 0 errors
+- **Verified Modules**: 17 modules, 275 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
   - Capability system (CapRights, capability derivation, rights checking)
   - CNode operations (slot management, power-of-2 proofs)
   - Page table operations (ARMv8-A 4-level page tables, shift/index calculations)
+  - Page table entries (PTE descriptor types, address extraction, permission bits)
   - IPC operations (thread queues, endpoint state, FIFO properties)
   - Scheduler operations (priority bitmap, O(1) priority lookup with leading_zeros)
   - Syscall invocation (argument validation, rights checking, label parsing)
