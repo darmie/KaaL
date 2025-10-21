@@ -1,7 +1,7 @@
 # Verification Coverage
 
 **Last Updated**: 2025-10-21
-**Status**: 17 modules, 275 verified items, 0 errors
+**Status**: 18 modules, 312 verified items, 0 errors
 
 ---
 
@@ -15,10 +15,10 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 |----------|---------|----------------|--------|
 | **Memory Management** | 8 | 116 | ✅ Complete |
 | **Capability System** | 4 | 73 | ✅ Complete |
-| **Scheduling & IPC** | 3 | 40 | ✅ Complete |
+| **Scheduling & IPC** | 4 | 77 | ✅ Complete |
 | **System Invocations** | 1 | 40 | ✅ Complete |
 | **Page Tables** | 1 | 6 | ✅ Complete |
-| **TOTAL** | **17** | **275** | **✅ All Pass** |
+| **TOTAL** | **18** | **312** | **✅ All Pass** |
 
 ---
 
@@ -112,7 +112,7 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 
 ---
 
-### 3. Scheduling & IPC (40 items)
+### 3. Scheduling & IPC (77 items)
 
 #### Thread Queues
 - **[thread_queue_ops.rs](../../kernel/src/verified/thread_queue_ops.rs)** - 19 items
@@ -126,6 +126,15 @@ The KaaL microkernel has **17 verified modules** covering core memory management
   - Priority bitmap for O(1) priority lookup
   - `leading_zeros` optimization
   - Verification: priority bounds, bitmap consistency
+
+#### IPC Message Transfer
+- **[ipc_message_ops.rs](../../kernel/src/verified/ipc_message_ops.rs)** - 37 items
+  - Message info encoding/decoding (label, length, caps fields)
+  - Message register operations (MR0-MR7)
+  - Message buffer copying with frame conditions
+  - Bounds checking for message lengths (max 120 words)
+  - Badge extraction from capabilities
+  - Verification: bijective encoding/decoding, register preservation, buffer bounds
 
 ---
 

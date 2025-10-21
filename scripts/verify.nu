@@ -90,8 +90,11 @@ def main [] {
     let pte_ops = (verify-module $verus_bin "kernel/src/verified/pte_ops.rs" "pte_ops" 41
         --details "Page table entry operations: descriptor types, address extraction, permission bits (PXN/UXN/AF), frame conditions")
 
+    let ipc_message_ops = (verify-module $verus_bin "kernel/src/verified/ipc_message_ops.rs" "ipc_message_ops" 37
+        --details "IPC message operations: message info encoding/decoding, message registers (MR0-MR7), buffer copying, bounds checking")
+
     # Calculate summary
-    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops]
+    let results = [$bitmap, $phys_addr, $virt_addr, $pfn, $cap_rights, $bitmap_prod, $tcb, $cnode_ops, $capability_ops, $page_table_ops, $thread_queue_ops, $scheduler_ops, $invocation_ops, $frame_allocator_ops, $untyped_ops, $vspace_ops, $pte_ops, $ipc_message_ops]
     let all_ok = ($results | all {|r| $r.ok})
     let total_items = ($results | each {|r| $r.items} | math sum)
     let total_modules = ($results | length)
@@ -123,4 +126,5 @@ def main [] {
     print "   - untyped_ops.rs (untyped memory watermark allocator)"
     print "   - vspace_ops.rs (virtual address space operations)"
     print "   - pte_ops.rs (page table entry operations)"
+    print "   - ipc_message_ops.rs (IPC message transfer operations)"
 }
