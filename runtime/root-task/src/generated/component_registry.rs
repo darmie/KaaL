@@ -123,7 +123,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "test-cap-revoke",
         component_type: ComponentType::Service,
         priority: 56,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "caps:allocate"
     ],
