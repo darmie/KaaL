@@ -1,0 +1,11 @@
+[package]
+name = "test-memory"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[profile.release]
+panic = "abort"
+lto = true

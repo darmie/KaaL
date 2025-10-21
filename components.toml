@@ -153,6 +153,17 @@ capabilities = [
     "caps:allocate",  # Needs CAP_CAPS to test revocation
 ]
 
+[[component]]
+name = "test_memory"
+binary = "test-memory"
+type = "service"
+priority = 57  # Run after test_cap_revoke
+autostart = true  # Enable to test memory syscalls
+capabilities = [
+    "memory:allocate",  # Needs CAP_MEMORY to test remap/share
+    "memory:map",       # Needs CAP_MEMORY to map pages
+]
+
 # Applications - User-facing programs
 [[component]]
 name = "shell"
