@@ -200,9 +200,10 @@ Configure platforms in [build-config.toml](build-config.toml).
 ![Verification](.github/badges/verification.svg)
 
 - **Verus**: Mathematical verification of critical kernel components
-- **Verified Modules**: 18 modules, 312 items, 0 errors
+- **Verified Modules**: 19 modules, 335 items, 0 errors
   - Memory operations (PhysAddr, VirtAddr, PageFrameNumber)
-  - Capability system (CapRights, capability derivation, rights checking)
+  - Capability system (CapRights, capability derivation, rights checking, transfer operations)
+  - Capability transfer (rights diminishing, badge minting, GRANT validation, CSpace isolation)
   - CNode operations (slot management, power-of-2 proofs)
   - Page table operations (ARMv8-A 4-level page tables, shift/index calculations)
   - Page table entries (PTE descriptor types, address extraction, permission bits)

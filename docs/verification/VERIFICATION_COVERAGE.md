@@ -1,7 +1,7 @@
 # Verification Coverage
 
 **Last Updated**: 2025-10-21
-**Status**: 18 modules, 312 verified items, 0 errors
+**Status**: 19 modules, 335 verified items, 0 errors
 
 ---
 
@@ -14,11 +14,11 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 | Category | Modules | Verified Items | Status |
 |----------|---------|----------------|--------|
 | **Memory Management** | 8 | 116 | ✅ Complete |
-| **Capability System** | 4 | 73 | ✅ Complete |
+| **Capability System** | 5 | 96 | ✅ Complete |
 | **Scheduling & IPC** | 4 | 77 | ✅ Complete |
 | **System Invocations** | 1 | 40 | ✅ Complete |
 | **Page Tables** | 1 | 6 | ✅ Complete |
-| **TOTAL** | **18** | **312** | **✅ All Pass** |
+| **TOTAL** | **19** | **335** | **✅ All Pass** |
 
 ---
 
@@ -76,7 +76,7 @@ The KaaL microkernel has **17 verified modules** covering core memory management
 
 ---
 
-### 2. Capability System (73 items)
+### 2. Capability System (96 items)
 
 #### Rights Management
 - **[cap_rights.rs](../../kernel/src/verified/cap_rights.rs)** - 4 items
@@ -102,6 +102,14 @@ The KaaL microkernel has **17 verified modules** covering core memory management
   - Capability checking for TCB operations
   - Time slice management
   - Verification: state transition properties
+
+#### Capability Transfer
+- **[cap_transfer_ops.rs](../../kernel/src/verified/cap_transfer_ops.rs)** - 23 items
+  - Capability transfer with rights diminishing
+  - Badge assignment and minting
+  - GRANT right validation (prevents unauthorized duplication)
+  - Copy vs transfer vs mint vs mutate operations
+  - Verification: rights subset preservation, CSpace isolation, badge correctness
 
 #### System Invocations
 - **[invocation_ops.rs](../../kernel/src/verified/invocation_ops.rs)** - 53 items
