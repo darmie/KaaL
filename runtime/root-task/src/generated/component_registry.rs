@@ -152,9 +152,10 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         autostart: true,
         capabilities:     &[
         "caps:allocate",
-        "irq:control"
+        "irq:control",
+        "memory:map"
     ],
-        capabilities_bitmask: 8,
+        capabilities_bitmask: 9,
         binary_data: Some(include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver")),
     },
     ComponentDescriptor {
