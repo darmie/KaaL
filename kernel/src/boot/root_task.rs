@@ -351,6 +351,32 @@ pub unsafe fn create_and_start_root_task() -> ! {
     core::ptr::write(cnode_ptr, cnode);
     crate::kprintln!("  CNode:           {:#x} (256 slots)", cnode_ptr as usize);
 
+    // Step 3b: Create IRQControl capability for root-task
+    crate::kprintln!("  Creating IRQControl capability...");
+
+    // Allocate frame for IRQControl object
+    let irq_control_frame = crate::memory::alloc_frame()
+        .expect("[FATAL] Failed to allocate IRQControl frame");
+    let irq_control_phys = irq_control_frame.phys_addr();
+    let irq_control_ptr = irq_control_phys.as_usize() as *mut crate::objects::IRQControl;
+
+    // Initialize IRQControl object
+    let irq_control = crate::objects::IRQControl::new();
+    core::ptr::write(irq_control_ptr, irq_control);
+
+    // Create IRQControl capability
+    let irq_control_cap = crate::objects::Capability::new(
+        crate::objects::CapType::IrqControl,
+        irq_control_ptr as usize,
+    );
+
+    // Insert IRQControl capability into slot 0 of root-task's CSpace
+    const IRQ_CONTROL_SLOT: usize = 0;
+    (*cnode_ptr).insert(IRQ_CONTROL_SLOT, irq_control_cap)
+        .expect("[FATAL] Failed to insert IRQControl capability");
+
+    crate::kprintln!("  IRQControl:      slot {} → {:#x}", IRQ_CONTROL_SLOT, irq_control_ptr as usize);
+
     // Step 4: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
     let root_tcb_frame = crate::memory::alloc_frame()
