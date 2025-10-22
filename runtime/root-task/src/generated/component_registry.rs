@@ -145,6 +145,19 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: Some(include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory")),
     },
     ComponentDescriptor {
+        name: "uart_driver",
+        binary: "uart-driver",
+        component_type: ComponentType::Driver,
+        priority: 50,
+        autostart: true,
+        capabilities:     &[
+        "caps:allocate",
+        "irq:control"
+    ],
+        capabilities_bitmask: 8,
+        binary_data: Some(include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver")),
+    },
+    ComponentDescriptor {
         name: "shell",
         binary: "shell",
         component_type: ComponentType::Application,
@@ -171,4 +184,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 11;
+pub const COMPONENT_COUNT: usize = 12;
