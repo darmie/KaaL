@@ -2503,9 +2503,9 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
         // This is critical - if we block, we need the context saved for when we resume
         *(*current).context_mut() = *tf;
 
-        // Debug: verify saved context
-        crate::kprintln!("[syscall] sys_wait: saved context for TCB={:#x}, ELR={:#x}, SP={:#x}",
-                        current as usize, tf.elr_el1, tf.sp_el0);
+        // Debug: verify saved context (commented out - too verbose)
+        // crate::kprintln!("[syscall] sys_wait: saved context for TCB={:#x}, ELR={:#x}, SP={:#x}",
+        //                 current as usize, tf.elr_el1, tf.sp_el0);
 
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
@@ -2520,15 +2520,22 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
         match notification.wait(current) {
             Some(signals) => {
                 // Signals were already pending, return immediately
+                if signals != 0 {
+                    crate::kprintln!("[syscall] sys_wait: signals pending 0x{:x}, returning immediately", signals);
+                } else {
+                    crate::kprintln!("[syscall] sys_wait: WARNING - notification.wait() returned Some(0)!");
+                }
                 ksyscall_debug!("[syscall] Wait -> received signals 0x{:x}", signals);
                 signals
             }
             None => {
                 // No signals pending - thread has been blocked
                 // Now we need to schedule the next thread
+                crate::kprintln!("[syscall] sys_wait: no signals, blocking thread TCB={:#x}", current as usize);
                 let next = crate::scheduler::schedule();
                 if next.is_null() || next == current {
                     // No other thread available - this shouldn't happen if we blocked
+                    crate::kprintln!("[syscall] sys_wait: ERROR - blocked but no other thread available!");
                     ksyscall_debug!("[syscall] Wait -> blocked but no other thread!");
                     return u64::MAX;
                 }
