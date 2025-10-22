@@ -2868,8 +2868,9 @@ fn sys_shutdown() -> ! {
     // Function ID: 0x84000008
     unsafe {
         core::arch::asm!(
-            "mov x0, #0x84000008",  // PSCI SYSTEM_OFF function
-            "hvc #0",                // Hypervisor call
+            "movz x0, #0x0008",      // Lower 16 bits
+            "movk x0, #0x8400, lsl #16",  // Upper 16 bits
+            "hvc #0",                 // Hypervisor call
             options(noreturn)
         );
     }
