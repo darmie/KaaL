@@ -170,12 +170,12 @@ capabilities = [
 name = "uart_driver"
 binary = "uart-driver"
 type = "driver"
-priority = 50 # High priority - runs before test components
-autostart = false # Enable to test IRQ driver
-spawned_by = "system_init"
+priority = 50    # High priority - runs before applications
+autostart = true # Must autostart to handle UART interrupts for notepad
+# Spawned by root-task (not system_init) to receive IRQControl delegation
 capabilities = [
     "caps:allocate", # Needs CAP_CAPS to allocate notification/IRQHandler slots
-    "irq:control",   # Receives IRQControl delegation from root-task via system_init
+    "irq:control",   # Receives IRQControl delegation from root-task
     "memory:map",    # Needs CAP_MEMORY to map UART MMIO region
 ]
 

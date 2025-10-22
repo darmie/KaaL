@@ -165,12 +165,13 @@ impl ComponentRegistry {
 /// Component loader - handles spawning components
 pub struct ComponentLoader {
     registry: &'static ComponentRegistry,
+    irq_control_paddr: usize,
 }
 
 impl ComponentLoader {
     /// Create a new component loader
-    pub const fn new(registry: &'static ComponentRegistry) -> Self {
-        Self { registry }
+    pub const fn new(registry: &'static ComponentRegistry, irq_control_paddr: usize) -> Self {
+        Self { registry, irq_control_paddr }
     }
 
     /// Spawn a component by name
@@ -424,6 +425,35 @@ impl ComponentLoader {
         let insert_result = crate::sys_cap_insert_self(tcb_cap_slot, 4, result.tcb_phys);
         if insert_result != 0 {
             crate::sys_print("[loader] Warning: Failed to insert TCB capability\n");
+        }
+
+        // Check if component needs IRQControl and delegate it
+        // IRQControl capability is at slot 0 in root-task's CSpace (from boot_info)
+        // If component has irq:control capability, insert IRQControl into its CSpace at slot 0
+        const IRQ_CONTROL_BIT: u64 = 1 << 10; // irq:control capability bit
+        if (capabilities & IRQ_CONTROL_BIT) != 0 && self.irq_control_paddr != 0 {
+            crate::sys_print("[loader] Delegating IRQControl to ");
+            crate::sys_print(desc.name);
+            crate::sys_print("\n");
+
+            // Insert IRQControl into component's CSpace at slot 0
+            // sys_cap_insert_into(target_tcb_cap, target_slot, cap_type, object_ptr)
+            // CapType::IrqControl = 10 (from kernel)
+            const IRQ_CONTROL_SLOT: usize = 0;
+            const CAP_TYPE_IRQCONTROL: usize = 10;
+
+            let insert_result = crate::sys_cap_insert_into(
+                tcb_cap_slot,
+                IRQ_CONTROL_SLOT,
+                CAP_TYPE_IRQCONTROL,
+                self.irq_control_paddr,
+            );
+
+            if insert_result == 0 {
+                crate::sys_print("[loader] ✓ IRQControl delegated to slot 0\n");
+            } else {
+                crate::sys_print("[loader] ✗ Failed to delegate IRQControl\n");
+            }
         }
 
         // Convert to SpawnResult with capability information

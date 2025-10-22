@@ -1442,6 +1442,11 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
             4 => CapType::Tcb,
             5 => CapType::CNode,
             6 => CapType::VSpace,
+            7 => CapType::Page,
+            8 => CapType::PageTable,
+            9 => CapType::IrqHandler,
+            10 => CapType::IrqControl,
+            11 => CapType::Reply,
             _ => {
                 ksyscall_debug!("[syscall] cap_insert_into: invalid cap_type {}", cap_type);
                 return u64::MAX;

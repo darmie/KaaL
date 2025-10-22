@@ -214,6 +214,10 @@ pub const USER_VIRT_MAX: usize = ($platform_cfg.user_virt_max);
 export def "codegen system-init-registry" [] {
     print "Generating system_init component registry..."
 
+    # Clean up old generated files first
+    rm -f components/system-init/src/generated/registry.rs
+    rm -f components/system-init/src/generated/mod.rs
+
     ensure dir components/system-init/src/generated
 
     # Create mod.rs to export registry
@@ -619,6 +623,9 @@ def parse_capability [cap: string]: nothing -> int {
     if ($cap_lower | str starts-with "endpoint:") or ($cap_lower == "endpoint") {
         return 4
     }
+    if ($cap_lower | str starts-with "irq:") or ($cap_lower == "irq") {
+        return 1024  # Bit 10 for IRQ control
+    }
     if ($cap_lower | str starts-with "interrupt:") {
         # Interrupts are not part of core capabilities yet - ignore
         return 0
@@ -664,6 +671,10 @@ export def "codegen component-registry" [] {
 
     let components_data = (config load-components)
     let components = ($components_data | get component)
+
+    # Clean up old generated files first
+    rm -f runtime/root-task/src/generated/component_registry.rs
+    rm -f runtime/root-task/src/generated/mod.rs
 
     ensure dir runtime/root-task/src/generated
 

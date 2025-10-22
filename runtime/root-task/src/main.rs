@@ -27,6 +27,9 @@ mod generated;
 // Import ComponentError for error handling
 use component_loader::ComponentError;
 
+/// Global IRQControl physical address (populated from boot_info)
+static mut IRQ_CONTROL_PADDR: usize = 0;
+
 /// Syscall numbers
 const SYS_DEBUG_PRINT: usize = 0x1001;
 const SYS_CAP_ALLOCATE: usize = 0x10;
@@ -683,11 +686,34 @@ pub extern "C" fn _start() -> ! {
     }
     */
 
-    // Create component loader with registry
+    // Read IRQControl physical address from boot_info
+    // Boot info is mapped at 0x7ffff000 in root-task's address space
+    const BOOT_INFO_VADDR: usize = 0x7ffff000;
+    #[repr(C)]
+    struct BootInfo {
+        magic: u32,
+        version: u32,
+        num_untyped_regions: u32,
+        num_device_regions: u32,
+        num_initial_caps: u32,
+        _reserved: [u32; 3],
+        cspace_root_slot: u64,
+        vspace_root_slot: u64,
+        ipc_buffer_vaddr: u64,
+        ram_size: u64,
+        kernel_virt_base: u64,
+        user_virt_start: u64,
+        irq_control_paddr: u64,
+        // ... rest of boot_info (not needed here)
+    }
+    let boot_info = unsafe { &*(BOOT_INFO_VADDR as *const BootInfo) };
+    let irq_control_paddr = boot_info.irq_control_paddr as usize;
+
+    // Create component loader with registry and IRQControl address
     use component_loader::{ComponentLoader, ComponentRegistry};
     static REGISTRY: ComponentRegistry =
         ComponentRegistry::new(generated::component_registry::COMPONENT_REGISTRY);
-    let loader = ComponentLoader::new(&REGISTRY);
+    let loader = ComponentLoader::new(&REGISTRY, irq_control_paddr);
 
     // Component Loading & Spawning - See docs/chapters/CHAPTER_09_STATUS.md
     unsafe {

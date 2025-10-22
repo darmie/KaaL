@@ -391,6 +391,9 @@ pub unsafe fn create_and_start_root_task() -> ! {
 
     crate::kprintln!("  IRQControl:      slot {} → {:#x}", IRQ_CONTROL_SLOT, irq_control_ptr as usize);
 
+    // Update boot_info with IRQControl physical address (for delegation to drivers)
+    (*boot_info_ptr).irq_control_paddr = irq_control_phys.as_usize() as u64;
+
     // Step 4: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
     let root_tcb_frame = crate::memory::alloc_frame()

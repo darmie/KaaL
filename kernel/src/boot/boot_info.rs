@@ -176,6 +176,9 @@ pub struct BootInfo {
     /// User virtual address space start
     pub user_virt_start: u64,
 
+    /// IRQControl capability physical address (for delegation to drivers)
+    pub irq_control_paddr: u64,
+
     /// Untyped memory regions
     pub untyped_regions: [UntypedRegion; MAX_UNTYPED_REGIONS],
 
@@ -202,6 +205,7 @@ impl BootInfo {
             ram_size: 0,
             kernel_virt_base: 0,
             user_virt_start: 0,
+            irq_control_paddr: 0,
             untyped_regions: [UntypedRegion {
                 paddr: 0,
                 size_bits: 0,
