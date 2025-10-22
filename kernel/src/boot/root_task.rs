@@ -4,7 +4,7 @@
 
 use crate::arch::aarch64::page_table::PageTableFlags;
 use crate::boot::{bootinfo, boot_info};
-use crate::memory::{PhysAddr, VirtAddr, PAGE_SIZE};
+use crate::memory::{PhysAddr, VirtAddr, PAGE_SIZE, alloc_frame};
 use crate::generated::memory_config;
 use core::arch::naked_asm;
 
@@ -245,11 +245,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
             let mut current_phys = phys_addr & !(PAGE_SIZE - 1);
             let mut page_count = 0;
 
-            crate::kprintln!("    Mapping virt {:#x} → phys {:#x} (end: {:#x})", virt_start, current_phys, virt_end);
-
             while current_virt < virt_end {
-                crate::kprintln!("      Mapping page {} at virt={:#x} phys={:#x}", page_count, current_virt, current_phys);
-
                 if let Err(e) = mapper.map(
                     VirtAddr::new(current_virt),
                     PhysAddr::new(current_phys),
@@ -278,13 +274,22 @@ pub unsafe fn create_and_start_root_task() -> ! {
     let stack_bottom = stack_top - stack_size;
 
     crate::kprintln!("  Mapping stack: {:#x} - {:#x}", stack_bottom, stack_top);
-    if let Err(e) = crate::memory::paging::identity_map_region(
-        &mut mapper,
-        stack_bottom,
-        stack_size,
-        PageTableFlags::USER_DATA,
-    ) {
-        panic!("[FATAL] Failed to map stack: {:?}", e);
+
+    // Allocate physical frames for the stack and map them
+    let num_stack_pages = stack_size / PAGE_SIZE;
+    for i in 0..num_stack_pages {
+        let virt_addr = stack_bottom + (i * PAGE_SIZE);
+        let phys_frame = alloc_frame().expect("Failed to allocate stack frame");
+        let phys_addr = phys_frame.phys_addr();
+
+        if let Err(e) = mapper.map(
+            VirtAddr::new(virt_addr),
+            phys_addr,
+            PageTableFlags::USER_DATA,
+            crate::memory::PageSize::Size4KB,
+        ) {
+            panic!("[FATAL] Failed to map stack page at {:#x}: {:?}", virt_addr, e);
+        }
     }
 
     // Map heap for root-task allocator (256KB at 32MB mark)
@@ -292,13 +297,22 @@ pub unsafe fn create_and_start_root_task() -> ! {
     const HEAP_START: usize = 0x200_0000; // 32MB
     const HEAP_SIZE: usize = 0x40000;     // 256KB
     crate::kprintln!("  Mapping heap: {:#x} - {:#x} (256 KB)", HEAP_START, HEAP_START + HEAP_SIZE);
-    if let Err(e) = crate::memory::paging::identity_map_region(
-        &mut mapper,
-        HEAP_START,
-        HEAP_SIZE,
-        PageTableFlags::USER_DATA,
-    ) {
-        panic!("[FATAL] Failed to map heap: {:?}", e);
+
+    // Allocate physical frames for the heap and map them
+    let num_heap_pages = HEAP_SIZE / PAGE_SIZE;
+    for i in 0..num_heap_pages {
+        let virt_addr = HEAP_START + (i * PAGE_SIZE);
+        let phys_frame = alloc_frame().expect("Failed to allocate heap frame");
+        let phys_addr = phys_frame.phys_addr();
+
+        if let Err(e) = mapper.map(
+            VirtAddr::new(virt_addr),
+            phys_addr,
+            PageTableFlags::USER_DATA,
+            crate::memory::PageSize::Size4KB,
+        ) {
+            panic!("[FATAL] Failed to map heap page at {:#x}: {:?}", virt_addr, e);
+        }
     }
 
     // UART already mapped with kernel permissions earlier, no need to map again
@@ -402,6 +416,23 @@ pub unsafe fn create_and_start_root_task() -> ! {
     // Set state to Running (root-task will start executing immediately)
     (*root_tcb_ptr).set_state(crate::objects::ThreadState::Running);
 
+    // Initialize next_virt_addr to start after root-task's mapped regions
+    // Root-task ELF segments: USER_VIRT_START - ~1MB
+    // Loader temp mappings: LOADER_VIRT_START - LOADER_VIRT_END (reserved for component loading)
+    // IPC shared memory: IPC_VIRT_START - IPC_VIRT_END
+    // Stack: 0x7ffbf000 - 0x7ffff000
+    // Heap:  0x2000000 - 0x2040000
+    // Start allocating from USER_DYNAMIC_VIRT_START (configured in build-config.toml)
+    const ROOT_TASK_VIRT_ALLOC_START: u64 = memory_config::USER_DYNAMIC_VIRT_START;
+    (*root_tcb_ptr).alloc_virt_range(0); // Initialize allocator
+    // Manually set it to the correct start value
+    unsafe {
+        // Direct access to update next_virt_addr
+        let tcb_mut = &mut *root_tcb_ptr;
+        let start_offset = ROOT_TASK_VIRT_ALLOC_START - memory_config::USER_VIRT_START;
+        tcb_mut.alloc_virt_range(start_offset); // Advance allocator to start position
+    }
+
     crate::kprintln!("  Setting priority to 255 (lowest)...");
     // Root-task should have lowest priority (255) so it only runs when nothing else can run
     // This ensures spawned components at priority 200 (test) or 100 (IPC) run before root-task
@@ -461,9 +492,12 @@ pub unsafe fn create_and_start_root_task() -> ! {
     // We need to temporarily switch to the user page table to test this
     crate::kprintln!("  User PT is at phys {:#x}", user_page_table_phys.as_usize());
 
+
     // Directly transition using inline assembly to avoid any compiler-generated cleanup code
     core::arch::asm!(
         // Set up TTBR0_EL1 (user page table)
+        // In ARM64, TTBR0_EL1 is used for both EL1 and EL0 translations
+        // The TCR_EL1.EPD0 bit controls whether TTBR0 is used at EL0
         "msr ttbr0_el1, {ttbr0}",
         "isb",
         // Invalidate TLB for TTBR0
@@ -499,6 +533,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
 unsafe extern "C" fn transition_to_el0(entry: usize, sp: usize, ttbr0: usize) -> ! {
     naked_asm!(
         // Set up TTBR0_EL1 (user page table)
+        // In ARM64, TTBR0_EL1 is used for user space translations at EL0
         "msr ttbr0_el1, x2",
         "isb",
 

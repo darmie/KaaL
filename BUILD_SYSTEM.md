@@ -99,7 +99,33 @@ root task build → root task ELF → roottask.o (embeddable)
 - Builds root task (user-space initial process)
 - Converts to embeddable object file
 
-### Step 3: Elfloader Build
+### Step 3: Memory Layout Validation
+
+After building kernel and root-task but before building the final elfloader, the build system automatically validates the memory layout to prevent overlaps:
+
+- **Checks**: Ensures root-task doesn't extend into elfloader's memory region
+- **Detection**: Compares binary sizes against configured memory offsets
+- **Reporting**: Provides clear error messages showing:
+  - Exact addresses of overlap
+  - Size of each component
+  - Overlap region size
+  - Suggested fix with corrected `roottask_offset`
+
+**Example validation error:**
+```
+ERROR: Memory layout overlap detected!
+Root-task has grown too large and overlaps with elfloader:
+  Root-task:  0x40100000 - 0x40224dd0 (1171 KB)
+  Elfloader:  0x40200000 - ...
+  Overlap:    0x24dd0 bytes
+
+Solution: Increase roottask_offset in build-config.toml
+  Suggested: roottask_offset = "0x300000"
+```
+
+This prevents runtime crashes from memory corruption that would otherwise only manifest as mysterious boot failures.
+
+### Step 4: Elfloader Build
 
 ```
 kernel.o + roottask.o + linker.ld (generated) → elfloader → bootable image
@@ -120,11 +146,18 @@ kernel.o + roottask.o + linker.ld (generated) → elfloader → bootable image
             │  .text           │
             │  .rodata         │
             │  .kernel_elf     │  ← Embedded kernel ELF
-            │  .roottask_data  │  ← Embedded root task
+            │  .roottask_data  │  ← Embedded root task ELF
             │  .data           │
             │  .bss            │
             ├─────────────────┤
-0x40400000  │  Kernel          │  ← Loaded by elfloader
+0x40400000  │  Kernel          │  ← Loaded by elfloader from embedded ELF
+            │  .text           │
+            │  .rodata         │
+            │  .data           │
+            │  .bss            │
+            │  .stack          │
+            ├─────────────────┤
+0x40600000  │  Root Task       │  ← Loaded by elfloader from embedded ELF
             │  .text           │
             │  .rodata         │
             │  .data           │
@@ -133,6 +166,8 @@ kernel.o + roottask.o + linker.ld (generated) → elfloader → bootable image
             └─────────────────┘
 0x48000000  Stack top (elfloader)
 ```
+
+**Note**: The elfloader embeds both kernel and root-task ELF files, then loads them to their respective addresses (0x40400000 for kernel, 0x40600000 for root-task) before jumping to the kernel.
 
 ### Raspberry Pi 4 Platform
 

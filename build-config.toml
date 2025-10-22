@@ -46,13 +46,13 @@ gic_dist_size = "0x10000"    # 64KB
 gic_cpu_size = "0x10000"     # 64KB
 
 # IRQ numbers (QEMU virt platform)
-irq_timer = "27"  # ARM Generic Timer
-irq_uart0 = "33"  # PL011 UART0
-irq_uart1 = "34"  # PL011 UART1
+irq_timer = "27" # ARM Generic Timer
+irq_uart0 = "33" # PL011 UART0
+irq_uart1 = "34" # PL011 UART1
 
 # Boot memory layout offsets (relative to ram_base)
 dtb_offset = "0x0"            # DTB at ram_base + 0x0 = 0x40000000
-roottask_offset = "0x100000"  # Root task at ram_base + 0x100000 = 0x40100000
+roottask_offset = "0x600000"  # Root task at ram_base + 0x600000 = 0x40600000
 elfloader_offset = "0x200000" # Elfloader at ram_base + 0x200000 = 0x40200000
 kernel_offset = "0x400000"    # Kernel at ram_base + 0x400000 = 0x40400000
 
@@ -64,9 +64,19 @@ kernel_virt_base = "0xFFFF000000000000" # Kernel virtual address space start
 user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
-# IPC shared memory region (reserved in each component's address space)
-ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
-ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
+# Component loader region sizes (automatically calculated from user_virt_start)
+# Root-task ELF occupies the first portion of user address space
+# Loader region comes after, used to temporarily map component binaries during spawning
+loader_virt_offset = "0x100000"  # 1MB offset from user_virt_start (after root-task ELF)
+loader_virt_size = "0xF00000"    # 15MB size (enough for largest component)
+
+# IPC shared memory region size (automatically placed after loader region)
+# Reserved in each component's address space for shared memory IPC
+ipc_virt_size = "0x10000000"     # 256MB reserved for IPC shared memory
+
+# Dynamic memory allocation starts after IPC region
+# Used by memory_map syscall for per-process virtual address allocation
+# This value is automatically calculated as: user_virt_start + loader_virt_offset + loader_virt_size + ipc_virt_size
 
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB
@@ -105,9 +115,9 @@ gic_dist_size = "0x1000"     # 4KB
 gic_cpu_size = "0x2000"      # 8KB
 
 # IRQ numbers (BCM2711)
-irq_timer = "30"  # Generic Timer
-irq_uart0 = "57"  # Mini UART
-irq_uart1 = "57"  # Mini UART (same as uart0)
+irq_timer = "30" # Generic Timer
+irq_uart0 = "57" # Mini UART
+irq_uart1 = "57" # Mini UART (same as uart0)
 
 # Boot memory layout offsets
 dtb_offset = "0x0"           # DTB at 0x0
@@ -123,8 +133,8 @@ user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
 # IPC shared memory region (reserved in each component's address space)
-ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
-ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
+ipc_virt_start = "0x90000000" # IPC region start (2.25GB)
+ipc_virt_end = "0xA0000000"   # IPC region end (2.5GB) - 256MB reserved
 
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB
@@ -158,9 +168,9 @@ gic_dist_size = "0x10000"    # 64KB
 gic_cpu_size = "0x10000"     # 64KB
 
 # IRQ numbers (customize for your board)
-irq_timer = "27"  # Timer IRQ
-irq_uart0 = "33"  # UART0 IRQ
-irq_uart1 = "34"  # UART1 IRQ
+irq_timer = "27" # Timer IRQ
+irq_uart0 = "33" # UART0 IRQ
+irq_uart1 = "34" # UART1 IRQ
 
 # Boot memory layout offsets
 dtb_offset = "0x0"
@@ -176,8 +186,8 @@ user_virt_start = "0x80000000"          # User virtual address space start (2GB)
 user_virt_max = "0x0000FFFFFFFFFFFF"    # User virtual address space max
 
 # IPC shared memory region (reserved in each component's address space)
-ipc_virt_start = "0x90000000"           # IPC region start (2.25GB)
-ipc_virt_end = "0xA0000000"             # IPC region end (2.5GB) - 256MB reserved
+ipc_virt_start = "0x90000000" # IPC region start (2.25GB)
+ipc_virt_end = "0xA0000000"   # IPC region end (2.5GB) - 256MB reserved
 
 # Page sizes (ARM64 standard)
 page_size = "0x1000"          # 4KB

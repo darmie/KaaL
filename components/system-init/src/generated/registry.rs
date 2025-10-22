@@ -56,4 +56,11 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         capabilities_bitmask: 9,
         binary_data: include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver"),
     },
+    ComponentDescriptor {
+        name: "notepad",
+        priority: 110,
+        autostart: true,
+        capabilities_bitmask: 0,
+        binary_data: include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad"),
+    },
 ];

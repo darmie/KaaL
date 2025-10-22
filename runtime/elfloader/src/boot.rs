@@ -55,9 +55,10 @@ pub fn load_images(dtb_addr: usize) -> (usize, BootInfo) {
     let kernel_entry = parse_elf_and_load_segments(kernel_start);
     uart_println!("Kernel loaded at entry point: {:#x}", kernel_entry);
 
-    // Parse root task ELF and load its segments
-    let user_entry = parse_elf_and_load_segments(user_start);
-    uart_println!("Root task loaded at entry point: {:#x}", user_entry);
+    // Parse root task ELF header to get entry point, but DON'T load segments
+    // The kernel will load the root-task into user virtual address space
+    let user_entry = parse_elf_entry_point(user_start);
+    uart_println!("Root task entry point: {:#x} (will be loaded by kernel)", user_entry);
 
     uart_println!("Images loaded successfully!");
     uart_println!("Kernel entry: {:#x}", kernel_entry);
@@ -77,6 +78,27 @@ pub fn load_images(dtb_addr: usize) -> (usize, BootInfo) {
             dtb_size: 0,                     // Will be filled by caller
         },
     )
+}
+
+/// Parse ELF header and return entry point without loading segments
+fn parse_elf_entry_point(elf_addr: usize) -> usize {
+    // Read ELF header
+    let elf_header = unsafe { core::slice::from_raw_parts(elf_addr as *const u8, 64) };
+
+    // Check ELF magic number
+    if &elf_header[0..4] != b"\x7FELF" {
+        uart_println!("WARNING: Invalid ELF magic at {:#x}, using base address", elf_addr);
+        return elf_addr;
+    }
+
+    // Read entry point from ELF64 header (offset 0x18, 8 bytes, little-endian)
+    let entry_bytes = &elf_header[0x18..0x20];
+    let entry = u64::from_le_bytes([
+        entry_bytes[0], entry_bytes[1], entry_bytes[2], entry_bytes[3],
+        entry_bytes[4], entry_bytes[5], entry_bytes[6], entry_bytes[7],
+    ]) as usize;
+
+    entry
 }
 
 /// Parse ELF and load its segments into memory, return entry point

@@ -103,6 +103,7 @@ impl PageMapper {
 
         // Set the entry
         let index = target_level.index(vaddr);
+
         if table.is_valid(index) {
             return Err(MappingError::AlreadyMapped);
         }
@@ -225,7 +226,13 @@ impl PageMapper {
                 }
 
                 // Allocate a new page table
-                let frame = alloc_frame().ok_or(MappingError::FrameAllocFailed)?;
+                let frame = match alloc_frame() {
+                    Some(f) => f,
+                    None => {
+                        crate::kprintln!("[paging] ERROR: Failed to allocate frame for page table at level {:?}", level);
+                        return Err(MappingError::FrameAllocFailed);
+                    }
+                };
                 let phys_addr = frame.phys_addr();
 
                 // Zero the new table

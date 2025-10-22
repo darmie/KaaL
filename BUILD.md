@@ -143,20 +143,23 @@ The build system performs these steps:
 ### 3. Component Builds
 ```
 [1/4] Building kernel...
-  ✓ Kernel: 156.2 KiB
+  ✓ Kernel: 165.4 kB
 
 [2/4] Building root-task...
   🔍 Component manifest: /path/to/project/components.toml
-  📦 Found 6 component(s)
-  ✓ Root-task: 45.3 KiB
+  📦 Found 13 component(s)
+  ✓ Root-task: 1.1 MB
 
 [3/4] Creating embeddable objects...
-  ✓ kernel.o: 156.3 KiB
-  ✓ roottask.o: 45.4 KiB
+  ✓ kernel.o: 166.0 kB
+  ✓ roottask.o: 1.2 MB
+  ✓ Memory layout validated - no overlaps detected
 
 [4/4] Building elfloader...
-  ✓ Final Image: 202.1 KiB
+  ✓ Final Image: 1.4 MB
 ```
+
+**Note**: After creating embeddable objects, the build system automatically validates the memory layout to ensure no component overlaps. If an overlap is detected, the build fails with a clear error message and suggested fix.
 
 ### 4. Bootimage Creation
 The elfloader embeds:
@@ -339,6 +342,33 @@ cargo clean
 # Manual clean
 rm -rf runtime/build kernel/target runtime/*/target
 ```
+
+### "Memory layout overlap detected"
+
+This error occurs when components grow too large and overlap in physical memory:
+
+```
+ERROR: Memory layout overlap detected!
+Root-task has grown too large and overlaps with elfloader:
+  Root-task:  0x40100000 - 0x40224dd0 (1171 KB)
+  Elfloader:  0x40200000 - ...
+  Overlap:    0x24dd0 bytes
+
+Solution: Increase roottask_offset in build-config.toml
+  Suggested: roottask_offset = "0x300000"
+```
+
+**Fix**: Update `roottask_offset` in `build-config.toml` with the suggested value:
+
+```toml
+# Before
+roottask_offset = "0x100000"  # Root task at 0x40100000
+
+# After
+roottask_offset = "0x600000"  # Root task at 0x40600000
+```
+
+The build system automatically detects overlaps and suggests the correct offset based on actual binary sizes.
 
 ## Comparison: Nushell vs Bash
 

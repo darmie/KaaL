@@ -886,13 +886,13 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
 
     // Check if caller has memory mapping capability
-    unsafe {
-        let current_tcb = crate::scheduler::current_thread();
-        if current_tcb.is_null() {
-            ksyscall_debug!("[syscall] memory_map: no current thread");
-            return u64::MAX;
-        }
+    let current_tcb = unsafe { crate::scheduler::current_thread() };
+    if current_tcb.is_null() {
+        ksyscall_debug!("[syscall] memory_map: no current thread");
+        return u64::MAX;
+    }
 
+    unsafe {
         if !(*current_tcb).has_capability(TCB::CAP_MEMORY) {
             ksyscall_debug!("[syscall] memory_map: caller lacks CAP_MEMORY capability");
             return u64::MAX; // Permission denied
@@ -913,12 +913,8 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     // Get mutable reference to caller's page table
     let page_table = unsafe { &mut *(page_table_phys as *mut PageTable) };
 
-    // Allocate virtual address from high memory region to avoid conflicts
-    let virt_addr = unsafe {
-        let addr = NEXT_VIRT_ADDR;
-        NEXT_VIRT_ADDR += aligned_size;
-        addr
-    };
+    // Allocate virtual address from the caller's per-thread allocator
+    let virt_addr = unsafe { (*current_tcb).alloc_virt_range(aligned_size) };
 
     crate::kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}, mapping {} pages",
               virt_addr, virt_addr + aligned_size, num_pages);
@@ -944,8 +940,10 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
                          i, page_virt.as_usize(), page_phys.as_usize());
             },
             Err(e) => {
-                ksyscall_debug!("[syscall] memory_map: failed to map page {} at virt={:#x}, error={:?}",
+                crate::kprintln!("[syscall] memory_map: failed to map page {} at virt={:#x}, error={:?}",
                          i, page_virt.as_usize(), e);
+                crate::kprintln!("[syscall] memory_map: phys_addr={:#x}, num_pages={}, failed at page {}",
+                         phys_addr, num_pages, i);
                 return u64::MAX;
             }
         }

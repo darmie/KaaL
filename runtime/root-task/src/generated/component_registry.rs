@@ -149,7 +149,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "uart-driver",
         component_type: ComponentType::Driver,
         priority: 50,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "caps:allocate",
         "irq:control",
@@ -157,6 +157,16 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ],
         capabilities_bitmask: 9,
         binary_data: Some(include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver")),
+    },
+    ComponentDescriptor {
+        name: "notepad",
+        binary: "notepad",
+        component_type: ComponentType::Application,
+        priority: 110,
+        autostart: false,
+        capabilities:     &[],
+        capabilities_bitmask: 0,
+        binary_data: Some(include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad")),
     },
     ComponentDescriptor {
         name: "shell",
@@ -185,4 +195,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 12;
+pub const COMPONENT_COUNT: usize = 13;

@@ -146,6 +146,37 @@ def main [
     let kernel_elf = (build kernel $config $kernel_addr)
     let roottask_elf = (build roottask $platform $platform_cfg $config.build.root_task_stack_size)
     build embeddable $kernel_elf $roottask_elf $build_dir
+
+    # Validate memory layout before building elfloader
+    let kernel_size = (ls $kernel_elf | get 0.size | into int)
+    let roottask_size = (ls $roottask_elf | get 0.size | into int)
+    let needs_rebuild = (validate memory-layout $platform_cfg $kernel_size $roottask_size)
+
+    # If memory layout was auto-fixed, rebuild root-task with new offset
+    let roottask_elf = if $needs_rebuild {
+        # Reload config to get updated roottask_offset
+        let updated_config = (config load)
+        let updated_platform_cfg = (config get-platform $updated_config $platform)
+
+        # Rebuild root-task with new memory layout
+        let new_roottask_elf = (build roottask $platform $updated_platform_cfg $config.build.root_task_stack_size)
+
+        # Recreate embeddable objects with new root-task
+        build embeddable $kernel_elf $new_roottask_elf $build_dir
+
+        # Validate again (should pass now)
+        let new_roottask_size = (ls $new_roottask_elf | get 0.size | into int)
+        let final_check = (validate memory-layout $updated_platform_cfg $kernel_size $new_roottask_size)
+
+        if $final_check {
+            error make { msg: "Memory layout still overlaps after auto-fix - this should not happen!" }
+        }
+
+        $new_roottask_elf
+    } else {
+        $roottask_elf
+    }
+
     let bootimage = (build elfloader $platform_cfg $platform $elfloader_addr $stack_top $build_dir)
 
     # Print success

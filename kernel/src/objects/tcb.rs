@@ -89,6 +89,12 @@ pub struct TCB {
     ///
     /// Root-task gets all capabilities (0xFFFFFFFFFFFFFFFF)
     capabilities: u64,
+
+    /// Next virtual address to allocate in this thread's address space
+    ///
+    /// Used by memory_map syscall to allocate virtual addresses.
+    /// Starts at USER_VIRT_START and grows upward.
+    next_virt_addr: u64,
 }
 
 /// Thread state - lifecycle states of a thread
@@ -210,6 +216,7 @@ impl TCB {
             time_slice: Self::DEFAULT_TIME_SLICE,
             tid,
             capabilities,
+            next_virt_addr: crate::generated::memory_config::USER_VIRT_START,
         }
     }
 
@@ -415,6 +422,22 @@ impl TCB {
         self.context.x0 = arg0;
         self.context.x1 = arg1;
         self.context.x2 = arg2;
+    }
+
+    /// Allocate a virtual address range in this thread's address space
+    ///
+    /// Returns the start of the allocated range and updates the allocator.
+    /// This is used by memory_map syscall to find free virtual addresses.
+    pub fn alloc_virt_range(&mut self, size: u64) -> u64 {
+        let addr = self.next_virt_addr;
+        self.next_virt_addr += size;
+        addr
+    }
+
+    /// Get the current next_virt_addr (for debugging)
+    #[inline]
+    pub fn next_virt_addr(&self) -> u64 {
+        self.next_virt_addr
     }
 }
 

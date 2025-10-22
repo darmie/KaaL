@@ -66,6 +66,80 @@ export def "build embeddable" [kernel_elf: string, roottask_elf: string, build_d
     print success "roottask.o" $"($build_dir)/roottask.o"
 }
 
+# Validate and auto-fix memory layout to ensure no overlaps
+# Returns: updated platform_cfg if changes were made, or original if no changes needed
+export def "validate memory-layout" [platform_cfg: record, kernel_size: int, roottask_size: int] {
+    let ram_base = ($platform_cfg.ram_base | into int)
+    let roottask_offset = ($platform_cfg.roottask_offset | into int)
+    let elfloader_offset = ($platform_cfg.elfloader_offset | into int)
+    let kernel_offset = ($platform_cfg.kernel_offset | into int)
+
+    let roottask_start = $ram_base + $roottask_offset
+    let roottask_end = $roottask_start + $roottask_size
+    let elfloader_start = $ram_base + $elfloader_offset
+    let kernel_start = $ram_base + $kernel_offset
+
+    # Check root-task doesn't overlap with elfloader
+    # Root-task is typically loaded BEFORE elfloader in memory layout
+    if $roottask_offset < $elfloader_offset {
+        # Root-task is before elfloader, check it doesn't extend into elfloader
+        if $roottask_end > $elfloader_start {
+            print ""
+            print $"(ansi yellow_bold)⚠ Memory layout overlap detected!(ansi reset)"
+            print $"(ansi yellow)Root-task has grown too large and overlaps with elfloader:(ansi reset)"
+            let roottask_kb = ($roottask_size // 1024)
+            print $"  Root-task:  (printf '0x%x' $roottask_start) - (printf '0x%x' $roottask_end) \(($roottask_kb) KB\)"
+            print $"  Elfloader:  (printf '0x%x' $elfloader_start) - ..."
+            print $"  Overlap:    (printf '0x%x' ($roottask_end - $elfloader_start)) bytes"
+            print ""
+
+            # Calculate new offset: place root-task after kernel, with 1MB alignment
+            # Memory layout: DTB -> elfloader (embedded images) -> kernel -> root-task
+            # Root-task must be after kernel_offset + some margin for kernel size
+            let suggested_offset = (($kernel_offset + 0x200000) // 0x100000) * 0x100000  # kernel + 2MB margin, rounded up
+
+            print $"(ansi cyan_bold)🔧 Auto-fixing: Adjusting roottask_offset(ansi reset)"
+            print $"  Old: (printf '0x%x' $roottask_offset)"
+            print $"  New: (printf '0x%x' $suggested_offset)"
+            print ""
+
+            # Update build-config.toml (both value and comment)
+            let old_offset_hex = (printf '0x%x' $roottask_offset)
+            let new_offset_hex = (printf '0x%x' $suggested_offset)
+            let new_addr_hex = (printf '0x%x' ($ram_base + $suggested_offset))
+
+            let old_line = $"roottask_offset = \"($old_offset_hex)\""
+            let new_line = $"roottask_offset = \"($new_offset_hex)\"  # Root task at ram_base + ($new_offset_hex) = ($new_addr_hex)"
+
+            # Read, update, and write config file as raw text
+            let config_content = (open --raw build-config.toml)
+            # Replace the entire line including any existing comment
+            let updated_content = ($config_content | str replace -r $"roottask_offset = \"($old_offset_hex)\"[^\n]*" $new_line)
+            $updated_content | save -f build-config.toml
+
+            print $"(ansi green)✓ Updated build-config.toml(ansi reset)"
+            print $"(ansi cyan)Rebuilding root-task with new memory layout...(ansi reset)"
+            print ""
+
+            # Return true to signal that we need to rebuild
+            return true
+        }
+    }
+
+    # Check elfloader doesn't overlap with kernel
+    if $elfloader_start >= $kernel_start {
+        print ""
+        print $"(ansi red_bold)ERROR: Elfloader offset >= Kernel offset!(ansi reset)"
+        print $"  Elfloader: (printf '0x%x' $elfloader_start)"
+        print $"  Kernel:    (printf '0x%x' $kernel_start)"
+        print ""
+        error make { msg: "Memory layout configuration error - elfloader cannot be after kernel" }
+    }
+
+    print $"(ansi green)✓ Memory layout validated - no overlaps detected(ansi reset)"
+    return false
+}
+
 # Build elfloader (final bootimage)
 export def "build elfloader" [
     platform_cfg: record,
