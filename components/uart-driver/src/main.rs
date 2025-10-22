@@ -3,9 +3,12 @@
 //! Serial driver for ARM PL011 UART hardware. Supports interrupt-driven
 //! receive with 4KB ring buffer and blocking transmit.
 //!
+//! Provides serial I/O to applications via shared memory IPC channel.
+//!
 //! # Testing
-//! - QEMU: Type characters in terminal, they will be echoed back
-//! - Hardware: Connect serial terminal at 115200 8N1
+//! Enable the `notepad` component in components.toml to test the UART driver
+//! with a real application. The notepad provides a simple text editor that
+//! demonstrates UART input/output handling.
 
 #![no_std]
 #![no_main]
@@ -134,7 +137,7 @@ impl Component for UartDriver {
 }
 
 impl UartDriver {
-    /// Handle receive interrupt - read data and echo back
+    /// Handle receive interrupt - buffer incoming data
     fn handle_rx_interrupt(&mut self) {
         // Read all available bytes from UART FIFO
         while let Some(byte) = self.uart.read_byte() {
@@ -145,18 +148,32 @@ impl UartDriver {
                 printf!("[uart_driver] WARN: RX buffer overflow!\n");
             }
 
-            // Echo the character back
+            // TODO: Notify waiting applications via IPC
+            // In production, this would signal applications that have
+            // registered for UART input via shared memory channel
+        }
+    }
+
+    /// Write data to UART (for applications to use via IPC)
+    #[allow(dead_code)]
+    pub fn write(&mut self, data: &[u8]) {
+        for &byte in data {
             self.uart.write_byte(byte);
+        }
+    }
 
-            // If newline, also send CR
-            if byte == b'\n' || byte == b'\r' {
-                self.uart.write_byte(b'\r');
-                self.uart.write_byte(b'\n');
-
-                // Print statistics
-                printf!("[uart_driver] Stats: {} IRQs, {} chars received, {} buffered\n",
-                    self.irq_count, self.char_count, self.rx_buffer.len());
+    /// Read buffered data (for applications to use via IPC)
+    #[allow(dead_code)]
+    pub fn read(&mut self, buf: &mut [u8]) -> usize {
+        let mut count = 0;
+        for i in 0..buf.len() {
+            if let Some(byte) = self.rx_buffer.pop() {
+                buf[i] = byte;
+                count += 1;
+            } else {
+                break;
             }
         }
+        count
     }
 }

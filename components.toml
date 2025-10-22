@@ -181,9 +181,18 @@ capabilities = [
 
 # Applications - User-facing programs
 [[component]]
+name = "notepad"
+binary = "notepad"
+type = "application"
+priority = 110 # Medium priority - text editor
+autostart = false # Spawned by system_init when needed
+spawned_by = "system_init"
+capabilities = []
+
+[[component]]
 name = "shell"
 binary = "shell"
 type = "application"
 priority = 120 # Medium-low priority - interactive application
-autostart = false                                       # Spawned by system_init after drivers ready
+autostart = false # Spawned by system_init after drivers ready
 capabilities = ["ipc:serial", "ipc:vfs", "ipc:procmgr"]
