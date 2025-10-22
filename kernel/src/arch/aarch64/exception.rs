@@ -336,16 +336,12 @@ extern "C" fn exception_curr_el_spx_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
-            // Dispatch based on IRQ number
-            match irq_id {
-                // Timer interrupt for preemption
-                irq if irq == crate::generated::memory_config::IRQ_TIMER => {
-                    crate::scheduler::timer::timer_tick();
-                }
-                // Unknown IRQ
-                _ => {
-                    kprintln!("[IRQ] Unhandled IRQ {} (kernel context)", irq_id);
-                }
+            // Check if this is the timer IRQ (special case - handled by kernel)
+            if irq_id == crate::generated::memory_config::IRQ_TIMER {
+                crate::scheduler::timer::timer_tick();
+            } else {
+                // Check if a userspace driver has registered for this IRQ
+                crate::objects::irq_handler::handle_irq(irq_id);
             }
 
             // Signal end of interrupt to GIC
@@ -441,16 +437,12 @@ extern "C" fn exception_lower_el_aarch64_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
-            // Dispatch based on IRQ number
-            match irq_id {
-                // Timer interrupt for preemption
-                irq if irq == crate::generated::memory_config::IRQ_TIMER => {
-                    crate::scheduler::timer::timer_tick();
-                }
-                // Unknown IRQ
-                _ => {
-                    kprintln!("[IRQ] Unhandled IRQ {} (userspace context)", irq_id);
-                }
+            // Check if this is the timer IRQ (special case - handled by kernel)
+            if irq_id == crate::generated::memory_config::IRQ_TIMER {
+                crate::scheduler::timer::timer_tick();
+            } else {
+                // Check if a userspace driver has registered for this IRQ
+                crate::objects::irq_handler::handle_irq(irq_id);
             }
 
             // Signal end of interrupt to GIC

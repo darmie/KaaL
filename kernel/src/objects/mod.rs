@@ -33,6 +33,7 @@ pub mod notification;
 pub mod tcb;
 pub mod untyped;
 pub mod invoke;
+pub mod irq_handler;  // IRQ handling capabilities
 pub mod test_runner;
 
 #[cfg(test)]
@@ -47,3 +48,4 @@ pub use notification::Notification;
 pub use tcb::{TCB, ThreadState};
 pub use untyped::{UntypedMemory, ObjectType};
 pub use invoke::{invoke_capability, InvocationArgs, InvocationError, InvocationResult};
+pub use irq_handler::{IRQHandler, IRQControl};
