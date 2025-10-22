@@ -292,8 +292,12 @@ impl ComponentLoader {
         crate::print_hex(pt_root);
         crate::sys_print("\n");
 
-        // 6. Allocate CNode for capability space (4KB)
-        let cspace_root = crate::sys_memory_allocate(4096);
+        // 6. Allocate CNode for capability space
+        // CNode needs:
+        // - CNode struct (~24 bytes)
+        // - Capability slots array (256 slots × 32 bytes = 8KB = 2 pages)
+        // Total: 3 pages minimum (12KB) to avoid overlap with TCB
+        let cspace_root = crate::sys_memory_allocate(12288); // 3 pages
         if cspace_root == usize::MAX {
             return Err(ComponentError::OutOfMemory);
         }

@@ -443,14 +443,11 @@ fn sys_debug_print(tf: &TrapFrame, ptr: u64, len: u64) -> u64 {
 // Chapter 9: Capability Management Syscalls
 //
 
-// Global capability slot counter
-// Slots 0-99 are reserved for well-known capabilities
-static mut NEXT_CAP_SLOT: u64 = 100;
-
 /// Allocate a capability slot
 ///
 /// Returns a capability slot number that can be used to store capabilities.
 /// Capability slots are process-local identifiers used to reference kernel objects.
+/// Each process has its own capability slot namespace starting at slot 100.
 fn sys_cap_allocate() -> u64 {
     // Check if caller has capability management capability
     unsafe {
@@ -465,9 +462,9 @@ fn sys_cap_allocate() -> u64 {
             return u64::MAX; // Permission denied
         }
 
-        let slot = NEXT_CAP_SLOT;
-        NEXT_CAP_SLOT += 1;
-        slot
+        // Allocate from the thread's per-process capability slot allocator
+        let tcb_mut = &mut *current_tcb;
+        tcb_mut.alloc_cap_slot()
     }
 }
 
@@ -782,12 +779,17 @@ fn sys_process_create(
     let pid = tcb_frame.as_usize();
 
     // Initialize CNode at the allocated physical address
+    // Memory layout from caller (root-task):
+    // - cspace_root + 0x0: CNode struct (~24 bytes)
+    // - cspace_root + 0x1000: Capability slots array (256 × 32 = 8KB = 2 pages)
+    // This avoids overlap with TCB which is allocated immediately after
     let cnode_phys = PA::new(cspace_root as usize);
     let cspace_ptr = cspace_root as *mut CNode;
+    let slots_phys = PA::new((cspace_root as usize) + 0x1000); // Slots start 1 page after CNode
 
     // Create CNode with 256 slots (2^8 = 256 capabilities)
     unsafe {
-        let cnode = CNode::new(8, cnode_phys)
+        let cnode = CNode::new(8, slots_phys)  // Use separate slots address!
             .expect("[FATAL] Failed to create CNode for new process");
 
         // Write initialized CNode to allocated memory
@@ -2418,7 +2420,7 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
 
 /// Look up a notification capability from the current thread's CSpace
 unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
-    use crate::objects::{CapType, Notification};
+    use crate::objects::{CapType, Capability, Notification};
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -2489,12 +2491,14 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
 ///
 /// Returns: signal bits (non-zero), or u64::MAX on error
 fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
+    crate::kprintln!("[syscall] sys_wait called: notification_cap_slot={}", notification_cap_slot);
     ksyscall_debug!("[syscall] Wait: notification={}", notification_cap_slot);
 
     unsafe {
         // Get current thread
         let current = crate::scheduler::current_thread();
         if current.is_null() {
+            crate::kprintln!("[syscall] sys_wait: ERROR - no current thread");
             ksyscall_debug!("[syscall] Wait -> error: no current thread");
             return u64::MAX;
         }

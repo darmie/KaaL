@@ -115,13 +115,9 @@ unsafe fn sys_memory_allocate(size: usize) -> usize {
     let result: usize;
     core::arch::asm!(
         "mov x8, {syscall_num}",
-        "mov x0, {size}",
         "svc #0",
-        "mov {result}, x0",
         syscall_num = in(reg) SYS_MEMORY_ALLOCATE,
-        size = in(reg) size,
-        result = out(reg) result,
-        lateout("x0") _,
+        inlateout("x0") size => result,
         lateout("x1") _,
         lateout("x2") _,
         lateout("x3") _,

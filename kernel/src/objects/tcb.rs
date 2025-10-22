@@ -95,6 +95,12 @@ pub struct TCB {
     /// Used by memory_map syscall to allocate virtual addresses.
     /// Starts at USER_VIRT_START and grows upward.
     next_virt_addr: u64,
+
+    /// Next capability slot to allocate in this thread's CSpace
+    ///
+    /// Used by cap_allocate syscall to allocate capability slots.
+    /// Slots 0-99 are reserved for well-known capabilities, starts at 100.
+    next_cap_slot: u64,
 }
 
 /// Thread state - lifecycle states of a thread
@@ -217,6 +223,7 @@ impl TCB {
             tid,
             capabilities,
             next_virt_addr: crate::generated::memory_config::USER_VIRT_START,
+            next_cap_slot: 100, // Slots 0-99 reserved for well-known capabilities
         }
     }
 
@@ -438,6 +445,16 @@ impl TCB {
     #[inline]
     pub fn next_virt_addr(&self) -> u64 {
         self.next_virt_addr
+    }
+
+    /// Allocate a capability slot in this thread's CSpace
+    ///
+    /// Returns the allocated slot number and updates the allocator.
+    /// This is used by cap_allocate syscall to find free capability slots.
+    pub fn alloc_cap_slot(&mut self) -> u64 {
+        let slot = self.next_cap_slot;
+        self.next_cap_slot += 1;
+        slot
     }
 }
 
