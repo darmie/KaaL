@@ -20,6 +20,8 @@ use kaal_sdk::{
     component::Component,
     printf,
     syscall,
+    message::{Channel, ChannelConfig as MsgChannelConfig},
+    channel_setup::{establish_channel, ChannelRole},
 };
 use pl011::Pl011;
 use ring_buffer::RingBuffer;
@@ -41,6 +43,7 @@ pub struct UartDriver {
     irq_handler_slot: usize,
     irq_count: u32,
     char_count: u32,
+    output_channel: Option<Channel<u8>>,
 }
 
 // Platform constants (from build-config.toml)
@@ -48,6 +51,9 @@ const UART0_BASE: usize = 0x09000000;  // UART0 MMIO base address
 const UART0_SIZE: usize = 0x1000;      // 4KB MMIO region
 const IRQ_CONTROL_SLOT: usize = 0;     // IRQControl capability from root-task
 const UART0_IRQ: usize = 33;           // UART0 IRQ number
+
+/// IPC buffer size for output channel (4KB)
+const IPC_BUFFER_SIZE: usize = 4096;
 
 impl Component for UartDriver {
     fn init() -> kaal_sdk::Result<Self> {
@@ -99,6 +105,36 @@ impl Component for UartDriver {
         printf!("[uart_driver] Ready (MMIO: {:#x}, IRQ: {})\n", uart_virt, UART0_IRQ);
         uart.write_str("\r\nUART driver online\r\n");
 
+        // Establish IPC channel with notepad for output
+        printf!("[uart_driver] Establishing output channel to notepad...\n");
+        let output_channel = match establish_channel("kaal.uart.output", IPC_BUFFER_SIZE, ChannelRole::Producer) {
+            Ok(config) => {
+                printf!("[uart_driver] Output channel established (buffer: {:#x})\n", config.buffer_addr);
+
+                // Initialize the SharedRing structure in shared memory
+                use kaal_sdk::ipc::SharedRing;
+                use core::ptr;
+
+                let ring_ptr = config.buffer_addr as *mut SharedRing<u8, 256>;
+                unsafe {
+                    ptr::write(ring_ptr, SharedRing::new());
+                    printf!("[uart_driver] Initialized SharedRing<u8, 256> in shared memory\n");
+                }
+
+                let msg_config = MsgChannelConfig {
+                    shared_memory: config.buffer_addr,
+                    receiver_notify: config.notification_cap as u64,
+                    sender_notify: config.notification_cap as u64,
+                };
+                Some(unsafe { Channel::sender(msg_config) })
+            }
+            Err(e) => {
+                printf!("[uart_driver] WARN: Failed to establish output channel: {}\n", e);
+                printf!("[uart_driver] Will buffer input but not forward to applications\n");
+                None
+            }
+        };
+
         Ok(Self {
             uart,
             rx_buffer: RingBuffer::new(),
@@ -106,6 +142,7 @@ impl Component for UartDriver {
             irq_handler_slot,
             irq_count: 0,
             char_count: 0,
+            output_channel,
         })
     }
 
@@ -143,14 +180,20 @@ impl UartDriver {
         while let Some(byte) = self.uart.read_byte() {
             self.char_count += 1;
 
-            // Store in buffer
-            if self.rx_buffer.push(byte).is_err() {
-                printf!("[uart_driver] WARN: RX buffer overflow!\n");
-            }
+            // Echo character back to UART
+            self.uart.write_byte(byte);
 
-            // TODO: Notify waiting applications via IPC
-            // In production, this would signal applications that have
-            // registered for UART input via shared memory channel
+            // Send to notepad via IPC channel if established
+            if let Some(ref mut channel) = self.output_channel {
+                if let Err(_) = channel.send(byte) {
+                    printf!("[uart_driver] WARN: Failed to send char to notepad\n");
+                }
+            } else {
+                // No channel - store in buffer
+                if self.rx_buffer.push(byte).is_err() {
+                    printf!("[uart_driver] WARN: RX buffer overflow!\n");
+                }
+            }
         }
     }
 

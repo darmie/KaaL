@@ -184,10 +184,13 @@ capabilities = [
 name = "notepad"
 binary = "notepad"
 type = "application"
-priority = 110             # Medium priority - text editor
-autostart = false          # Spawned by system_init when needed
+priority = 110   # Medium priority - text editor
+autostart = false # Enable for testing UART input/output
 spawned_by = "system_init"
-capabilities = []
+capabilities = [
+    "memory:map",     # Needs to map shared IPC buffer from UART driver
+    "caps:allocate",  # Needs to allocate capability slot for notification
+]
 
 [[component]]
 name = "shell"

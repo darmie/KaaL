@@ -17,6 +17,8 @@ use kaal_sdk::{
     component::Component,
     printf,
     syscall,
+    message::{Channel, ChannelConfig as MsgChannelConfig},
+    channel_setup::{establish_channel, ChannelRole},
 };
 
 // Declare as application component
@@ -28,6 +30,9 @@ kaal_sdk::component! {
     impl: Notepad
 }
 
+/// IPC buffer size for UART channel (4KB)
+const IPC_BUFFER_SIZE: usize = 4096;
+
 /// Text editor state
 pub struct Notepad {
     lines: [Line; 32],          // Maximum 32 lines
@@ -35,6 +40,7 @@ pub struct Notepad {
     current_line: Line,
     current_pos: usize,
     char_count: usize,
+    input_channel: Channel<u8>,
 }
 
 /// A single line of text
@@ -98,29 +104,58 @@ impl Component for Notepad {
         printf!("Ready. Start typing!\n");
         printf!("> ");
 
+        // Establish IPC channel with UART driver for input
+        // Retry until uart_driver is ready (it may not have started yet)
+        printf!("[notepad] Waiting for UART driver to be ready...\n");
+        let input_channel = loop {
+            match establish_channel("kaal.uart.output", IPC_BUFFER_SIZE, ChannelRole::Consumer) {
+                Ok(config) => {
+                    printf!("[notepad] Connected to UART driver (buffer: {:#x})\n", config.buffer_addr);
+                    let msg_config = MsgChannelConfig {
+                        shared_memory: config.buffer_addr,
+                        receiver_notify: config.notification_cap as u64,
+                        sender_notify: config.notification_cap as u64,
+                    };
+                    break unsafe { Channel::receiver(msg_config) };
+                }
+                Err(_) => {
+                    // UART driver not ready yet, yield and retry
+                    syscall::yield_now();
+                }
+            }
+        };
+
         Ok(Self {
             lines: [Line::new(); 32],
             line_count: 0,
             current_line: Line::new(),
             current_pos: 0,
             char_count: 0,
+            input_channel,
         })
     }
 
     fn run(&mut self) -> ! {
-        // TODO: Set up IPC channel with UART driver
-        // For now, demonstrate the component structure
+        printf!("[notepad] Entering main loop, waiting for input...\n");
 
         loop {
-            // TODO: Wait for UART characters via IPC channel
-            syscall::yield_now();
+            // Receive character from UART driver via IPC
+            match self.input_channel.receive() {
+                Ok(ch) => {
+                    // Process the character
+                    self.process_char(ch);
+                }
+                Err(_) => {
+                    // No character available, yield
+                    syscall::yield_now();
+                }
+            }
         }
     }
 }
 
 impl Notepad {
     /// Process a single character of input
-    #[allow(dead_code)]
     fn process_char(&mut self, ch: u8) {
         match ch {
             // Newline/Enter - save current line
@@ -201,7 +236,6 @@ impl Notepad {
     }
 
     /// Display statistics
-    #[allow(dead_code)]
     fn show_stats(&self) {
         printf!("\n");
         printf!("=== Notepad Statistics ===\n");
