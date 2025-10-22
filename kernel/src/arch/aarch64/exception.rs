@@ -332,9 +332,26 @@ extern "C" fn exception_curr_el_spx_sync_handler(tf: &mut TrapFrame) {
 
 #[no_mangle]
 extern "C" fn exception_curr_el_spx_irq() {
-    // Timer interrupt for preemption (kernel running)
+    // IRQ while kernel is running
     unsafe {
-        crate::scheduler::timer::timer_tick();
+        // Acknowledge interrupt and get IRQ number from GIC
+        if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
+            // Dispatch based on IRQ number
+            match irq_id {
+                // Timer interrupt for preemption
+                irq if irq == crate::generated::memory_config::IRQ_TIMER => {
+                    crate::scheduler::timer::timer_tick();
+                }
+                // Unknown IRQ
+                _ => {
+                    kprintln!("[IRQ] Unhandled IRQ {} (kernel context)", irq_id);
+                }
+            }
+
+            // Signal end of interrupt to GIC
+            crate::arch::aarch64::gic::end_of_interrupt(irq_id);
+        }
+        // Spurious IRQ if None - just return
     }
 }
 
@@ -420,9 +437,26 @@ extern "C" fn exception_lower_el_aarch64_sync_handler(frame: &mut TrapFrame) {
 
 #[no_mangle]
 extern "C" fn exception_lower_el_aarch64_irq() {
-    // Timer interrupt for preemption (userspace running)
+    // IRQ while userspace is running
     unsafe {
-        crate::scheduler::timer::timer_tick();
+        // Acknowledge interrupt and get IRQ number from GIC
+        if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
+            // Dispatch based on IRQ number
+            match irq_id {
+                // Timer interrupt for preemption
+                irq if irq == crate::generated::memory_config::IRQ_TIMER => {
+                    crate::scheduler::timer::timer_tick();
+                }
+                // Unknown IRQ
+                _ => {
+                    kprintln!("[IRQ] Unhandled IRQ {} (userspace context)", irq_id);
+                }
+            }
+
+            // Signal end of interrupt to GIC
+            crate::arch::aarch64::gic::end_of_interrupt(irq_id);
+        }
+        // Spurious IRQ if None - just return
     }
 }
 

@@ -209,6 +209,24 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_DEVICE,
         ).expect("Failed to map UART");
 
+        // 5. Map GIC (Generic Interrupt Controller) for interrupt handling
+        crate::kprintln!("  Mapping GIC: {:#x} - {:#x}",
+            crate::generated::memory_config::GIC_DIST_BASE,
+            crate::generated::memory_config::GIC_DIST_BASE + crate::generated::memory_config::GIC_DIST_SIZE);
+        crate::memory::paging::identity_map_region(
+            &mut mapper,
+            crate::generated::memory_config::GIC_DIST_BASE,
+            crate::generated::memory_config::GIC_DIST_SIZE,
+            PageTableFlags::KERNEL_DEVICE,
+        ).expect("Failed to map GIC Distributor");
+
+        crate::memory::paging::identity_map_region(
+            &mut mapper,
+            crate::generated::memory_config::GIC_CPU_BASE,
+            crate::generated::memory_config::GIC_CPU_SIZE,
+            PageTableFlags::KERNEL_DEVICE,
+        ).expect("Failed to map GIC CPU Interface");
+
         // CRITICAL: Install exception handlers BEFORE MMU enable!
         // MMU enable might trigger exceptions, so handlers must be ready
         crate::arch::aarch64::exception::init();
@@ -236,6 +254,13 @@ pub fn kernel_entry() -> ! {
     // Exception Handling & Syscalls - See docs/chapters/CHAPTER_03_STATUS.md
     // Exception vector table already installed before MMU enable
     // Exception handling verified (trap frame, ESR/FAR decoding, syscalls)
+
+    // Initialize GIC (Generic Interrupt Controller)
+    crate::kprintln!("[boot] Initializing interrupt controller (GIC)...");
+    unsafe {
+        crate::arch::aarch64::gic::init();
+    }
+    crate::kprintln!("");
 
     crate::kprintln!("[boot] Kernel initialization complete");
     crate::kprintln!("");
@@ -267,8 +292,11 @@ pub fn kernel_entry() -> ! {
         // Initialize timer for preemption
         crate::scheduler::timer::init();
 
-        // Enable IRQs for timer interrupts
-        core::arch::asm!("msr daifclr, #2"); // Clear IRQ mask (bit 1)
+        // Enable timer interrupt in GIC
+        crate::arch::aarch64::gic::enable_irq(crate::generated::memory_config::IRQ_TIMER);
+
+        // Enable IRQs at CPU level
+        core::arch::asm!("msr daifclr, #2"); // Clear IRQ mask (bit 1 = IRQ)
     }
     crate::kprintln!("");
 
