@@ -47,9 +47,12 @@ flamegraph.svg
 perf.data*
 
 # QEMU
-qemu.log
+qemu_*.log
+qemu_*.logs
 *.img
 *.iso
+test-*.logs
+debug.logs
 
 # Build artifacts
 *.o
