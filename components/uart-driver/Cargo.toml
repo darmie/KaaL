@@ -1,0 +1,16 @@
+[package]
+name = "uart-driver"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# This empty workspace table opts out of the parent workspace
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

@@ -166,6 +166,18 @@ capabilities = [
     "caps:allocate",   # Needs CAP_CAPS to allocate capability slots for IRQ tests
 ]
 
+[[component]]
+name = "uart_driver"
+binary = "uart-driver"
+type = "driver"
+priority = 50 # High priority - runs before test components
+autostart = true # Enable to test IRQ driver
+spawned_by = "system_init"
+capabilities = [
+    "caps:allocate",   # Needs CAP_CAPS to allocate notification/IRQHandler slots
+    "irq:control",     # Receives IRQControl delegation from root-task via system_init
+]
+
 # Applications - User-facing programs
 [[component]]
 name = "shell"
