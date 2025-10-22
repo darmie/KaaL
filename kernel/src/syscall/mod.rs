@@ -2785,6 +2785,9 @@ fn sys_irq_handler_get(tf: &TrapFrame, irq_control_cap: u64, irq_num: u64, notif
             return u64::MAX;
         }
 
+        // Enable the IRQ in the GIC
+        crate::arch::aarch64::gic::enable_irq(irq_num as u32);
+
         // Create capability for IRQHandler
         let irq_handler_cap = crate::objects::Capability::new(
             crate::objects::CapType::IrqHandler,
