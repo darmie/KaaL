@@ -118,6 +118,13 @@ pub fn establish_channel(
         Err(_) => return Err("Failed to create notification"),
     };
 
+    // WORKAROUND: This printf prevents a heisenbug where buffer_addr gets corrupted
+    // The bug appears to be related to compiler optimization or stack layout
+    // Removing this line causes notepad to crash with FAR=0x164 (wrong buffer address)
+    // Root cause: likely printf! macro's static mut globals affecting register allocation
+    use crate::printf;
+    printf!("[channel_setup] virt_addr={:#x}\n", virt_addr);
+
     // TODO: For proper IPC, we need to:
     // - Share the physical address with the other component via broker
     // - Exchange notification capabilities
