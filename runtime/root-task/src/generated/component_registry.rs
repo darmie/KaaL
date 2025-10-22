@@ -138,9 +138,10 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         autostart: false,
         capabilities:     &[
         "memory:allocate",
-        "memory:map"
+        "memory:map",
+        "caps:allocate"
     ],
-        capabilities_bitmask: 1,
+        capabilities_bitmask: 9,
         binary_data: Some(include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory")),
     },
     ComponentDescriptor {

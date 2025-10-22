@@ -46,7 +46,7 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         name: "test_memory",
         priority: 200,
         autostart: true,
-        capabilities_bitmask: 1,
+        capabilities_bitmask: 9,
         binary_data: include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory"),
     },
 ];
