@@ -87,6 +87,35 @@ pub const RTC_BASE: u64 = ($platform_cfg.rtc_base);
 pub const TIMER_BASE: u64 = ($platform_cfg.timer_base);
 
 // =============================================================================
+// Interrupt Controller \(GICv2\)
+// =============================================================================
+
+/// GIC Distributor base address
+pub const GIC_DIST_BASE: usize = ($platform_cfg.gic_dist_base);
+
+/// GIC CPU Interface base address
+pub const GIC_CPU_BASE: usize = ($platform_cfg.gic_cpu_base);
+
+/// GIC Distributor size
+pub const GIC_DIST_SIZE: usize = ($platform_cfg.gic_dist_size);
+
+/// GIC CPU Interface size
+pub const GIC_CPU_SIZE: usize = ($platform_cfg.gic_cpu_size);
+
+// =============================================================================
+// IRQ Numbers
+// =============================================================================
+
+/// ARM Generic Timer IRQ
+pub const IRQ_TIMER: u32 = ($platform_cfg.irq_timer);
+
+/// UART0 IRQ
+pub const IRQ_UART0: u32 = ($platform_cfg.irq_uart0);
+
+/// UART1 IRQ
+pub const IRQ_UART1: u32 = ($platform_cfg.irq_uart1);
+
+// =============================================================================
 // Device IDs for syscalls
 // =============================================================================
 

@@ -39,6 +39,17 @@ uart1_base = "0x09010000" # PL011 UART1
 rtc_base = "0x0A000000"   # ARM PL031 RTC
 timer_base = "0x0A003000" # ARM Generic Timer
 
+# Interrupt controller (GICv2)
+gic_dist_base = "0x08000000" # GIC Distributor
+gic_cpu_base = "0x08010000"  # GIC CPU Interface
+gic_dist_size = "0x10000"    # 64KB
+gic_cpu_size = "0x10000"     # 64KB
+
+# IRQ numbers (QEMU virt platform)
+irq_timer = "27"  # ARM Generic Timer
+irq_uart0 = "33"  # PL011 UART0
+irq_uart1 = "34"  # PL011 UART1
+
 # Boot memory layout offsets (relative to ram_base)
 dtb_offset = "0x0"            # DTB at ram_base + 0x0 = 0x40000000
 roottask_offset = "0x100000"  # Root task at ram_base + 0x100000 = 0x40100000
@@ -87,6 +98,17 @@ ram_size = "0x40000000" # 1GB (for 1GB model)
 # Device addresses
 uart_base = "0xFE201000" # Mini UART
 
+# Interrupt controller (GICv2)
+gic_dist_base = "0xFF841000" # GIC Distributor (BCM2711)
+gic_cpu_base = "0xFF842000"  # GIC CPU Interface (BCM2711)
+gic_dist_size = "0x1000"     # 4KB
+gic_cpu_size = "0x2000"      # 8KB
+
+# IRQ numbers (BCM2711)
+irq_timer = "30"  # Generic Timer
+irq_uart0 = "57"  # Mini UART
+irq_uart1 = "57"  # Mini UART (same as uart0)
+
 # Boot memory layout offsets
 dtb_offset = "0x0"           # DTB at 0x0
 elfloader_offset = "0x80000" # Elfloader at 0x80000 (standard ARM64 boot offset)
@@ -128,6 +150,17 @@ ram_size = "0x20000000" # 512MB
 
 # Device addresses (customize for your board)
 uart_base = "0x10000000"
+
+# Interrupt controller (GICv2 - customize for your board)
+gic_dist_base = "0x08000000" # GIC Distributor
+gic_cpu_base = "0x08010000"  # GIC CPU Interface
+gic_dist_size = "0x10000"    # 64KB
+gic_cpu_size = "0x10000"     # 64KB
+
+# IRQ numbers (customize for your board)
+irq_timer = "27"  # Timer IRQ
+irq_uart0 = "33"  # UART0 IRQ
+irq_uart1 = "34"  # UART1 IRQ
 
 # Boot memory layout offsets
 dtb_offset = "0x0"

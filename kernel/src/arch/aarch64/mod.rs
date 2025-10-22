@@ -7,3 +7,4 @@ pub mod mmu;
 pub mod exception;
 pub mod context;
 pub mod context_switch;
+pub mod gic;
