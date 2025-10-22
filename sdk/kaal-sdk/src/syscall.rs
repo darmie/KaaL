@@ -40,6 +40,10 @@ pub mod numbers {
     pub const SYS_MEMORY_REMAP: usize = 0x24;
     pub const SYS_MEMORY_SHARE: usize = 0x25;
 
+    // IRQ handling syscalls
+    pub const SYS_IRQ_HANDLER_GET: usize = 0x40;
+    pub const SYS_IRQ_HANDLER_ACK: usize = 0x41;
+
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
 
@@ -1271,6 +1275,119 @@ pub unsafe fn cap_insert_self(
         slot,
         cap_type,
         object_ptr
+    );
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(crate::Error::SyscallFailed)
+    }
+}
+
+// =============================================================================
+// IRQ Handling Syscalls
+// =============================================================================
+
+/// Allocate an IRQ handler capability (requires IRQControl capability)
+///
+/// This syscall allows a process with an IRQControl capability to allocate
+/// an IRQHandler for a specific hardware interrupt and bind it to a notification.
+///
+/// # Arguments
+///
+/// * `irq_control_cap` - Capability slot containing IRQControl capability
+/// * `irq_num` - Hardware IRQ number to allocate (e.g., 27 for timer, 33 for UART0)
+/// * `notification_cap` - Capability slot containing notification to signal on IRQ
+/// * `irq_handler_slot` - Empty capability slot to store the new IRQHandler
+///
+/// # Returns
+///
+/// Ok(()) on success, error on failure
+///
+/// # Security
+///
+/// - Requires IRQControl capability (only root-task has this by default)
+/// - Only one IRQHandler can exist per IRQ number
+/// - IRQHandler is bound to the specific notification
+///
+/// # Example
+///
+/// ```no_run
+/// use kaal_sdk::syscall;
+///
+/// // Only root-task has IRQControl in slot 0
+/// let irq_control = 0;
+/// let uart_irq = 33;
+///
+/// // Create notification for IRQ signaling
+/// let notification = syscall::notification_create()?;
+///
+/// // Allocate slot for IRQHandler
+/// let irq_handler_slot = syscall::cap_allocate()?;
+///
+/// // Allocate IRQ handler
+/// syscall::irq_handler_get(irq_control, uart_irq, notification, irq_handler_slot)?;
+/// ```
+pub fn irq_handler_get(
+    irq_control_cap: usize,
+    irq_num: usize,
+    notification_cap: usize,
+    irq_handler_slot: usize,
+) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_IRQ_HANDLER_GET,
+        irq_control_cap,
+        irq_num,
+        notification_cap,
+        irq_handler_slot
+    );
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(crate::Error::SyscallFailed)
+    }
+}
+
+/// Acknowledge IRQ and re-enable it (requires IRQHandler capability)
+///
+/// This syscall must be called by a device driver after it has serviced an interrupt.
+/// It re-enables the IRQ at the GIC, allowing future interrupts to be delivered.
+///
+/// # Arguments
+///
+/// * `irq_handler_cap` - Capability slot containing IRQHandler capability
+///
+/// # Returns
+///
+/// Ok(()) on success, error on failure
+///
+/// # Security
+///
+/// - Requires IRQHandler capability for the specific IRQ
+/// - Only the holder of the IRQHandler can acknowledge the IRQ
+///
+/// # Example
+///
+/// ```no_run
+/// use kaal_sdk::syscall;
+///
+/// // Device driver IRQ handling loop
+/// loop {
+///     // Wait for IRQ
+///     syscall::wait(notification)?;
+///
+///     // Service the device
+///     handle_uart_interrupt();
+///
+///     // Re-enable IRQ
+///     syscall::irq_handler_ack(irq_handler)?;
+/// }
+/// ```
+pub fn irq_handler_ack(irq_handler_cap: usize) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_IRQ_HANDLER_ACK,
+        irq_handler_cap
     );
 
     if result == 0 {

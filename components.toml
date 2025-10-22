@@ -163,6 +163,7 @@ spawned_by = "system_init" # Delegation enabled
 capabilities = [
     "memory:allocate", # Needs CAP_MEMORY to test remap/share
     "memory:map",      # Needs CAP_MEMORY to map pages
+    "caps:allocate",   # Needs CAP_CAPS to allocate capability slots for IRQ tests
 ]
 
 # Applications - User-facing programs

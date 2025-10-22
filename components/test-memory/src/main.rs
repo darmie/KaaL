@@ -1,10 +1,14 @@
-//! Memory Management Syscall Tests
+//! Memory Management and IRQ Syscall Tests
 //!
-//! Tests for SYS_MEMORY_REMAP and SYS_MEMORY_SHARE syscalls.
+//! Tests for:
+//! - SYS_MEMORY_REMAP and SYS_MEMORY_SHARE syscalls
+//! - SYS_IRQ_HANDLER_GET and SYS_IRQ_HANDLER_ACK syscalls
 //!
 //! Test Plan:
 //! 1. Memory Remap - Change permissions on existing mappings
 //! 2. Memory Share - Share memory between processes (requires additional process)
+//! 3. IRQ Handler Get - Allocate IRQ handler capability (requires IRQControl)
+//! 4. IRQ Handler Ack - Acknowledge IRQ and re-enable
 
 #![no_std]
 #![no_main]
@@ -13,7 +17,7 @@ use kaal_sdk::{printf, syscall};
 
 const PAGE_SIZE: usize = 4096;
 
-// Syscall numbers
+// Syscall numbers (for memory tests that need raw syscalls)
 const SYS_MEMORY_ALLOCATE: u64 = 0x11;
 const SYS_MEMORY_MAP: u64 = 0x15;
 const SYS_MEMORY_REMAP: u64 = 0x24;
@@ -34,9 +38,12 @@ pub extern "C" fn _start() -> ! {
     // Test 1: Memory Remap
     test_memory_remap();
 
+    // Test 2: IRQ Capabilities
+    test_irq_capabilities();
+
     printf!("\n");
     printf!("===========================================\n");
-    printf!("  All Memory Tests Complete\n");
+    printf!("  All Tests Complete\n");
     printf!("===========================================\n");
     printf!("\n");
 
@@ -143,6 +150,79 @@ fn test_memory_remap() {
 
     printf!("\n");
     printf!("✓ Test 1: Memory Remap - ALL TESTS PASSED\n");
+}
+
+/// Test 2: IRQ Capability Tests
+/// Note: This test requires IRQControl capability to be passed to this component
+/// For now, it tests error handling when IRQControl is not available
+fn test_irq_capabilities() {
+    printf!("\n");
+    printf!("Test 2: IRQ Capability System\n");
+    printf!("------------------------------------------\n");
+
+    // Test 2a: Create notification for IRQ signaling
+    printf!("Test 2a: Create notification capability\n");
+    let notification_cap = match syscall::notification_create() {
+        Ok(cap) => cap,
+        Err(_) => {
+            printf!("  ✗ FAIL: notification_create failed\n");
+            return;
+        }
+    };
+    printf!("  ✓ PASS: Notification created at slot {}\n", notification_cap);
+
+    // Test 2b: Allocate slot for IRQHandler
+    printf!("Test 2b: Allocate capability slot for IRQHandler\n");
+    let irq_handler_slot = match syscall::cap_allocate() {
+        Ok(slot) => slot,
+        Err(_) => {
+            printf!("  ✗ FAIL: cap_allocate failed\n");
+            return;
+        }
+    };
+    printf!("  ✓ PASS: Allocated slot {}\n", irq_handler_slot);
+
+    // Test 2c: Try to allocate IRQ handler WITHOUT IRQControl capability
+    // This should fail since test-memory doesn't have IRQControl
+    printf!("Test 2c: Try IRQ handler allocation without IRQControl (should fail)\n");
+
+    // IRQControl would be in slot 0 if we had it, but we don't
+    let fake_irq_control_slot = 0;
+    let test_irq = 100; // Some arbitrary IRQ number
+
+    let result = syscall::irq_handler_get(
+        fake_irq_control_slot,
+        test_irq,
+        notification_cap,
+        irq_handler_slot
+    );
+
+    if result.is_err() {
+        printf!("  ✓ PASS: Correctly rejected (no IRQControl capability)\n");
+        printf!("  This is expected - only root-task has IRQControl\n");
+    } else {
+        printf!("  ✗ FAIL: Should have rejected request\n");
+        return;
+    }
+
+    // Test 2d: Try to ACK non-existent IRQ handler
+    printf!("Test 2d: Try to ACK non-existent IRQ handler (should fail)\n");
+    let result = syscall::irq_handler_ack(irq_handler_slot);
+    if result.is_err() {
+        printf!("  ✓ PASS: Correctly rejected (no IRQHandler in slot)\n");
+    } else {
+        printf!("  ✗ FAIL: Should have rejected ACK\n");
+        return;
+    }
+
+    printf!("\n");
+    printf!("✓ Test 2: IRQ Capability System - ALL TESTS PASSED\n");
+    printf!("\n");
+    printf!("Note: Full IRQ functionality test would require:\n");
+    printf!("  1. IRQControl capability (root-task only)\n");
+    printf!("  2. Valid hardware IRQ to bind\n");
+    printf!("  3. Device driver to trigger interrupt\n");
+    printf!("  These tests verify the syscall interface works correctly.\n");
 }
 
 // =============================================================================

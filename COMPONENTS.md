@@ -83,10 +83,11 @@ User-facing programs with minimal privileges.
 
 Components are assigned priorities (0-255):
 
-- **255**: system_init (highest priority)
-- **200**: Device drivers
-- **150**: Core system services
-- **100**: Optional services
+- **255**: root-task (highest priority)
+- **200**: system_init (high priority)
+- **150**: Device drivers (high priority)
+- **100**: Core system services
+- **80**: Optional services
 - **50**: User applications (lowest priority)
 
 Higher priority = more CPU time when multiple components are runnable.
@@ -274,7 +275,7 @@ Error: components.toml not found at project root
 - [COMPONENT_DISCOVERY.md](docs/COMPONENT_DISCOVERY.md) - Detailed architecture
 - [SYSTEM_COMPOSITION.md](docs/SYSTEM_COMPOSITION.md) - Overall system design
 - [sdk/README.md](sdk/README.md) - SDK component patterns
-- [examples/system-init/](examples/system-init/) - system_init implementation
+- [components/system-init/](examples/system-init/) - system_init implementation
 
 ## Summary
 
