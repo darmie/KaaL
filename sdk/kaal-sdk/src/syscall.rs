@@ -57,21 +57,17 @@ pub mod numbers {
 /// kaal_sdk::syscall::print("Hello, world!\n");
 /// ```
 pub fn print(msg: &str) {
-    unsafe {
-        let msg_ptr = msg.as_ptr() as usize;
-        let msg_len = msg.len();
+    let msg_ptr = msg.as_ptr() as usize;
+    let msg_len = msg.len();
 
+    unsafe {
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {msg_ptr}",
-            "mov x1, {msg_len}",
             "svc #0",
             syscall_num = in(reg) numbers::SYS_DEBUG_PRINT,
-            msg_ptr = in(reg) msg_ptr,
-            msg_len = in(reg) msg_len,
-            out("x0") _,
-            out("x1") _,
-            out("x8") _,
+            inlateout("x0") msg_ptr => _,
+            inlateout("x1") msg_len => _,
+            lateout("x8") _,
         );
     }
 }
@@ -186,15 +182,11 @@ pub fn cap_revoke(cnode_cap: usize, slot: usize) -> Result<()> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cnode_cap}",
-            "mov x1, {slot}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_REVOKE,
-            cnode_cap = in(reg) cnode_cap,
-            slot = in(reg) slot,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") cnode_cap => result,
+            inlateout("x1") slot => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -235,19 +227,13 @@ pub fn cap_derive(cnode_cap: usize, src_slot: usize, dest_slot: usize, new_right
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cnode_cap}",
-            "mov x1, {src_slot}",
-            "mov x2, {dest_slot}",
-            "mov x3, {new_rights}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_DERIVE,
-            cnode_cap = in(reg) cnode_cap,
-            src_slot = in(reg) src_slot,
-            dest_slot = in(reg) dest_slot,
-            new_rights = in(reg) new_rights,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") cnode_cap => result,
+            inlateout("x1") src_slot => _,
+            inlateout("x2") dest_slot => _,
+            inlateout("x3") new_rights => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -288,19 +274,13 @@ pub fn cap_mint(cnode_cap: usize, src_slot: usize, dest_slot: usize, badge: usiz
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cnode_cap}",
-            "mov x1, {src_slot}",
-            "mov x2, {dest_slot}",
-            "mov x3, {badge}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_MINT,
-            cnode_cap = in(reg) cnode_cap,
-            src_slot = in(reg) src_slot,
-            dest_slot = in(reg) dest_slot,
-            badge = in(reg) badge,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") cnode_cap => result,
+            inlateout("x1") src_slot => _,
+            inlateout("x2") dest_slot => _,
+            inlateout("x3") badge => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -333,19 +313,13 @@ pub fn cap_copy(src_cnode_cap: usize, src_slot: usize, dest_cnode_cap: usize, de
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {src_cnode_cap}",
-            "mov x1, {src_slot}",
-            "mov x2, {dest_cnode_cap}",
-            "mov x3, {dest_slot}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_COPY,
-            src_cnode_cap = in(reg) src_cnode_cap,
-            src_slot = in(reg) src_slot,
-            dest_cnode_cap = in(reg) dest_cnode_cap,
-            dest_slot = in(reg) dest_slot,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") src_cnode_cap => result,
+            inlateout("x1") src_slot => _,
+            inlateout("x2") dest_cnode_cap => _,
+            inlateout("x3") dest_slot => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -376,15 +350,11 @@ pub fn cap_delete(cnode_cap: usize, slot: usize) -> Result<()> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cnode_cap}",
-            "mov x1, {slot}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_DELETE,
-            cnode_cap = in(reg) cnode_cap,
-            slot = in(reg) slot,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") cnode_cap => result,
+            inlateout("x1") slot => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -419,19 +389,13 @@ pub fn cap_move(src_cnode_cap: usize, src_slot: usize, dest_cnode_cap: usize, de
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {src_cnode_cap}",
-            "mov x1, {src_slot}",
-            "mov x2, {dest_cnode_cap}",
-            "mov x3, {dest_slot}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_CAP_MOVE,
-            src_cnode_cap = in(reg) src_cnode_cap,
-            src_slot = in(reg) src_slot,
-            dest_cnode_cap = in(reg) dest_cnode_cap,
-            dest_slot = in(reg) dest_slot,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") src_cnode_cap => result,
+            inlateout("x1") src_slot => _,
+            inlateout("x2") dest_cnode_cap => _,
+            inlateout("x3") dest_slot => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|_| ())
     }
@@ -449,13 +413,10 @@ pub fn memory_allocate(size: usize) -> Result<usize> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {size}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_MEMORY_ALLOCATE,
-            size = in(reg) size,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") size => result,
+            lateout("x8") _,
         );
         Error::from_syscall(result)
     }
@@ -475,20 +436,12 @@ pub fn memory_map(phys_addr: usize, size: usize, permissions: usize) -> Result<u
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {phys}",
-            "mov x1, {size}",
-            "mov x2, {perms}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_MEMORY_MAP,
-            phys = in(reg) phys_addr,
-            size = in(reg) size,
-            perms = in(reg) permissions,
-            result = out(reg) result,
-            out("x8") _,
-            out("x0") _,
-            out("x1") _,
-            out("x2") _,
+            inlateout("x0") phys_addr => result,
+            inlateout("x1") size => _,
+            inlateout("x2") permissions => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result)
     }
@@ -504,17 +457,11 @@ pub fn memory_unmap(virt_addr: usize, size: usize) -> Result<()> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {virt}",
-            "mov x1, {size}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_MEMORY_UNMAP,
-            virt = in(reg) virt_addr,
-            size = in(reg) size,
-            result = out(reg) result,
-            out("x8") _,
-            out("x0") _,
-            out("x1") _,
+            inlateout("x0") virt_addr => result,
+            inlateout("x1") size => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result)?;
         Ok(())
@@ -562,20 +509,12 @@ pub fn memory_remap(virt_addr: usize, size: usize, new_permissions: usize) -> Re
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {virt}",
-            "mov x1, {size}",
-            "mov x2, {perms}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_MEMORY_REMAP,
-            virt = in(reg) virt_addr,
-            size = in(reg) size,
-            perms = in(reg) new_permissions,
-            result = out(reg) result,
-            out("x8") _,
-            out("x0") _,
-            out("x1") _,
-            out("x2") _,
+            inlateout("x0") virt_addr => result,
+            inlateout("x1") size => _,
+            inlateout("x2") new_permissions => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result)?;
         Ok(())
@@ -643,26 +582,14 @@ pub fn memory_share(
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {target_tcb}",
-            "mov x1, {src_virt}",
-            "mov x2, {size}",
-            "mov x3, {dst_virt}",
-            "mov x4, {perms}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_MEMORY_SHARE,
-            target_tcb = in(reg) target_tcb_cap,
-            src_virt = in(reg) source_virt_addr,
-            size = in(reg) size,
-            dst_virt = in(reg) dest_virt_addr,
-            perms = in(reg) permissions,
-            result = out(reg) result,
-            out("x8") _,
-            out("x0") _,
-            out("x1") _,
-            out("x2") _,
-            out("x3") _,
-            out("x4") _,
+            inlateout("x0") target_tcb_cap => result,
+            inlateout("x1") source_virt_addr => _,
+            inlateout("x2") size => _,
+            inlateout("x3") dest_virt_addr => _,
+            inlateout("x4") permissions => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result)?;
         Ok(())
@@ -681,13 +608,10 @@ pub fn device_request(device_id: usize) -> Result<usize> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {device_id}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_DEVICE_REQUEST,
-            device_id = in(reg) device_id,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") device_id => result,
+            lateout("x8") _,
         );
         Error::from_syscall(result)
     }
@@ -745,17 +669,11 @@ pub fn signal(notification: usize, badge: u64) -> Result<()> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cap}",
-            "mov x1, {badge}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_SIGNAL,
-            cap = in(reg) notification,
-            badge = in(reg) badge,
-            result = out(reg) result,
-            out("x8") _,
-            out("x0") _,
-            out("x1") _,
+            inlateout("x0") notification => result,
+            inlateout("x1") badge => _,
+            lateout("x8") _,
         );
         Error::from_syscall(result)?;
         Ok(())
@@ -784,13 +702,10 @@ pub fn wait(notification: usize) -> Result<u64> {
         let result: usize;
         core::arch::asm!(
             "mov x8, {syscall_num}",
-            "mov x0, {cap}",
             "svc #0",
-            "mov {result}, x0",
             syscall_num = in(reg) numbers::SYS_WAIT,
-            cap = in(reg) notification,
-            result = out(reg) result,
-            out("x8") _,
+            inlateout("x0") notification => result,
+            lateout("x8") _,
         );
         Error::from_syscall(result).map(|v| v as u64)
     }
@@ -870,14 +785,10 @@ pub unsafe fn raw_syscall_1arg(syscall_num: usize, arg0: usize) -> usize {
     let result: usize;
     core::arch::asm!(
         "mov x8, {syscall_num}",
-        "mov x0, {arg0}",
         "svc #0",
-        "mov {result}, x0",
         syscall_num = in(reg) syscall_num,
-        arg0 = in(reg) arg0,
-        result = out(reg) result,
-        out("x8") _,
-        out("x0") _,
+        inlateout("x0") arg0 => result,
+        lateout("x8") _,
     );
     result
 }
@@ -900,20 +811,12 @@ pub unsafe fn raw_syscall_3args(syscall_num: usize, arg0: usize, arg1: usize, ar
     let result: usize;
     core::arch::asm!(
         "mov x8, {syscall_num}",
-        "mov x0, {arg0}",
-        "mov x1, {arg1}",
-        "mov x2, {arg2}",
         "svc #0",
-        "mov {result}, x0",
         syscall_num = in(reg) syscall_num,
-        arg0 = in(reg) arg0,
-        arg1 = in(reg) arg1,
-        arg2 = in(reg) arg2,
-        result = out(reg) result,
-        out("x8") _,
-        out("x0") _,
-        out("x1") _,
-        out("x2") _,
+        inlateout("x0") arg0 => result,
+        inlateout("x1") arg1 => _,
+        inlateout("x2") arg2 => _,
+        lateout("x8") _,
     );
     result
 }
@@ -959,17 +862,11 @@ macro_rules! syscall {
         unsafe {
             core::arch::asm!(
                 "mov x8, {syscall_num}",
-                "mov x0, {arg0}",
-                "mov x1, {arg1}",
                 "svc #0",
-                "mov {result}, x0",
                 syscall_num = in(reg) $num,
-                arg0 = in(reg) $arg0 as usize,
-                arg1 = in(reg) $arg1 as usize,
-                result = out(reg) result,
-                out("x8") _,
-                out("x0") _,
-                out("x1") _,
+                inlateout("x0") $arg0 as usize => result,
+                inlateout("x1") $arg1 as usize => _,
+                lateout("x8") _,
             );
             result
         }
@@ -985,24 +882,14 @@ macro_rules! syscall {
         let result: usize;
         unsafe {
             core::arch::asm!(
-                "mov x0, {arg0}",
-                "mov x1, {arg1}",
-                "mov x2, {arg2}",
-                "mov x3, {arg3}",
                 "mov x8, {num}",
                 "svc #0",
-                "mov {result}, x0",
-                arg0 = in(reg) $arg0 as usize,
-                arg1 = in(reg) $arg1 as usize,
-                arg2 = in(reg) $arg2 as usize,
-                arg3 = in(reg) $arg3 as usize,
                 num = in(reg) $num,
-                result = out(reg) result,
-                out("x0") _,
-                out("x1") _,
-                out("x2") _,
-                out("x3") _,
-                out("x8") _,
+                inlateout("x0") $arg0 as usize => result,
+                inlateout("x1") $arg1 as usize => _,
+                inlateout("x2") $arg2 as usize => _,
+                inlateout("x3") $arg3 as usize => _,
+                lateout("x8") _,
             );
             result
         }
@@ -1013,27 +900,15 @@ macro_rules! syscall {
         let result: usize;
         unsafe {
             core::arch::asm!(
-                "mov x0, {arg0}",
-                "mov x1, {arg1}",
-                "mov x2, {arg2}",
-                "mov x3, {arg3}",
-                "mov x4, {arg4}",
                 "mov x8, {num}",
                 "svc #0",
-                "mov {result}, x0",
-                arg0 = in(reg) $arg0 as usize,
-                arg1 = in(reg) $arg1 as usize,
-                arg2 = in(reg) $arg2 as usize,
-                arg3 = in(reg) $arg3 as usize,
-                arg4 = in(reg) $arg4 as usize,
                 num = in(reg) $num,
-                result = out(reg) result,
-                out("x0") _,
-                out("x1") _,
-                out("x2") _,
-                out("x3") _,
-                out("x4") _,
-                out("x8") _,
+                inlateout("x0") $arg0 as usize => result,
+                inlateout("x1") $arg1 as usize => _,
+                inlateout("x2") $arg2 as usize => _,
+                inlateout("x3") $arg3 as usize => _,
+                inlateout("x4") $arg4 as usize => _,
+                lateout("x8") _,
             );
             result
         }
@@ -1045,42 +920,20 @@ macro_rules! syscall {
         let result: usize;
         unsafe {
             core::arch::asm!(
-                "mov x0, {arg0}",
-                "mov x1, {arg1}",
-                "mov x2, {arg2}",
-                "mov x3, {arg3}",
-                "mov x4, {arg4}",
-                "mov x5, {arg5}",
-                "mov x6, {arg6}",
-                "mov x7, {arg7}",
                 "mov x8, {num}",
-                "mov x9, {priority}",
-                "mov x10, {capabilities}",
                 "svc #0",
-                "mov {result}, x0",
-                arg0 = in(reg) $arg0 as usize,
-                arg1 = in(reg) $arg1 as usize,
-                arg2 = in(reg) $arg2 as usize,
-                arg3 = in(reg) $arg3 as usize,
-                arg4 = in(reg) $arg4 as usize,
-                arg5 = in(reg) $arg5 as usize,
-                arg6 = in(reg) $arg6 as usize,
-                arg7 = in(reg) $arg7 as usize,
                 num = in(reg) $num,
-                priority = in(reg) $priority as usize,
-                capabilities = in(reg) $capabilities as usize,
-                result = out(reg) result,
-                out("x0") _,
-                out("x1") _,
-                out("x2") _,
-                out("x3") _,
-                out("x4") _,
-                out("x5") _,
-                out("x6") _,
-                out("x7") _,
-                out("x8") _,
-                out("x9") _,
-                out("x10") _,
+                inlateout("x0") $arg0 as usize => result,
+                inlateout("x1") $arg1 as usize => _,
+                inlateout("x2") $arg2 as usize => _,
+                inlateout("x3") $arg3 as usize => _,
+                inlateout("x4") $arg4 as usize => _,
+                inlateout("x5") $arg5 as usize => _,
+                inlateout("x6") $arg6 as usize => _,
+                inlateout("x7") $arg7 as usize => _,
+                inlateout("x9") $priority as usize => _,
+                inlateout("x10") $capabilities as usize => _,
+                lateout("x8") _,
             );
             result
         }
