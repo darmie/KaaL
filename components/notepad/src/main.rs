@@ -38,6 +38,7 @@ pub struct Notepad {
 }
 
 /// A single line of text
+#[derive(Copy, Clone)]
 struct Line {
     data: [u8; 128],  // Maximum 128 characters per line
     len: usize,
