@@ -31,6 +31,7 @@ use core::ptr;
 ///
 /// CNodes are arrays of capability slots that form a thread's capability
 /// address space. Each slot can contain one capability.
+#[repr(C)]
 pub struct CNode {
     /// Number of slots as a power of 2 (2^size_bits slots)
     size_bits: u8,

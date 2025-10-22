@@ -149,13 +149,13 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "uart-driver",
         component_type: ComponentType::Driver,
         priority: 50,
-        autostart: false,
+        autostart: true,
         capabilities:     &[
         "caps:allocate",
         "irq:control",
         "memory:map"
     ],
-        capabilities_bitmask: 9,
+        capabilities_bitmask: 1033,
         binary_data: Some(include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver")),
     },
     ComponentDescriptor {
@@ -164,8 +164,11 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         component_type: ComponentType::Application,
         priority: 110,
         autostart: false,
-        capabilities:     &[],
-        capabilities_bitmask: 0,
+        capabilities:     &[
+        "memory:map",
+        "caps:allocate"
+    ],
+        capabilities_bitmask: 9,
         binary_data: Some(include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad")),
     },
     ComponentDescriptor {

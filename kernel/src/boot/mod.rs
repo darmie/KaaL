@@ -191,15 +191,17 @@ pub fn kernel_entry() -> ! {
             PageTableFlags::KERNEL_RWX,  // RWX for bootstrapping (TODO: split code/data)
         ).expect("Failed to map kernel");
 
-        // 3. Map stack region (grows down from top of RAM)
-        let stack_region_start = kernel_end;
-        let stack_region_size = info.memory_end - kernel_end;
+        // 3. Map rest of RAM (for kernel allocations, stacks, etc.)
+        let ram_region_start = kernel_end;
+        let ram_region_size = info.memory_end - kernel_end;
+        crate::kprintln!("  Mapping RAM region: {:#x} - {:#x} ({}MB)",
+            ram_region_start, info.memory_end, ram_region_size / (1024 * 1024));
         crate::memory::paging::identity_map_region(
             &mut mapper,
-            stack_region_start,
-            stack_region_size,
+            ram_region_start,
+            ram_region_size,
             PageTableFlags::KERNEL_DATA,
-        ).expect("Failed to map stack region");
+        ).expect("Failed to map RAM region");
 
         // 4. Map UART for console output
         crate::memory::paging::identity_map_region(

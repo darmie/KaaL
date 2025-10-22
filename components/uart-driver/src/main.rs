@@ -49,7 +49,7 @@ pub struct UartDriver {
 // Platform constants (from build-config.toml)
 const UART0_BASE: usize = 0x09000000;  // UART0 MMIO base address
 const UART0_SIZE: usize = 0x1000;      // 4KB MMIO region
-const IRQ_CONTROL_SLOT: usize = 0;     // IRQControl capability from root-task
+const IRQ_CONTROL_SLOT: usize = 1;     // IRQControl capability from root-task (slot 0 is reserved)
 const UART0_IRQ: usize = 33;           // UART0 IRQ number
 
 /// IPC buffer size for output channel (4KB)

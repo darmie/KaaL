@@ -410,7 +410,7 @@ impl ComponentLoader {
 
         // Allocate capability slot for TCB in our CSpace
         // Start at slot 200 to avoid initial capabilities populated during boot
-        static mut NEXT_CAP_SLOT: usize = 200;
+        static mut NEXT_CAP_SLOT: usize = 10;
         let tcb_cap_slot = NEXT_CAP_SLOT;
         NEXT_CAP_SLOT += 1;
 
@@ -436,10 +436,10 @@ impl ComponentLoader {
             crate::sys_print(desc.name);
             crate::sys_print("\n");
 
-            // Insert IRQControl into component's CSpace at slot 0
+            // Insert IRQControl into component's CSpace at slot 1 (slot 0 is reserved)
             // sys_cap_insert_into(target_tcb_cap, target_slot, cap_type, object_ptr)
             // CapType::IrqControl = 10 (from kernel)
-            const IRQ_CONTROL_SLOT: usize = 0;
+            const IRQ_CONTROL_SLOT: usize = 1;
             const CAP_TYPE_IRQCONTROL: usize = 10;
 
             let insert_result = crate::sys_cap_insert_into(
@@ -450,7 +450,7 @@ impl ComponentLoader {
             );
 
             if insert_result == 0 {
-                crate::sys_print("[loader] ✓ IRQControl delegated to slot 0\n");
+                crate::sys_print("[loader] ✓ IRQControl delegated to slot 1\n");
             } else {
                 crate::sys_print("[loader] ✗ Failed to delegate IRQControl\n");
             }

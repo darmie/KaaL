@@ -1380,7 +1380,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr
 fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
     use crate::objects::{Capability, CapType};
 
-    ksyscall_debug!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
+    crate::kprintln!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
               target_tcb_cap, target_slot, cap_type, object_ptr);
 
     unsafe {
@@ -1458,14 +1458,22 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
 
         // Insert into target's CSpace
         let target_cnode = &mut *target_cspace;
+
+        // Debug: Check if slot is already occupied
+        if !target_cnode.is_empty(target_slot as usize) {
+            crate::kprintln!("[syscall] cap_insert_into: slot {} already occupied", target_slot);
+            if let Some(existing_cap) = target_cnode.lookup(target_slot as usize) {
+                crate::kprintln!("[syscall] cap_insert_into: existing cap type: {:?}", existing_cap.cap_type());
+            }
+        }
+
         match target_cnode.insert(target_slot as usize, cap) {
             Ok(()) => {
-                ksyscall_debug!("[syscall] cap_insert_into: inserted {:?} cap at slot {} in target CSpace",
-                         cap_type_enum, target_slot);
+                crate::kprintln!("[syscall] cap_insert_into: ✓ inserted {:?} cap at slot {}", cap_type_enum, target_slot);
                 0
             }
             Err(e) => {
-                ksyscall_debug!("[syscall] cap_insert_into: failed to insert: {:?}", e);
+                crate::kprintln!("[syscall] cap_insert_into: ✗ failed to insert: {:?}", e);
                 u64::MAX
             }
         }
@@ -2036,10 +2044,21 @@ fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
 
         // Insert into caller's own CSpace
         let cnode = &mut *cspace_root;
+
+        // Debug: Check slot status and CNode size
+        crate::kprintln!("[syscall] cap_insert_self: CNode has {} slots, inserting at slot {}",
+                 cnode.num_slots(), cap_slot);
+        crate::kprintln!("[syscall] cap_insert_self: CNode slots_paddr={:#x}, size_bits={}",
+                 cnode.slots_paddr().as_usize(), cnode.size_bits());
+        if cap_slot as usize >= cnode.num_slots() {
+            crate::kprintln!("[syscall] cap_insert_self: slot {} is out of bounds!", cap_slot);
+        } else if !cnode.is_empty(cap_slot as usize) {
+            crate::kprintln!("[syscall] cap_insert_self: slot {} is already occupied", cap_slot);
+        }
+
         match cnode.insert(cap_slot as usize, cap) {
             Ok(()) => {
-                crate::kprintln!("[syscall] cap_insert_self: ✓ inserted {:?} cap at slot {} in caller's CSpace",
-                         cap_type_enum, cap_slot);
+                crate::kprintln!("[syscall] cap_insert_self: ✓ inserted {:?} cap at slot {}", cap_type_enum, cap_slot);
                 0
             }
             Err(e) => {

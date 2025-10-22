@@ -51,9 +51,7 @@ qemu_*.log
 qemu_*.logs
 *.img
 *.iso
-test-*.logs
-test_*.logs
-debug.logs
+*.logs
 
 # Build artifacts
 *.o

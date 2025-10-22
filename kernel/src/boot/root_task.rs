@@ -358,12 +358,19 @@ pub unsafe fn create_and_start_root_task() -> ! {
         .expect("[FATAL] Failed to allocate CNode frame");
     let cnode_phys = cnode_frame.phys_addr();
     let cnode_ptr = cnode_phys.as_usize() as *mut crate::objects::CNode;
+    crate::kprintln!("  CNode frame allocated at: {:#x}", cnode_ptr as usize);
+
+    // Allocate slots array for CNode (256 slots * 16 bytes/cap = 4096 bytes = 1 frame)
+    let slots_frame = crate::memory::alloc_frame()
+        .expect("[FATAL] Failed to allocate CNode slots frame");
+    let slots_phys = slots_frame.phys_addr();
+    crate::kprintln!("  CNode slots allocated at: {:#x}", slots_phys.as_usize());
 
     // Create CNode with 256 slots (2^8 = 256 capabilities)
-    let cnode = crate::objects::CNode::new(8, cnode_phys)
+    let cnode = crate::objects::CNode::new(8, slots_phys)
         .expect("[FATAL] Failed to create CNode");
     core::ptr::write(cnode_ptr, cnode);
-    crate::kprintln!("  CNode:           {:#x} (256 slots)", cnode_ptr as usize);
+    crate::kprintln!("  CNode:           {:#x} (256 slots, slots at {:#x})", cnode_ptr as usize, slots_phys.as_usize());
 
     // Step 3b: Create IRQControl capability for root-task
     crate::kprintln!("  Creating IRQControl capability...");
