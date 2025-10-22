@@ -208,6 +208,20 @@ pub const SYS_SHMEM_REGISTER: u64 = 0x33;
 /// Allows consumer to discover the physical address allocated by producer
 pub const SYS_SHMEM_QUERY: u64 = 0x34;
 
+// IRQ handling syscalls
+
+/// IRQControl_Get - Allocate an IRQ handler (requires IRQControl capability)
+/// Args: irq_control_cap, irq_num, notification_cap, irq_handler_slot
+/// Returns: 0 on success, error code on failure
+/// Creates an IRQHandler capability and binds it to a notification
+pub const SYS_IRQ_HANDLER_GET: u64 = 0x40;
+
+/// IRQHandler_Ack - Acknowledge IRQ and re-enable it (requires IRQHandler capability)
+/// Args: irq_handler_cap
+/// Returns: 0 on success, error code on failure
+/// Must be called by driver after servicing interrupt to re-enable IRQ
+pub const SYS_IRQ_HANDLER_ACK: u64 = 0x41;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

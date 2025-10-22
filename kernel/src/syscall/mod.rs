@@ -278,6 +278,10 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_SHMEM_REGISTER => sys_shmem_register(tf, args[0], args[1], args[2], args[3]),
         numbers::SYS_SHMEM_QUERY => sys_shmem_query(tf, args[0], args[1]),
 
+        // IRQ handling syscalls
+        numbers::SYS_IRQ_HANDLER_GET => sys_irq_handler_get(tf, args[0], args[1], args[2], args[3]),
+        numbers::SYS_IRQ_HANDLER_ACK => sys_irq_handler_ack(tf, args[0]),
+
         _ => {
             ksyscall_debug!("[syscall] Unknown syscall number: {} from ELR={:#x}, x8={:#x}",
                      syscall_num, tf.elr_el1, tf.syscall_number());
@@ -2628,4 +2632,217 @@ fn sys_shmem_query(tf: &TrapFrame, name_ptr: u64, name_len: u64) -> u64 {
     kprintln!("[syscall] shmem_query: not found '{}'",
              core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"));
     0
+}
+
+// ==============================================================================
+// IRQ Handling Syscalls
+// ==============================================================================
+
+/// IRQControl_Get - Allocate an IRQ handler capability
+///
+/// This syscall allows a process with an IRQControl capability to allocate
+/// an IRQHandler for a specific hardware interrupt and bind it to a notification.
+///
+/// # Arguments
+/// * `irq_control_cap` - Capability slot containing IRQControl capability
+/// * `irq_num` - Hardware IRQ number to allocate (e.g., 27 for timer, 33 for UART0)
+/// * `notification_cap` - Capability slot containing notification to signal on IRQ
+/// * `irq_handler_slot` - Empty capability slot to store the new IRQHandler
+///
+/// # Returns
+/// - 0 on success
+/// - u64::MAX on error (invalid capability, IRQ already allocated, etc.)
+///
+/// # Security
+/// - Requires IRQControl capability (only root-task has this by default)
+/// - Only one IRQHandler can exist per IRQ number
+/// - IRQHandler is bound to the specific notification
+///
+/// # Usage
+/// ```ignore
+/// let notification_cap = sys_notification_create();
+/// let irq_handler_slot = sys_cap_allocate();
+/// sys_irq_handler_get(irq_control_cap, IRQ_UART0, notification_cap, irq_handler_slot);
+/// ```
+fn sys_irq_handler_get(tf: &TrapFrame, irq_control_cap: u64, irq_num: u64, notification_cap: u64, irq_handler_slot: u64) -> u64 {
+    ksyscall_debug!("[syscall] sys_irq_handler_get: irq_control={}, irq={}, notif={}, slot={}",
+                   irq_control_cap, irq_num, notification_cap, irq_handler_slot);
+
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            kprintln!("[syscall] sys_irq_handler_get: no current thread");
+            return u64::MAX;
+        }
+
+        let tcb = &*current;
+        let cspace_root = tcb.cspace_root();
+        if cspace_root.is_null() {
+            kprintln!("[syscall] sys_irq_handler_get: no CSpace");
+            return u64::MAX;
+        }
+
+        // Look up IRQControl capability
+        let cap = match (*cspace_root).lookup(irq_control_cap as usize) {
+            Some(c) => c,
+            None => {
+                kprintln!("[syscall] sys_irq_handler_get: IRQControl cap not found");
+                return u64::MAX;
+            }
+        };
+
+        if cap.cap_type() != crate::objects::CapType::IrqControl {
+            kprintln!("[syscall] sys_irq_handler_get: not an IRQControl capability");
+            return u64::MAX;
+        }
+
+        // Look up notification capability
+        let notif_cap = match (*cspace_root).lookup(notification_cap as usize) {
+            Some(c) => c,
+            None => {
+                kprintln!("[syscall] sys_irq_handler_get: notification cap not found");
+                return u64::MAX;
+            }
+        };
+
+        if notif_cap.cap_type() != crate::objects::CapType::Notification {
+            kprintln!("[syscall] sys_irq_handler_get: not a Notification capability");
+            return u64::MAX;
+        }
+
+        let notification_ptr = notif_cap.object_ptr() as *mut crate::objects::Notification;
+        if notification_ptr.is_null() {
+            kprintln!("[syscall] sys_irq_handler_get: invalid notification pointer");
+            return u64::MAX;
+        }
+
+        // Validate IRQ number
+        if irq_num >= crate::arch::aarch64::gic::MAX_IRQS as u64 {
+            kprintln!("[syscall] sys_irq_handler_get: invalid IRQ number {}", irq_num);
+            return u64::MAX;
+        }
+
+        // Check if IRQ is already allocated
+        if crate::objects::irq_handler::get_irq_handler(irq_num as u32).is_some() {
+            kprintln!("[syscall] sys_irq_handler_get: IRQ {} already allocated", irq_num);
+            return u64::MAX;
+        }
+
+        // Allocate physical frame for IRQHandler object
+        let handler_frame = crate::memory::alloc_frame();
+        if handler_frame.is_none() {
+            kprintln!("[syscall] sys_irq_handler_get: failed to allocate IRQHandler frame");
+            return u64::MAX;
+        }
+
+        let handler_phys = handler_frame.unwrap().phys_addr();
+        let handler_ptr = handler_phys.as_usize() as *mut crate::objects::IRQHandler;
+
+        // Initialize IRQHandler
+        let handler = crate::objects::IRQHandler::new(irq_num as u32, notification_ptr);
+        core::ptr::write(handler_ptr, handler);
+
+        // Register handler in global table
+        if crate::objects::irq_handler::register_irq_handler(irq_num as u32, handler_ptr).is_err() {
+            kprintln!("[syscall] sys_irq_handler_get: failed to register IRQ handler");
+            // TODO: Deallocate frame
+            return u64::MAX;
+        }
+
+        // Create capability for IRQHandler
+        let irq_handler_cap = crate::objects::Capability::new(
+            crate::objects::CapType::IrqHandler,
+            handler_ptr as usize,
+        );
+
+        // Insert capability into caller's CSpace
+        if (*cspace_root).insert(irq_handler_slot as usize, irq_handler_cap).is_err() {
+            kprintln!("[syscall] sys_irq_handler_get: failed to insert capability");
+            crate::objects::irq_handler::unregister_irq_handler(irq_num as u32);
+            // TODO: Deallocate frame
+            return u64::MAX;
+        }
+
+        kprintln!("[syscall] sys_irq_handler_get: ✓ allocated IRQ {} handler at {:#x}",
+                 irq_num, handler_ptr as usize);
+
+        0 // Success
+    }
+}
+
+/// IRQHandler_Ack - Acknowledge IRQ and re-enable it
+///
+/// This syscall must be called by a device driver after it has serviced an interrupt.
+/// It re-enables the IRQ at the GIC, allowing future interrupts to be delivered.
+///
+/// # Arguments
+/// * `irq_handler_cap` - Capability slot containing IRQHandler capability
+///
+/// # Returns
+/// - 0 on success
+/// - u64::MAX on error (invalid capability, etc.)
+///
+/// # Security
+/// - Requires IRQHandler capability for the specific IRQ
+/// - Only the holder of the IRQHandler can acknowledge the IRQ
+///
+/// # IRQ Flow
+/// 1. IRQ fires → kernel ACKs at GIC + signals notification + masks IRQ
+/// 2. Driver wakes up from sys_wait(notification)
+/// 3. Driver services the device
+/// 4. Driver calls sys_irq_handler_ack() → kernel unmasks IRQ
+/// 5. IRQ can fire again
+///
+/// # Usage
+/// ```ignore
+/// loop {
+///     sys_wait(notification_cap); // Wait for IRQ
+///     // Service device here
+///     uart_handle_interrupt();
+///     sys_irq_handler_ack(irq_handler_cap); // Re-enable IRQ
+/// }
+/// ```
+fn sys_irq_handler_ack(tf: &TrapFrame, irq_handler_cap: u64) -> u64 {
+    ksyscall_debug!("[syscall] sys_irq_handler_ack: cap={}", irq_handler_cap);
+
+    unsafe {
+        let current = crate::scheduler::current_thread();
+        if current.is_null() {
+            return u64::MAX;
+        }
+
+        let tcb = &*current;
+        let cspace_root = tcb.cspace_root();
+        if cspace_root.is_null() {
+            return u64::MAX;
+        }
+
+        // Look up IRQHandler capability
+        let cap = match (*cspace_root).lookup(irq_handler_cap as usize) {
+            Some(c) => c,
+            None => {
+                kprintln!("[syscall] sys_irq_handler_ack: capability not found");
+                return u64::MAX;
+            }
+        };
+
+        if cap.cap_type() != crate::objects::CapType::IrqHandler {
+            kprintln!("[syscall] sys_irq_handler_ack: not an IRQHandler capability");
+            return u64::MAX;
+        }
+
+        let handler_ptr = cap.object_ptr() as *mut crate::objects::IRQHandler;
+        if handler_ptr.is_null() {
+            kprintln!("[syscall] sys_irq_handler_ack: invalid handler pointer");
+            return u64::MAX;
+        }
+
+        // Acknowledge IRQ (re-enables it at GIC)
+        let handler = &mut *handler_ptr;
+        handler.ack();
+
+        ksyscall_debug!("[syscall] sys_irq_handler_ack: ✓ IRQ {} re-enabled", handler.irq_num());
+
+        0 // Success
+    }
 }
