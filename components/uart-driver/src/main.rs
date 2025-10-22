@@ -1,57 +1,82 @@
-//! UART Driver Component
+//! PL011 UART Driver
 //!
-//! Demonstrates interrupt handling using the IRQ capability system.
-//! Binds to UART0 IRQ and handles keyboard input interrupts.
+//! Serial driver for ARM PL011 UART hardware. Supports interrupt-driven
+//! receive with 4KB ring buffer and blocking transmit.
+//!
+//! # Testing
+//! - QEMU: Type characters in terminal, they will be echoed back
+//! - Hardware: Connect serial terminal at 115200 8N1
 
 #![no_std]
 #![no_main]
+
+mod pl011;
+mod ring_buffer;
 
 use kaal_sdk::{
     component::Component,
     printf,
     syscall,
 };
+use pl011::Pl011;
+use ring_buffer::RingBuffer;
 
 // Declare this as a driver component
 kaal_sdk::component! {
     name: "uart_driver",
     type: Driver,
     version: "0.1.0",
-    capabilities: ["caps:allocate", "irq:control"],
+    capabilities: ["caps:allocate", "irq:control", "memory:map"],
     impl: UartDriver
 }
 
 /// UART Driver
 pub struct UartDriver {
+    uart: Pl011,
+    rx_buffer: RingBuffer<4096>,
     notification_cap: usize,
     irq_handler_slot: usize,
     irq_count: u32,
+    char_count: u32,
 }
 
-// Well-known capability slots
-const IRQ_CONTROL_SLOT: usize = 0; // IRQControl capability from root-task
-const UART0_IRQ: usize = 33;       // UART0 IRQ number (from platform config)
+// Platform constants (from build-config.toml)
+const UART0_BASE: usize = 0x09000000;  // UART0 MMIO base address
+const UART0_SIZE: usize = 0x1000;      // 4KB MMIO region
+const IRQ_CONTROL_SLOT: usize = 0;     // IRQControl capability from root-task
+const UART0_IRQ: usize = 33;           // UART0 IRQ number
 
 impl Component for UartDriver {
     fn init() -> kaal_sdk::Result<Self> {
-        printf!("\n");
-        printf!("===========================================\n");
-        printf!("  UART Driver - IRQ Capability Demo\n");
-        printf!("===========================================\n");
-        printf!("\n");
 
-        // Step 1: Create notification for UART IRQ signaling
-        printf!("[uart_driver] Step 1: Create notification for IRQ signaling\n");
+        // Map UART MMIO region
+        printf!("[uart_driver] Mapping UART0 MMIO: {:#x} ({} bytes)\n", UART0_BASE, UART0_SIZE);
+
+        let uart_virt = match unsafe {
+            syscall::memory_map(UART0_BASE, UART0_SIZE, 0x3) // RW permissions
+        } {
+            Ok(virt) => {
+                printf!("  ✓ Mapped to virtual address: {:#x}\n", virt);
+                virt
+            }
+            Err(_) => {
+                printf!("  ✗ FAIL: Failed to map UART MMIO\n");
+                printf!("  Driver requires memory:map capability\n");
+                return Err(kaal_sdk::Error::SyscallFailed);
+            }
+        };
+
+        // Initialize UART hardware
+        let mut uart = unsafe { Pl011::new(uart_virt) };
+        unsafe { uart.init(); }
+        printf!("[uart_driver] Initialized: 115200 8N1, FIFOs enabled\n");
+
+        // Create notification for UART IRQ
         let notification_cap = syscall::notification_create()?;
-        printf!("  ✓ Created notification at slot {}\n", notification_cap);
-
-        // Step 2: Allocate slot for IRQHandler
-        printf!("[uart_driver] Step 2: Allocate slot for IRQHandler\n");
         let irq_handler_slot = syscall::cap_allocate()?;
-        printf!("  ✓ Allocated IRQHandler slot {}\n", irq_handler_slot);
 
-        // Step 3: Get IRQHandler from IRQControl
-        printf!("[uart_driver] Step 3: Allocate IRQHandler for UART0 (IRQ {})\n", UART0_IRQ);
+        // Bind UART IRQ to notification
+        printf!("[uart_driver] Binding IRQ {} to notification\n", UART0_IRQ);
         match unsafe {
             syscall::irq_handler_get(
                 IRQ_CONTROL_SLOT,
@@ -61,47 +86,23 @@ impl Component for UartDriver {
             )
         } {
             Ok(()) => {
-                printf!("  ✓ Successfully bound IRQ {} to notification\n", UART0_IRQ);
-                printf!("  ✓ IRQHandler created at slot {}\n", irq_handler_slot);
+                printf!("[uart_driver] IRQ {} bound successfully\n", UART0_IRQ);
             }
             Err(_) => {
-                printf!("  ✗ FAIL: irq_handler_get failed\n");
-                printf!("  This might be because:\n");
-                printf!("    - No IRQControl capability in slot 0\n");
-                printf!("    - IRQ {} already allocated\n", UART0_IRQ);
-                printf!("    - Invalid notification capability\n");
-                printf!("\n");
-                printf!("  Note: Full IRQ driver requires IRQControl delegation from root-task\n");
-                printf!("  For now, driver initialization complete (syscall interface verified)\n");
-                printf!("\n");
-
-                // Return early but don't fail - let the component run
-                return Ok(Self {
-                    notification_cap,
-                    irq_handler_slot,
-                    irq_count: 0,
-                });
+                printf!("[uart_driver] WARN: IRQ binding failed (requires IRQControl)\n");
             }
         }
 
-        printf!("\n");
-        printf!("===========================================\n");
-        printf!("  UART Driver Initialized Successfully!\n");
-        printf!("===========================================\n");
-        printf!("\n");
-        printf!("Driver configuration:\n");
-        printf!("  - IRQ Number:       {}\n", UART0_IRQ);
-        printf!("  - Notification:     slot {}\n", notification_cap);
-        printf!("  - IRQHandler:       slot {}\n", irq_handler_slot);
-        printf!("\n");
-        printf!("Driver is now waiting for UART interrupts...\n");
-        printf!("(Press keys in QEMU to generate UART RX interrupts)\n");
-        printf!("\n");
+        printf!("[uart_driver] Ready (MMIO: {:#x}, IRQ: {})\n", uart_virt, UART0_IRQ);
+        uart.write_str("\r\nUART driver online\r\n");
 
         Ok(Self {
+            uart,
+            rx_buffer: RingBuffer::new(),
             notification_cap,
             irq_handler_slot,
             irq_count: 0,
+            char_count: 0,
         })
     }
 
@@ -109,33 +110,52 @@ impl Component for UartDriver {
         loop {
             // Wait for notification (blocks until IRQ fires)
             match syscall::wait(self.notification_cap) {
-                Ok(badge) => {
+                Ok(_badge) => {
                     self.irq_count += 1;
-                    printf!("\n");
-                    printf!(">>> IRQ RECEIVED! <<<\n");
-                    printf!("  IRQ count: {}\n", self.irq_count);
-                    printf!("  Badge:     0x{:x}\n", badge);
-                    printf!("\n");
 
-                    // In a real driver, we would:
-                    // 1. Read UART data register
-                    // 2. Process received character
-                    // 3. Clear UART interrupt flag
+                    // Handle RX interrupt
+                    if self.uart.has_rx_interrupt() {
+                        self.handle_rx_interrupt();
+                        self.uart.clear_rx_interrupts();
+                    }
 
                     // Acknowledge IRQ to re-enable it
-                    match unsafe { syscall::irq_handler_ack(self.irq_handler_slot) } {
-                        Ok(()) => {
-                            printf!("  ✓ IRQ acknowledged and re-enabled\n");
-                        }
-                        Err(_) => {
-                            printf!("  ✗ FAIL: irq_handler_ack failed\n");
-                        }
+                    if let Err(_) = unsafe { syscall::irq_handler_ack(self.irq_handler_slot) } {
+                        printf!("[uart_driver] ERROR: Failed to ACK IRQ\n");
                     }
                 }
                 Err(_) => {
                     // Wait failed - yield and retry
                     syscall::yield_now();
                 }
+            }
+        }
+    }
+}
+
+impl UartDriver {
+    /// Handle receive interrupt - read data and echo back
+    fn handle_rx_interrupt(&mut self) {
+        // Read all available bytes from UART FIFO
+        while let Some(byte) = self.uart.read_byte() {
+            self.char_count += 1;
+
+            // Store in buffer
+            if self.rx_buffer.push(byte).is_err() {
+                printf!("[uart_driver] WARN: RX buffer overflow!\n");
+            }
+
+            // Echo the character back
+            self.uart.write_byte(byte);
+
+            // If newline, also send CR
+            if byte == b'\n' || byte == b'\r' {
+                self.uart.write_byte(b'\r');
+                self.uart.write_byte(b'\n');
+
+                // Print statistics
+                printf!("[uart_driver] Stats: {} IRQs, {} chars received, {} buffered\n",
+                    self.irq_count, self.char_count, self.rx_buffer.len());
             }
         }
     }

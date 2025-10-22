@@ -176,6 +176,7 @@ spawned_by = "system_init"
 capabilities = [
     "caps:allocate",   # Needs CAP_CAPS to allocate notification/IRQHandler slots
     "irq:control",     # Receives IRQControl delegation from root-task via system_init
+    "memory:map",      # Needs CAP_MEMORY to map UART MMIO region
 ]
 
 # Applications - User-facing programs
