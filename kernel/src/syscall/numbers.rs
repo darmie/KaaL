@@ -222,6 +222,13 @@ pub const SYS_IRQ_HANDLER_GET: u64 = 0x40;
 /// Must be called by driver after servicing interrupt to re-enable IRQ
 pub const SYS_IRQ_HANDLER_ACK: u64 = 0x41;
 
+// System control syscalls
+
+/// Shutdown the system
+/// Args: none
+/// Returns: Does not return
+pub const SYS_SHUTDOWN: u64 = 0x50;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success

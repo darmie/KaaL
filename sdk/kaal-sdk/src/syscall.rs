@@ -44,6 +44,9 @@ pub mod numbers {
     pub const SYS_IRQ_HANDLER_GET: usize = 0x40;
     pub const SYS_IRQ_HANDLER_ACK: usize = 0x41;
 
+    // System control syscalls
+    pub const SYS_SHUTDOWN: usize = 0x50;
+
     pub const SYS_DEBUG_PRINT: usize = 0x1001;
 }
 
@@ -1394,5 +1397,32 @@ pub fn irq_handler_ack(irq_handler_cap: usize) -> crate::Result<()> {
         Ok(())
     } else {
         Err(crate::Error::SyscallFailed)
+    }
+}
+
+// ============================================================================
+// System Control Functions
+// ============================================================================
+
+/// Shutdown the system
+///
+/// Requests the kernel to power off the system. On QEMU, this cleanly exits
+/// the emulator. On real hardware, this powers off the system via PSCI.
+///
+/// This function does not return.
+///
+/// # Example
+/// ```no_run
+/// // Clean shutdown when application exits
+/// kaal_sdk::syscall::shutdown();
+/// ```
+pub fn shutdown() -> ! {
+    unsafe {
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "svc #0",
+            syscall_num = in(reg) numbers::SYS_SHUTDOWN,
+            options(noreturn)
+        );
     }
 }

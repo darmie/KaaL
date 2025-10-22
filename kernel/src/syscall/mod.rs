@@ -282,6 +282,9 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_IRQ_HANDLER_GET => sys_irq_handler_get(tf, args[0], args[1], args[2], args[3]),
         numbers::SYS_IRQ_HANDLER_ACK => sys_irq_handler_ack(tf, args[0]),
 
+        // System control syscalls
+        numbers::SYS_SHUTDOWN => sys_shutdown(),
+
         _ => {
             ksyscall_debug!("[syscall] Unknown syscall number: {} from ELR={:#x}, x8={:#x}",
                      syscall_num, tf.elr_el1, tf.syscall_number());
@@ -2844,5 +2847,30 @@ fn sys_irq_handler_ack(tf: &TrapFrame, irq_handler_cap: u64) -> u64 {
         ksyscall_debug!("[syscall] sys_irq_handler_ack: ✓ IRQ {} re-enabled", handler.irq_num());
 
         0 // Success
+    }
+}
+
+// ============================================================================
+// System Control Syscalls
+// ============================================================================
+
+/// Shutdown the system
+///
+/// This syscall gracefully shuts down the system by issuing a PSCI SYSTEM_OFF call.
+/// On QEMU, this cleanly exits the emulator. On real hardware, this powers off the system.
+///
+/// Returns: Does not return
+fn sys_shutdown() -> ! {
+    crate::kprintln!("\n[kernel] System shutdown requested");
+    crate::kprintln!("[kernel] Powering off...\n");
+
+    // ARM PSCI (Power State Coordination Interface) SYSTEM_OFF
+    // Function ID: 0x84000008
+    unsafe {
+        core::arch::asm!(
+            "mov x0, #0x84000008",  // PSCI SYSTEM_OFF function
+            "hvc #0",                // Hypervisor call
+            options(noreturn)
+        );
     }
 }

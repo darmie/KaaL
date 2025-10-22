@@ -1,15 +1,14 @@
-//! Notepad - Simple Terminal Text Editor
+//! Notepad - Terminal Text Editor
 //!
-//! A line-based text editor that reads from UART and displays content.
-//! Demonstrates integration with UART driver for interactive applications.
+//! Line-based text editor with UART integration.
 //!
 //! # Commands
-//! - Type text to add to current line
-//! - Enter: Save line and start new one
+//! - Type: Add text to current line
+//! - Enter: Save line and start new
 //! - Backspace: Delete last character
-//! - Ctrl+L: List all lines
+//! - Ctrl+L: List all saved lines
 //! - Ctrl+C: Clear all lines
-//! - Ctrl+Q: Quit (not implemented - runs continuously)
+//! - Ctrl+Q: Quit and shutdown system
 
 #![no_std]
 #![no_main]
@@ -93,6 +92,7 @@ impl Component for Notepad {
         printf!("  Backspace   - Delete last character\n");
         printf!("  Ctrl+L (^L) - List all saved lines\n");
         printf!("  Ctrl+C (^C) - Clear all lines\n");
+        printf!("  Ctrl+Q (^Q) - Quit and shutdown\n");
         printf!("\n");
         printf!("Ready. Start typing!\n");
         printf!("> ");
@@ -107,17 +107,11 @@ impl Component for Notepad {
     }
 
     fn run(&mut self) -> ! {
-        // For now, just yield - in a real system this would:
-        // 1. Set up IPC channel with UART driver
-        // 2. Wait for character notifications
-        // 3. Process input and update display
-        //
-        // Since we don't have IPC channel setup yet, this demonstrates
-        // the component structure
+        // TODO: Set up IPC channel with UART driver
+        // For now, demonstrate the component structure
 
         loop {
-            // In production: wait for UART character via IPC
-            // For now: just yield to scheduler
+            // TODO: Wait for UART characters via IPC channel
             syscall::yield_now();
         }
     }
@@ -175,6 +169,17 @@ impl Notepad {
                 self.current_line.clear();
                 self.current_pos = 0;
                 printf!("\n[All lines cleared]\n> ");
+            }
+
+            // Ctrl+Q - quit and shutdown
+            0x11 => {
+                printf!("\n\n");
+                printf!("=== Notepad Session Summary ===\n");
+                printf!("Lines saved:  {}\n", self.line_count);
+                printf!("Total chars:  {}\n", self.char_count);
+                printf!("==============================\n");
+                printf!("\nShutting down...\n");
+                syscall::shutdown();
             }
 
             // Printable character - add to current line

@@ -138,7 +138,7 @@ capabilities = [
 name = "test_minimal"
 binary = "test-minimal"
 type = "service"
-priority = 200 # Low priority - background test
+priority = 200          # Low priority - background test
 autostart = false
 capabilities = []       # NO capabilities - tests that syscalls are properly denied
 
@@ -171,12 +171,12 @@ name = "uart_driver"
 binary = "uart-driver"
 type = "driver"
 priority = 50 # High priority - runs before test components
-autostart = true # Enable to test IRQ driver
+autostart = false # Enable to test IRQ driver
 spawned_by = "system_init"
 capabilities = [
-    "caps:allocate",   # Needs CAP_CAPS to allocate notification/IRQHandler slots
-    "irq:control",     # Receives IRQControl delegation from root-task via system_init
-    "memory:map",      # Needs CAP_MEMORY to map UART MMIO region
+    "caps:allocate", # Needs CAP_CAPS to allocate notification/IRQHandler slots
+    "irq:control",   # Receives IRQControl delegation from root-task via system_init
+    "memory:map",    # Needs CAP_MEMORY to map UART MMIO region
 ]
 
 # Applications - User-facing programs
@@ -184,8 +184,8 @@ capabilities = [
 name = "notepad"
 binary = "notepad"
 type = "application"
-priority = 110 # Medium priority - text editor
-autostart = false # Spawned by system_init when needed
+priority = 110             # Medium priority - text editor
+autostart = false          # Spawned by system_init when needed
 spawned_by = "system_init"
 capabilities = []
 
@@ -193,6 +193,6 @@ capabilities = []
 name = "shell"
 binary = "shell"
 type = "application"
-priority = 120 # Medium-low priority - interactive application
-autostart = false # Spawned by system_init after drivers ready
+priority = 120                                          # Medium-low priority - interactive application
+autostart = false                                       # Spawned by system_init after drivers ready
 capabilities = ["ipc:serial", "ipc:vfs", "ipc:procmgr"]
