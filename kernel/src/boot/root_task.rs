@@ -178,6 +178,23 @@ pub unsafe fn create_and_start_root_task() -> ! {
         PageTableFlags::KERNEL_DEVICE,
     ).expect("Failed to map UART into user PT");
 
+    // Map GIC (interrupt controller) for IRQ handling in syscalls
+    crate::kprintln!("    GIC Distributor: {:#x}", memory_config::GIC_DIST_BASE);
+    crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::GIC_DIST_BASE,
+        memory_config::GIC_DIST_SIZE,
+        PageTableFlags::KERNEL_DEVICE,
+    ).expect("Failed to map GIC distributor into user PT");
+
+    crate::kprintln!("    GIC CPU Interface: {:#x}", memory_config::GIC_CPU_BASE);
+    crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::GIC_CPU_BASE,
+        memory_config::GIC_CPU_SIZE,
+        PageTableFlags::KERNEL_DEVICE,
+    ).expect("Failed to map GIC CPU interface into user PT");
+
     crate::kprintln!("  ✓ Kernel regions mapped");
 
     // Step 2: Map root task memory (code + data + rodata)

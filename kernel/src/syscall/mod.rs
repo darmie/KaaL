@@ -718,6 +718,27 @@ fn sys_process_create(
         return u64::MAX;
     }
 
+    // Map GIC (interrupt controller) for IRQ handling in syscalls
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::GIC_DIST_BASE,
+        memory_config::GIC_DIST_SIZE,
+        PageTableFlags::KERNEL_DEVICE,
+    ) {
+        ksyscall_debug!("[syscall] process_create: failed to map GIC distributor: {:?}", e);
+        return u64::MAX;
+    }
+
+    if let Err(e) = crate::memory::paging::identity_map_region(
+        &mut mapper,
+        memory_config::GIC_CPU_BASE,
+        memory_config::GIC_CPU_SIZE,
+        PageTableFlags::KERNEL_DEVICE,
+    ) {
+        ksyscall_debug!("[syscall] process_create: failed to map GIC CPU interface: {:?}", e);
+        return u64::MAX;
+    }
+
     // Map the code region at the virtual address expected by the ELF
     // The caller has:
     // - Loaded the ELF binary at code_phys (physical address)

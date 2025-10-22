@@ -90,7 +90,7 @@ global_asm!(
 
     ".balign 0x80",
     "lower_el_aarch64_irq:",
-    "    b exception_lower_el_aarch64_irq",
+    "    b handle_lower_el_aarch64_irq",
 
     ".balign 0x80",
     "lower_el_aarch64_fiq:",
@@ -263,6 +263,85 @@ global_asm!(
     "    ldp x28, x29, [sp, #224]",
     "    ldr x30, [sp, #240]",
     "    add sp, sp, #296",            // Adjusted for new stack frame size
+    "    eret",
+);
+
+/// Lower EL IRQ handler stub - saves context, calls Rust handler, restores context
+///
+/// Similar to sync handler but for IRQ exceptions from userspace
+global_asm!(
+    ".global handle_lower_el_aarch64_irq",
+    "handle_lower_el_aarch64_irq:",
+    // Save all context to stack (296 bytes = 288 + 8 for TTBR0)
+    "    sub sp, sp, #296",
+    "    stp x0, x1, [sp, #0]",
+    "    stp x2, x3, [sp, #16]",
+    "    stp x4, x5, [sp, #32]",
+    "    stp x6, x7, [sp, #48]",
+    "    stp x8, x9, [sp, #64]",
+    "    stp x10, x11, [sp, #80]",
+    "    stp x12, x13, [sp, #96]",
+    "    stp x14, x15, [sp, #112]",
+    "    stp x16, x17, [sp, #128]",
+    "    stp x18, x19, [sp, #144]",
+    "    stp x20, x21, [sp, #160]",
+    "    stp x22, x23, [sp, #176]",
+    "    stp x24, x25, [sp, #192]",
+    "    stp x26, x27, [sp, #208]",
+    "    stp x28, x29, [sp, #224]",
+    "    str x30, [sp, #240]",
+    "    mrs x0, sp_el0",
+    "    mrs x1, elr_el1",
+    "    mrs x2, spsr_el1",
+    "    mrs x3, esr_el1",
+    "    mrs x4, far_el1",
+    "    stp x0, x1, [sp, #248]",
+    "    stp x2, x3, [sp, #264]",
+    "    str x4, [sp, #280]",
+    // Save TTBR0 (unified page table design - need to preserve it)
+    "    mrs x5, ttbr0_el1",
+    "    str x5, [sp, #288]",
+    // No page table switch - unified design
+    // Call Rust IRQ handler
+    "    bl exception_lower_el_aarch64_irq",
+    // Restore system registers
+    "    ldr x10, [sp, #248]",         // sp_el0
+    "    ldr x11, [sp, #256]",         // elr_el1
+    "    ldr x12, [sp, #264]",         // spsr_el1
+    "    ldr x13, [sp, #288]",         // ttbr0_el1 (saved)
+    "    msr sp_el0, x10",
+    "    msr elr_el1, x11",
+    "    msr spsr_el1, x12",
+    // Restore TTBR0 (check if changed, but unlikely for IRQ)
+    "    mrs x14, ttbr0_el1",
+    "    cmp x13, x14",
+    "    b.eq 1f",
+    "    msr ttbr0_el1, x13",
+    "    tlbi vmalle1is",
+    "    dsb ish",
+    "    b 2f",
+    "1:",
+    "    msr ttbr0_el1, x13",
+    "2:",
+    "    isb",
+    // Restore GPRs
+    "    ldp x0, x1, [sp, #0]",
+    "    ldp x2, x3, [sp, #16]",
+    "    ldp x4, x5, [sp, #32]",
+    "    ldp x6, x7, [sp, #48]",
+    "    ldp x8, x9, [sp, #64]",
+    "    ldp x10, x11, [sp, #80]",
+    "    ldp x12, x13, [sp, #96]",
+    "    ldp x14, x15, [sp, #112]",
+    "    ldp x16, x17, [sp, #128]",
+    "    ldp x18, x19, [sp, #144]",
+    "    ldp x20, x21, [sp, #160]",
+    "    ldp x22, x23, [sp, #176]",
+    "    ldp x24, x25, [sp, #192]",
+    "    ldp x26, x27, [sp, #208]",
+    "    ldp x28, x29, [sp, #224]",
+    "    ldr x30, [sp, #240]",
+    "    add sp, sp, #296",
     "    eret",
 );
 
