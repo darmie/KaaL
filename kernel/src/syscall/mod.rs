@@ -1483,12 +1483,16 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
         }
 
         let cspace_root = (*current_tcb).cspace_root();
+        crate::kprintln!("[syscall] retype: cspace_root = {:#x}", cspace_root as usize);
+
         if cspace_root.is_null() {
             crate::kprintln!("[syscall] retype: no CSpace root");
             return u64::MAX;
         }
 
+        crate::kprintln!("[syscall] retype: about to create cspace reference...");
         let caller_cspace = &mut *(cspace_root as *mut CNodeCdt);
+        crate::kprintln!("[syscall] retype: cspace reference created, calling lookup...");
 
         // 1. Lookup UntypedMemory capability
         let untyped_cap = match caller_cspace.lookup(untyped_cap_slot as usize) {
@@ -1499,6 +1503,8 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
             }
         };
 
+        crate::kprintln!("[syscall] retype: found cap at slot {}, type={:?}", untyped_cap_slot, untyped_cap.cap_type());
+
         // Verify it's an UntypedMemory capability
         if untyped_cap.cap_type() != CapType::UntypedMemory {
             crate::kprintln!("[syscall] retype: slot {} is not UntypedMemory (found {:?})",
@@ -1508,6 +1514,8 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
 
         // Get mutable reference to UntypedMemory object
         let untyped_ptr = untyped_cap.object_ptr() as *mut UntypedMemory;
+        crate::kprintln!("[syscall] retype: untyped object pointer = {:#x}", untyped_ptr as usize);
+
         if untyped_ptr.is_null() {
             crate::kprintln!("[syscall] retype: untyped object pointer is null");
             return u64::MAX;

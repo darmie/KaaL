@@ -6,6 +6,7 @@ use crate::arch::aarch64::page_table::PageTableFlags;
 use crate::boot::{bootinfo, boot_info};
 use crate::memory::{PhysAddr, VirtAddr, PAGE_SIZE, alloc_frame};
 use crate::generated::memory_config;
+use crate::objects::cnode_cdt::CNodeCdt;
 use core::arch::naked_asm;
 
 /// Root task creation error
@@ -383,11 +384,13 @@ pub unsafe fn create_and_start_root_task() -> ! {
     let slots_phys = slots_frame.phys_addr();
     crate::kprintln!("  CNode slots allocated at: {:#x}", slots_phys.as_usize());
 
-    // Create CNode with 256 slots (2^8 = 256 capabilities)
-    let cnode = crate::objects::CNode::new(8, slots_phys)
-        .expect("[FATAL] Failed to create CNode");
-    core::ptr::write(cnode_ptr, cnode);
-    crate::kprintln!("  CNode:           {:#x} (256 slots, slots at {:#x})", cnode_ptr as usize, slots_phys.as_usize());
+    // Create CNodeCdt with 256 slots (2^8 = 256 capabilities)
+    // We use CNodeCdt (CDT = Capability Derivation Tree) for proper capability tracking
+    let cnode_cdt = CNodeCdt::new(8, slots_phys)
+        .expect("[FATAL] Failed to create CNodeCdt");
+    let cnode_cdt_ptr = cnode_phys.as_usize() as *mut CNodeCdt;
+    core::ptr::write(cnode_cdt_ptr, cnode_cdt);
+    crate::kprintln!("  CNodeCdt:        {:#x} (256 slots, slots at {:#x})", cnode_cdt_ptr as usize, slots_phys.as_usize());
 
     // Step 3b: Create IRQControl capability for root-task
     crate::kprintln!("  Creating IRQControl capability...");
@@ -410,7 +413,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
 
     // Insert IRQControl capability into slot 0 of root-task's CSpace
     const IRQ_CONTROL_SLOT: usize = 0;
-    (*cnode_ptr).insert(IRQ_CONTROL_SLOT, irq_control_cap)
+    (*cnode_cdt_ptr).insert_root(IRQ_CONTROL_SLOT, irq_control_cap)
         .expect("[FATAL] Failed to insert IRQControl capability");
 
     crate::kprintln!("  IRQControl:      slot {} → {:#x}", IRQ_CONTROL_SLOT, irq_control_ptr as usize);
@@ -445,7 +448,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
 
     // Insert UntypedMemory capability into slot 1 of root-task's CSpace
     const UNTYPED_SLOT: usize = 1;
-    (*cnode_ptr).insert(UNTYPED_SLOT, untyped_cap)
+    (*cnode_cdt_ptr).insert_root(UNTYPED_SLOT, untyped_cap)
         .expect("[FATAL] Failed to insert UntypedMemory capability");
 
     crate::kprintln!("  UntypedMemory:   slot {} → object at {:#x}", UNTYPED_SLOT, untyped_ptr as usize);
@@ -465,7 +468,7 @@ pub unsafe fn create_and_start_root_task() -> ! {
     crate::kprintln!("  Initializing TCB...");
     let root_tcb = crate::objects::TCB::new(
         1,                                     // TID = 1 for root-task
-        cnode_ptr,                             // CSpace root (CNode)
+        cnode_cdt_ptr as *mut _,               // CSpace root (CNodeCdt)
         user_page_table_phys.as_usize(),       // VSpace root (page table)
         VirtAddr::new(0x8000_0000),            // IPC buffer (not used yet)
         entry_addr as u64,                     // Entry point
