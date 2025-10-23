@@ -79,21 +79,6 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: None,
     },
     ComponentDescriptor {
-        name: "ipc_producer",
-        binary: "ipc-producer",
-        component_type: ComponentType::Service,
-        priority: 100,
-        autostart: false,
-        capabilities:     &[
-        "memory:map",
-        "notification:signal",
-        "notification:wait",
-        "caps:allocate"
-    ],
-        capabilities_bitmask: 13,
-        binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
-    },
-    ComponentDescriptor {
         name: "ipc_consumer",
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
@@ -107,6 +92,21 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ],
         capabilities_bitmask: 13,
         binary_data: Some(include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer")),
+    },
+    ComponentDescriptor {
+        name: "ipc_producer",
+        binary: "ipc-producer",
+        component_type: ComponentType::Service,
+        priority: 100,
+        autostart: false,
+        capabilities:     &[
+        "memory:map",
+        "notification:signal",
+        "notification:wait",
+        "caps:allocate"
+    ],
+        capabilities_bitmask: 13,
+        binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
     },
     ComponentDescriptor {
         name: "test_minimal",

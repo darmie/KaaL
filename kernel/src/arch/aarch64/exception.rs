@@ -486,6 +486,12 @@ extern "C" fn exception_lower_el_aarch64_sync_handler(frame: &mut TrapFrame) {
     let esr = frame.esr_el1;
     let ec = (esr >> 26) & 0x3F;
 
+    // Debug: Log ALL non-syscall EL0 exceptions
+    if ec != 0x15 {
+        crate::kprintln!("[exception] EL0 sync: EC={:#x}, PC={:#x}, FAR={:#x}, SP={:#x}",
+                         ec, frame.elr_el1, frame.far_el1, frame.sp_el0);
+    }
+
     // EC 0x15 = SVC instruction from AArch64 (syscall)
     if ec == 0x15 {
         // Debug: Check for suspicious syscalls
