@@ -872,6 +872,16 @@ fn sys_process_create(
     crate::kprintln!("[syscall] process_create: set TrapFrame - x1={:#x}, x2={:#x}, x3={:#x}",
                      tf.x1, tf.x2, tf.x3);
 
+    // Full TLB and cache flush to ensure all processes see correct memory
+    unsafe {
+        core::arch::asm!(
+            "dsb ishst",          // Data sync barrier
+            "tlbi vmalle1is",     // Invalidate all TLB entries for all PEs
+            "dsb ish",            // Ensure TLB invalidation completes
+            "isb",                // Instruction sync barrier
+        );
+    }
+
     pid as u64
 }
 
