@@ -245,7 +245,115 @@ impl Capability {
 }
 ```
 
-### 3. IPC Fastpath
+### 3. Capability-Based Process Spawning (sys_retype)
+
+**Status**: ✅ Implemented (October 2025)
+
+KaaL implements seL4-style capability-based process spawning where all resource allocation goes through UntypedMemory capabilities:
+
+```rust
+// kernel/src/syscall/mod.rs
+
+/// Retype untyped memory into kernel objects
+///
+/// This is the core syscall for capability-based resource allocation.
+/// Instead of direct kernel allocation, processes obtain resources by
+/// "retyping" untyped memory capabilities.
+///
+/// # Arguments
+/// - `untyped_slot`: Capability slot containing UntypedMemory
+/// - `object_type`: Target object type (1=Untyped, 8=Page, etc.)
+/// - `size_bits`: Object size as log2 (14 = 16KB)
+/// - `dest_cnode`: Destination CNode (0 = own CSpace)
+/// - `dest_slot`: Slot to insert new capability
+///
+/// # Returns
+/// Physical address of created object (struct location for Untyped)
+fn sys_retype(
+    untyped_slot: u64,
+    object_type: u64,
+    size_bits: u64,
+    dest_cnode: u64,
+    dest_slot: u64
+) -> u64 {
+    // 1. Lookup UntypedMemory capability
+    let untyped_cap = caller_cspace.lookup(untyped_slot)?;
+    let untyped = untyped_cap.as_untyped_mut()?;
+
+    // 2. Allocate from watermark allocator
+    let obj_paddr = untyped.retype(target_type, size_bits)?;
+
+    // 3. For UntypedMemory, allocate separate struct frame
+    let cap_target = if target_type == CapType::UntypedMemory {
+        let struct_frame = alloc_frame()?;
+        let new_untyped = UntypedMemory::new(obj_paddr, size_bits)?;
+        ptr::write(struct_frame.as_ptr(), new_untyped);
+        struct_frame.phys_addr() // Return struct location
+    } else {
+        obj_paddr // Return object location
+    };
+
+    // 4. Create and insert capability
+    let new_cap = Capability::new(target_type, cap_target);
+    dest_cnode.insert_root(dest_slot, new_cap)?;
+
+    Ok(cap_target.as_u64())
+}
+```
+
+**Delegation Chain**:
+```
+Kernel (EL1)
+  └─ Creates 32MB UntypedMemory @ 0x46000000 (32MB-aligned)
+      └─ root-task (EL0) receives in slot 1
+          └─ sys_retype(1, UNTYPED, 24, 0, 50) → 16MB child
+              └─ sys_cap_insert_into(system_init, 10, ...) → delegate
+                  └─ system_init (EL0) slot 10
+                      └─ spawn_from_elf_with_untyped(binary, 10) → apps
+```
+
+**Userspace Spawning (sdk/kaal-sdk/component/spawn.rs)**:
+```rust
+pub fn spawn_from_elf_with_untyped(
+    binary_data: &[u8],
+    priority: u8,
+    capabilities: u64,
+    untyped_cap_slot: usize,
+) -> Result<SpawnResult> {
+    // Parse ELF to get memory requirements
+    let elf_info = elf::parse_elf(binary_data)?;
+    let process_size = elf_info.memory_size().next_power_of_two();
+
+    // Allocate process memory from UntypedMemory
+    let process_phys = syscall::sys_retype(
+        untyped_cap_slot,
+        8, // CAP_TYPE_PAGE
+        process_size.trailing_zeros(),
+        0, // own CSpace
+        syscall::cap_allocate()?,
+    )?;
+
+    // Allocate stack from UntypedMemory (16KB)
+    let stack_phys = syscall::sys_retype(
+        untyped_cap_slot,
+        8, // CAP_TYPE_PAGE
+        14, // 16KB
+        0,
+        syscall::cap_allocate()?,
+    )?;
+
+    // Map memory, copy ELF segments, create process
+    // ...
+}
+```
+
+**Key Properties**:
+- **No Kernel Bloat**: ELF loading stays in userspace
+- **Explicit Control**: Parent decides what resources child gets
+- **Security**: Every byte tracked through capability hierarchy
+- **Flexibility**: Custom allocation policies in userspace
+
+### 4. IPC Fastpath
 
 ```rust
 // kernel/src/ipc/fastpath.rs
