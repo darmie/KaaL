@@ -2993,8 +2993,11 @@ fn sys_irq_handler_get(tf: &TrapFrame, irq_control_cap: u64, irq_num: u64, notif
             return u64::MAX;
         }
 
+        // Cast to CNodeCdt (all CSpaces are CNodeCdt for CDT tracking)
+        let cnode = &mut *(cspace_root as *mut crate::objects::cnode_cdt::CNodeCdt);
+
         // Look up IRQControl capability
-        let cap = match (*cspace_root).lookup(irq_control_cap as usize) {
+        let cap = match cnode.lookup(irq_control_cap as usize) {
             Some(c) => c,
             None => {
                 kprintln!("[syscall] sys_irq_handler_get: IRQControl cap not found");
@@ -3008,7 +3011,7 @@ fn sys_irq_handler_get(tf: &TrapFrame, irq_control_cap: u64, irq_num: u64, notif
         }
 
         // Look up notification capability
-        let notif_cap = match (*cspace_root).lookup(notification_cap as usize) {
+        let notif_cap = match cnode.lookup(notification_cap as usize) {
             Some(c) => c,
             None => {
                 kprintln!("[syscall] sys_irq_handler_get: notification cap not found");
@@ -3069,8 +3072,8 @@ fn sys_irq_handler_get(tf: &TrapFrame, irq_control_cap: u64, irq_num: u64, notif
             handler_ptr as usize,
         );
 
-        // Insert capability into caller's CSpace
-        if (*cspace_root).insert(irq_handler_slot as usize, irq_handler_cap).is_err() {
+        // Insert capability into caller's CSpace using insert_root (CNodeCdt method)
+        if cnode.insert_root(irq_handler_slot as usize, irq_handler_cap).is_err() {
             kprintln!("[syscall] sys_irq_handler_get: failed to insert capability");
             crate::objects::irq_handler::unregister_irq_handler(irq_num as u32);
             // TODO: Deallocate frame
@@ -3131,8 +3134,11 @@ fn sys_irq_handler_ack(tf: &TrapFrame, irq_handler_cap: u64) -> u64 {
             return u64::MAX;
         }
 
+        // Cast to CNodeCdt
+        let cnode = &*(cspace_root as *const crate::objects::cnode_cdt::CNodeCdt);
+
         // Look up IRQHandler capability
-        let cap = match (*cspace_root).lookup(irq_handler_cap as usize) {
+        let cap = match cnode.lookup(irq_handler_cap as usize) {
             Some(c) => c,
             None => {
                 kprintln!("[syscall] sys_irq_handler_ack: capability not found");
