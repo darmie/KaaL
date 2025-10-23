@@ -2739,7 +2739,7 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
 ///
 /// Returns: 0 on success, u64::MAX on error
 fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
-    crate::kprintln!("[syscall] sys_signal called: slot={}, badge=0x{:x}", notification_cap_slot, badge);
+    // crate::kprintln!("[syscall] sys_signal called: slot={}, badge=0x{:x}", notification_cap_slot, badge);
 
     unsafe {
         // Look up notification from capability slot
@@ -2754,7 +2754,7 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
         // Signal the notification
         notification.signal(badge);
 
-        crate::kprintln!("[syscall] sys_signal: SUCCESS - returning to userspace");
+        // crate::kprintln!("[syscall] sys_signal: SUCCESS - returning to userspace");
         0
     }
 }
@@ -2799,11 +2799,11 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
         match notification.wait(current) {
             Some(signals) => {
                 // Signals were already pending, return immediately
-                if signals != 0 {
-                    crate::kprintln!("[syscall] sys_wait: signals pending 0x{:x}, returning immediately", signals);
-                } else {
-                    crate::kprintln!("[syscall] sys_wait: WARNING - notification.wait() returned Some(0)!");
-                }
+                // if signals != 0 {
+                //     crate::kprintln!("[syscall] sys_wait: signals pending 0x{:x}, returning immediately", signals);
+                // } else {
+                //     crate::kprintln!("[syscall] sys_wait: WARNING - notification.wait() returned Some(0)!");
+                // }
                 ksyscall_debug!("[syscall] Wait -> received signals 0x{:x}", signals);
                 signals
             }
@@ -2824,8 +2824,8 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
                 next_tcb.set_state(crate::objects::ThreadState::Running);
                 crate::scheduler::test_set_current_thread(next);
 
-                crate::kprintln!("[syscall] sys_wait: switching to TCB={:#x}, ELR={:#x}, TTBR0={:#x}",
-                                next as usize, next_tcb.context().elr_el1, next_tcb.context().saved_ttbr0);
+                // crate::kprintln!("[syscall] sys_wait: switching to TCB={:#x}, ELR={:#x}, TTBR0={:#x}",
+                //                 next as usize, next_tcb.context().elr_el1, next_tcb.context().saved_ttbr0);
 
                 // Replace our TrapFrame with the next thread's context
                 // When we return from this syscall, the exception handler will restore

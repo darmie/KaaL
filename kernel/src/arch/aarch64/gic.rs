@@ -221,7 +221,7 @@ pub unsafe fn enable_irq(irq: u32) {
         1 << bit,
     );
 
-    crate::kprintln!("[GIC] Enabled IRQ {}", irq);
+    // crate::kprintln!("[GIC] Enabled IRQ {}", irq);
 }
 
 /// Disable a specific interrupt
