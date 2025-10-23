@@ -31,28 +31,36 @@
 #
 # 1. Kernel boots and creates root-task
 # 2. Root-task reads this manifest
-# 3. Root-task spawns system_init (first component, elevated privileges)
-# 4. system_init spawns remaining components in phases:
-#    - Phase 1: Device drivers (serial, timer, etc.)
+# 3. Root-task spawns ALL components with autostart=true in listed order:
+#    - Phase 1: Device drivers (serial, timer, uart, etc.)
 #    - Phase 2: System services (process_manager, vfs, etc.)
-#    - Phase 3: User applications (shell, etc.)
+#    - Phase 3: Test/IPC components (producer, consumer, etc.)
+# 4. Components with autostart=false can be spawned later on-demand
+#
+# This architecture (root-task spawns all) was chosen because:
+# - Root-task has full kernel privileges and known-good initialization state
+# - Previous system_init spawning had bugs: only first spawned process worked
+# - Simpler, more reliable, and proven to work in testing
 #
 # Add your components below in the desired spawn order:
 
-# System Initializer - TEMPORARILY DISABLED to test if root-task can spawn multiple processes
-# This is the "system_init" component that bootstraps the rest of the system
-[[component]]
-name = "system_init"
-binary = "system-init"
-type = "service"
-priority = 10 # Highest priority - finishes quickly, bootstraps system
-autostart = false  # DISABLED FOR TESTING
-capabilities = [
-    "process:create",  # Can spawn other processes
-    "memory:allocate", # Can allocate memory
-    "ipc:*",           # Full IPC access
-    "caps:allocate",   # Can allocate capability slots
-]
+# System Initializer - REMOVED (architectural decision)
+# Root-task now spawns all autostart components directly (proven reliable).
+# system_init was causing multi-spawn bugs - only first spawned process would run.
+# If we need runtime process management later, we can implement a simpler service.
+#
+# [[component]]
+# name = "system_init"
+# binary = "system-init"
+# type = "service"
+# priority = 10
+# autostart = false
+# capabilities = [
+#     "process:create",
+#     "memory:allocate",
+#     "ipc:*",
+#     "caps:allocate",
+# ]
 
 # Device Drivers - Low-level hardware access
 [[component]]
@@ -105,14 +113,12 @@ capabilities = [
 ]
 
 # Test Components - IPC Testing (Phase 5)
-# TEMPORARILY ENABLED TO TEST ROOT-TASK SPAWNING MULTIPLE PROCESSES
 [[component]]
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = true # TESTING: Spawned by root-task instead of system_init
-#spawned_by = "system_init" # Delegation enabled - system_init has capabilities
+autostart = true # Spawned by root-task at boot
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -125,8 +131,7 @@ name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = true # TESTING: Spawned by root-task instead of system_init
-#spawned_by = "system_init" # Delegation enabled - system_init has capabilities
+autostart = true # Spawned by root-task at boot
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -148,8 +153,7 @@ name = "test_cap_revoke"
 binary = "test-cap-revoke"
 type = "service"
 priority = 200 # Low priority - background test
-autostart = false # Spawned by system_init
-spawned_by = "system_init" # Delegation enabled
+autostart = false # Can be spawned on-demand later
 capabilities = [
     "caps:allocate", # Needs CAP_CAPS to test revocation
 ]
@@ -159,8 +163,7 @@ name = "test_memory"
 binary = "test-memory"
 type = "service"
 priority = 200 # Low priority - background test
-autostart = false # Spawned by system_init
-spawned_by = "system_init" # Delegation enabled
+autostart = false # Can be spawned on-demand later
 capabilities = [
     "memory:allocate", # Needs CAP_MEMORY to test remap/share
     "memory:map",      # Needs CAP_MEMORY to map pages
@@ -186,8 +189,7 @@ name = "notepad"
 binary = "notepad"
 type = "application"
 priority = 110   # Medium priority - text editor
-autostart = false # Enable for testing UART input/output
-spawned_by = "system_init"
+autostart = false # Can be enabled for testing UART input/output
 capabilities = [
     "memory:map",     # Needs to map shared IPC buffer from UART driver
     "caps:allocate",  # Needs to allocate capability slot for notification
