@@ -1565,7 +1565,7 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
         let new_cap = Capability::new(target_type, obj_paddr.as_u64() as usize);
 
         // 6. Insert capability into destination CNode
-        if let Err(e) = dest_cnode.insert(dest_slot as usize, new_cap) {
+        if let Err(e) = dest_cnode.insert_root(dest_slot as usize, new_cap) {
             crate::kprintln!("[syscall] retype: failed to insert cap into slot {}: {:?}", dest_slot, e);
             return u64::MAX;
         }

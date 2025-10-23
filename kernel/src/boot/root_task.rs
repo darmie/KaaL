@@ -418,6 +418,42 @@ pub unsafe fn create_and_start_root_task() -> ! {
     // Update boot_info with IRQControl physical address (for delegation to drivers)
     (*boot_info_ptr).irq_control_paddr = irq_control_phys.as_usize() as u64;
 
+    // Step 3c: Create UntypedMemory capability for root-task
+    crate::kprintln!("  Creating UntypedMemory capability...");
+
+    // Allocate frame for UntypedMemory object
+    let untyped_frame = crate::memory::alloc_frame()
+        .expect("[FATAL] Failed to allocate UntypedMemory frame");
+    let untyped_phys = untyped_frame.phys_addr();
+    let untyped_ptr = untyped_phys.as_usize() as *mut crate::objects::UntypedMemory;
+
+    // Create UntypedMemory object covering 16MB of free RAM for delegation
+    // This will be used by root-task to delegate to system_init
+    // Start after kernel/root-task allocations (~80MB into RAM)
+    let untyped_region_start = PhysAddr::new((memory_config::RAM_BASE + 0x05000000) as usize); // 80MB offset
+    let untyped_region_size_bits = 24; // 16MB (2^24 = 16777216 bytes)
+
+    let untyped_obj = crate::objects::UntypedMemory::new(untyped_region_start, untyped_region_size_bits)
+        .expect("[FATAL] Failed to create UntypedMemory object");
+    core::ptr::write(untyped_ptr, untyped_obj);
+
+    // Create UntypedMemory capability
+    let untyped_cap = crate::objects::Capability::new(
+        crate::objects::CapType::UntypedMemory,
+        untyped_ptr as usize,
+    );
+
+    // Insert UntypedMemory capability into slot 1 of root-task's CSpace
+    const UNTYPED_SLOT: usize = 1;
+    (*cnode_ptr).insert(UNTYPED_SLOT, untyped_cap)
+        .expect("[FATAL] Failed to insert UntypedMemory capability");
+
+    crate::kprintln!("  UntypedMemory:   slot {} → object at {:#x}", UNTYPED_SLOT, untyped_ptr as usize);
+    crate::kprintln!("                   covers RAM {:#x} - {:#x} ({} MB)",
+                     untyped_region_start.as_usize(),
+                     untyped_region_start.as_usize() + (1 << untyped_region_size_bits),
+                     (1 << untyped_region_size_bits) / (1024 * 1024));
+
     // Step 4: Create TCB for root task
     crate::kprintln!("  Creating root TCB...");
     let root_tcb_frame = crate::memory::alloc_frame()
