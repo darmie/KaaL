@@ -379,10 +379,23 @@ impl ComponentLoader {
         crate::sys_memory_unmap(virt_mem, process_size);
         crate::sys_print("[loader] Unmap complete\n");
 
-        // 10. Create the process
-        // Stack grows down from top of userspace memory
-        const STACK_VIRT_TOP: usize = 0x8000_0000;  // 2GB
-        let stack_top = STACK_VIRT_TOP;  // Stack pointer at top (will grow down)
+        // 10. Map stack memory to get unique virtual address for this process
+        // This ensures each process has its own stack and prevents stack collisions
+        let stack_virt = crate::sys_memory_map(stack_mem, stack_size, 0x3);  // RW permissions
+        if stack_virt == usize::MAX {
+            crate::sys_print("[loader] ERROR: Failed to map stack memory\n");
+            return Err(ComponentError::OutOfMemory);
+        }
+        // Stack grows DOWN, so SP starts at the TOP of the stack region
+        let stack_top = stack_virt + stack_size;
+
+        crate::sys_print("[loader] Stack mapped: virt=0x");
+        crate::print_hex(stack_virt);
+        crate::sys_print(", size=0x");
+        crate::print_hex(stack_size);
+        crate::sys_print(", stack_top=0x");
+        crate::print_hex(stack_top);
+        crate::sys_print("\n");
 
         crate::sys_print("[loader] Calling sys_process_create with code_phys=0x");
         crate::print_hex(process_mem);

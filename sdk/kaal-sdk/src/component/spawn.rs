@@ -102,8 +102,17 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
         // 5. Unmap temporary mapping
         syscall::memory_unmap(virt_mem, process_size)?;
 
-        // 6. Create process
-        let stack_top = 0x80000000; // Standard user stack location
+        // 6. Map stack memory to get unique virtual address for this process
+        // This ensures each process has its own stack and prevents stack collisions
+        let stack_virt = syscall::memory_map(stack_phys, stack_size, RW_PERMS)?;
+        // Stack grows DOWN, so SP starts at the TOP of the stack region
+        let stack_top = stack_virt + stack_size;
+
+        // Debug: log stack allocation
+        printf!("[spawn_from_elf] Stack mapped: virt={:#x}, size={:#x}, stack_top={:#x}\n",
+                stack_virt, stack_size, stack_top);
+
+        // 7. Create process
         let pid = syscall::process_create(
             elf_info.entry_point,
             stack_top,
@@ -117,7 +126,7 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
             capabilities,  // Pass capabilities to new process
         )?;
 
-        // 7. Get TCB capability
+        // 8. Get TCB capability
         let tcb_cap_slot = syscall::cap_allocate()?;
         syscall::cap_insert_self(tcb_cap_slot, 4 /* CAP_TCB */, pid)?;
 

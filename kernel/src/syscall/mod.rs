@@ -348,23 +348,10 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         next_tcb.set_state(crate::objects::ThreadState::Running);
         crate::scheduler::test_set_current_thread(next);
 
-        // Check if this is the first time scheduling this thread
-        let next_context = next_tcb.context();
-        if next_context.x0 == 0 && next_context.x1 == 0 && next_context.x8 == 0 {
-            // First time scheduling - all registers are 0
-            ksyscall_debug!("[syscall] sys_yield: first schedule of new thread");
-            kprintln!("  Will jump to ELR={:#x} with SP={:#x}",
-                     next_context.elr_el1, next_context.sp_el0);
-        }
-
-        // Debug: Show page table switch (commented out to reduce noise)
-        // kprintln!("[syscall] sys_yield: switching from {:#x} to {:#x}, TTBR0: {:#x} -> {:#x}",
-        //          current as usize, next as usize,
-        //          tf.saved_ttbr0, next_context.saved_ttbr0);
-
         // Replace our TrapFrame with the next thread's context
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
+        let next_context = next_tcb.context();
         *tf = *next_context;
 
         // CRITICAL: Switch TTBR0 NOW to the next thread's page table
