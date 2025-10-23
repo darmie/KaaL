@@ -231,6 +231,39 @@ Run verification: `nu scripts/verify.nu`
 
 ---
 
+## 🎯 Capability-Based Process Spawning
+
+KaaL implements **seL4-style capability-based process spawning**, where all resource allocation goes through capabilities rather than direct kernel calls:
+
+### Resource Delegation Model
+
+```text
+Kernel (EL1)
+  └─ UntypedMemory Capabilities (untyped physical RAM)
+      └─ root-task (EL0) receives parent Untyped
+          └─ Creates child Untyped via sys_retype()
+              └─ Delegates to system_init
+                  └─ Spawns applications using spawn_from_elf_with_untyped()
+```
+
+**Key Features:**
+
+- **sys_retype()**: Retype untyped memory into kernel objects (TCB, Endpoint, Page, etc.)
+- **Watermark Allocator**: Efficient sequential allocation from untyped regions
+- **Userspace Spawning**: No kernel involvement after initial setup - spawning happens entirely in userspace
+- **Fine-Grained Control**: Parent processes control exactly what resources children receive
+
+### Why This Matters
+
+Traditional microkernels use direct kernel syscalls for process creation (`fork()`, `exec()`). KaaL follows seL4's approach:
+
+- **Security**: Parent explicitly delegates resources - no implicit allocation
+- **Accountability**: Every byte of RAM is tracked through capability hierarchy
+- **Flexibility**: Userspace can implement custom spawning policies
+- **No Kernel Bloat**: ELF loading and memory allocation logic stays in userspace
+
+---
+
 ## 💡 Example: Building a Custom Component
 
 Here's how you'd build a custom service using KaaL's composable APIs:

@@ -34,10 +34,13 @@ The KaaL microkernel is built from scratch in Rust, implementing capability-base
 | [Chapter 5](#chapter-5) | IPC & Message Passing | 3-4 weeks | ✅ Complete* |
 | [Chapter 6](#chapter-6) | Scheduling & Context Switching | 3-4 weeks | ✅ Complete |
 | [Chapter 7](#chapter-7) | Root Task & Boot Protocol | 2-3 weeks | ✅ Complete |
+| **[Chapter 7.5](#chapter-75)** | **Capability-Based Spawning (UntypedMemory & sys_retype)** | **2 weeks** | **✅ Complete (Oct 2025)** |
 | [Chapter 8](#chapter-8) | Verification & Hardening | 4-6 weeks | 📋 Planned |
 | [Chapter 9](#chapter-9) | Framework Integration & Runtime Services | 6-8 weeks | 📋 Planned |
 
 *\*Chapter 5: Implementation complete (~1,630 LOC), full IPC operation tests deferred to Chapter 9*
+
+**✨ Chapter 7.5 Achievement**: Implemented seL4-style capability-based process spawning with sys_retype syscall, UntypedMemory watermark allocator, and full delegation chain (kernel → root-task → system_init → apps). Three processes successfully running with IPC communication.
 
 **Note**:
 
@@ -717,6 +720,300 @@ runtime/root-task/     # Minimal root task (user-space)
 Create `docs/chapters/CHAPTER_07_STATUS.md`
 
 **Note**: This chapter focuses on **microkernel-side boot protocol only**. The root task is a minimal stub. Full Runtime Services (Capability Broker, Memory Manager) are part of the **KaaL Framework**, developed separately after microkernel completion.
+
+---
+
+## Chapter 7.5: Capability-Based Process Spawning
+
+**Duration**: 2 weeks
+**Status**: ✅ Complete (October 2025)
+**Prerequisites**: Chapter 7
+
+### Chapter Overview
+
+Chapter 7.5 implements seL4-style **capability-based process spawning**, where all resource allocation goes through capabilities rather than direct kernel syscalls. This is a critical architectural milestone that establishes KaaL's security model.
+
+### Objectives
+
+1. Implement `SYS_RETYPE` syscall (0x26) for capability-based object creation
+2. Implement UntypedMemory watermark allocator
+3. Establish proper capability delegation chain (kernel → root-task → system_init)
+4. Move process spawning entirely to userspace (no kernel involvement)
+5. Demonstrate multiple processes spawned via capabilities
+
+### Deliverables
+
+```text
+kernel/src/
+├── syscall/
+│   └── mod.rs              # sys_retype() implementation
+├── objects/
+│   └── untyped.rs          # UntypedMemory with watermark allocator
+└── boot/
+    └── root_task.rs        # UntypedMemory delegation to root-task
+
+runtime/root-task/src/
+└── main.rs                 # Child Untyped creation and delegation
+
+sdk/kaal-sdk/src/
+├── syscall.rs              # sys_retype() wrapper
+└── component/spawn.rs      # spawn_from_elf_with_untyped()
+
+components.toml             # system_init capabilities updated
+build-config.toml           # UntypedMemory size configuration
+```
+
+### Key Concepts
+
+#### Capability-Based Resource Allocation
+
+Traditional microkernels use direct syscalls like `fork()` or `process_create()` that implicitly allocate kernel memory. KaaL follows seL4's approach:
+
+```text
+// ❌ Traditional (implicit allocation)
+process_create(binary, stack_size) -> PID
+
+// ✅ Capability-based (explicit delegation)
+1. retype(Untyped, Page, size) -> Page cap
+2. retype(Untyped, Stack, size) -> Stack cap
+3. process_create(Page cap, Stack cap) -> PID
+```
+
+**Benefits:**
+- **Explicit Resource Control**: Parent controls exactly what resources child gets
+- **Security**: No hidden allocations - everything tracked through capabilities
+- **Accountability**: Every byte of RAM has a clear owner
+- **Flexibility**: Userspace can implement custom allocation policies
+
+#### UntypedMemory & Watermark Allocator
+
+**UntypedMemory** represents raw, untyped physical RAM that can be "retyped" into kernel objects:
+
+```rust
+pub struct UntypedMemory {
+    paddr: PhysAddr,         // Physical address of region
+    size_bits: u8,            // Region size (2^size_bits bytes)
+    watermark: usize,         // Current allocation offset
+    children: [PhysAddr; 128], // Derived objects
+    child_count: usize,
+}
+```
+
+**Watermark Allocator** properties:
+- Sequential allocation (no fragmentation)
+- Alignment requirement: `paddr % (2^size_bits) == 0`
+- Example: 32MB Untyped must be at 32MB-aligned address
+
+#### sys_retype Syscall
+
+```rust
+/// Retype untyped memory into kernel object
+///
+/// Args:
+///   - untyped_slot: Capability slot containing UntypedMemory
+///   - object_type: Target object type (1=Untyped, 8=Page, etc.)
+///   - size_bits: Object size as log2 (14 = 16KB)
+///   - dest_cnode: Destination CNode (0 = own CSpace)
+///   - dest_slot: Slot to insert new capability
+///
+/// Returns: Physical address of created object (struct location for Untyped)
+fn sys_retype(
+    untyped_slot: u64,
+    object_type: u64,
+    size_bits: u64,
+    dest_cnode: u64,
+    dest_slot: u64
+) -> u64
+```
+
+### Implementation Highlights
+
+#### 1. Kernel Creates Parent Untyped (boot/root_task.rs)
+
+```rust
+// Allocate 32MB at 32MB-aligned address
+let untyped_region_start = PhysAddr::new(0x46000000); // 96MB offset
+let untyped_region_size_bits = 25; // 32MB = 2^25
+
+let untyped_obj = UntypedMemory::new(untyped_region_start, 25)?;
+// UntypedMemory struct stored at separate allocated frame
+// Covers region 0x46000000 - 0x48000000
+
+// Insert into root-task's CSpace slot 1
+root_cnode.insert_root(1, Capability::new(CapType::UntypedMemory, struct_addr))?;
+```
+
+#### 2. Root-Task Creates Child Untyped (runtime/root-task/main.rs)
+
+```rust
+// Create 16MB child from parent's 32MB
+const PARENT_UNTYPED_SLOT: usize = 1;
+const CHILD_SIZE_BITS: usize = 24; // 16MB = 2^24
+
+let child_untyped_paddr = sys_retype(
+    PARENT_UNTYPED_SLOT,
+    CAP_TYPE_UNTYPED,
+    CHILD_SIZE_BITS,
+    0, // own CSpace
+    50, // temporary slot
+)?;
+
+// Delegate child to system_init slot 10
+sys_cap_insert_into(
+    system_init_tcb_cap,
+    10, // system_init's slot 10
+    CAP_TYPE_UNTYPED,
+    child_untyped_paddr,
+)?;
+```
+
+#### 3. System_Init Spawns Processes (sdk/kaal-sdk/component/spawn.rs)
+
+```rust
+pub fn spawn_from_elf_with_untyped(
+    binary_data: &[u8],
+    priority: u8,
+    capabilities: u64,
+    untyped_cap_slot: usize,
+) -> Result<SpawnResult> {
+    // Parse ELF to get memory requirements
+    let elf_info = elf::parse_elf(binary_data)?;
+    let process_size = elf_info.memory_size().next_power_of_two();
+    let process_size_bits = process_size.trailing_zeros();
+
+    // Allocate process memory from UntypedMemory
+    let process_cap_slot = syscall::cap_allocate()?;
+    let process_phys = syscall::sys_retype(
+        untyped_cap_slot,
+        8, // CAP_TYPE_PAGE
+        process_size_bits,
+        0,
+        process_cap_slot,
+    )?;
+
+    // Allocate stack from UntypedMemory (16KB)
+    let stack_cap_slot = syscall::cap_allocate()?;
+    let stack_phys = syscall::sys_retype(
+        untyped_cap_slot,
+        8, // CAP_TYPE_PAGE
+        14, // 2^14 = 16KB
+        0,
+        stack_cap_slot,
+    )?;
+
+    // Map memory, copy ELF segments, create process
+    // ...
+}
+```
+
+### Delegation Chain
+
+```text
+Kernel (EL1)
+  │
+  ├─ Creates 32MB Untyped @ 0x46000000 (struct @ 0x408d2000)
+  │  Alignment: 0x46000000 % 0x2000000 == 0 ✓
+  │
+  └─ root-task (EL0)
+      │
+      ├─ Receives parent Untyped in slot 1
+      │  Capability: {type: Untyped, object: 0x408d2000, rights: RWG}
+      │
+      ├─ Creates 16MB child via sys_retype
+      │  Allocated: 0x46000000 - 0x47000000 from parent
+      │  Struct at: 0x4098a000 (separate frame)
+      │
+      └─ Delegates child to system_init slot 10
+          │
+          └─ system_init (EL0)
+              │
+              ├─ Spawns ipc_producer (128KB + 16KB stack)
+              │  Allocated: 0x46000000, 0x46004000
+              │
+              ├─ Spawns ipc_consumer (128KB + 16KB stack)
+              │  Allocated: 0x46008000, 0x4600c000
+              │
+              └─ Spawns notepad (128KB + 16KB stack)
+                  Allocated: 0x46010000, 0x46014000
+```
+
+### Testing Criteria
+
+- ✅ sys_retype creates UntypedMemory objects with proper struct/region separation
+- ✅ Child Untyped created from parent, watermark updated correctly
+- ✅ Child Untyped delegated to system_init via capability transfer
+- ✅ system_init spawns multiple processes using spawn_from_elf_with_untyped()
+- ✅ ipc_producer and ipc_consumer communicate via shared memory
+- ✅ notepad connects to UART driver and waits for input
+- ✅ Preemptive multitasking works (timer preemption every 5ms)
+- ✅ All processes properly block on notifications (release CPU)
+
+### Critical Bugs Fixed
+
+1. **UntypedMemory Alignment** (Issue #1)
+   - Problem: 0x45000000 is not 32MB-aligned
+   - Solution: Moved to 0x46000000 (0x46000000 % 0x2000000 == 0)
+
+2. **Struct vs Region Separation** (Issue #2)
+   - Problem: UntypedMemory struct written to covered region
+   - Solution: Allocate separate frame for struct, point to covered region
+
+3. **sys_retype Return Value** (Issue #3)
+   - Problem: Returned covered region address instead of struct address
+   - Solution: Return `cap_target_paddr` (struct for Untyped, object for others)
+
+4. **CNode/CNodeCdt Type Mismatches** (Issue #4)
+   - Problem: 7 locations casting CNode when CNodeCdt expected
+   - Solution: Added explicit `as *const CNodeCdt` casts, use `insert_root()`
+
+5. **Size Bits Calculation** (Issue #5)
+   - Problem: `(32 - leading_zeros())` gave wrong results for non-power-of-2
+   - Solution: Use `next_power_of_two()` then `trailing_zeros()`
+
+### Configuration
+
+**build-config.toml:**
+```toml
+# Capability-based memory delegation (seL4-style)
+untyped_root_task_size_bits = "25"    # 32MB (2^25) to root-task
+untyped_system_init_size_bits = "24"  # 16MB (2^24) to system_init
+```
+
+**components.toml (system_init):**
+```toml
+capabilities = [
+    "untyped:1",         # Receives UntypedMemory from root-task
+    "caps:allocate",     # Can allocate capability slots
+    "memory:map",        # Can map pages into child processes
+    "memory:allocate",   # Can allocate physical memory (for PT/CSpace)
+    "process:create",    # Can create new processes
+]
+```
+
+### Documentation
+
+See:
+- `docs/chapters/CHAPTER_07_5_STATUS.md` - Implementation details
+- Commit history: `feat: Implement capability-based process spawning with UntypedMemory`
+
+### Key Achievements
+
+1. **seL4-Compatible Architecture**: Proper capability-based resource allocation
+2. **Userspace Spawning**: No kernel involvement after initial delegation
+3. **Multiple Processes**: 3 processes running with IPC communication
+4. **Security Foundation**: Explicit resource control and accountability
+5. **Clean Separation**: Kernel policy-free, all policy in userspace
+
+### What This Enables
+
+With capability-based spawning in place, KaaL can now:
+- Implement fine-grained access control policies in userspace
+- Create capability brokers that manage resource allocation
+- Build sandboxed execution environments
+- Implement process hierarchies with resource limits
+- Support dynamic process creation without kernel modifications
+
+This milestone completes the **core microkernel** and sets the stage for **Chapter 9: Framework Integration**.
 
 ---
 
