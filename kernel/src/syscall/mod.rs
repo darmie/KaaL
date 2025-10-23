@@ -1044,6 +1044,29 @@ fn sys_memory_unmap(virt_addr: u64, size: u64) -> u64 {
     // Create mapper for caller's page table
     let mut mapper = unsafe { PageMapper::new(&mut *page_table) };
 
+    // CRITICAL: Clean data cache to Point of Coherency before unmapping
+    // This ensures any writes to this memory are visible to instruction fetches
+    // Without this, newly written code may not be visible when executed!
+    unsafe {
+        for i in 0..num_pages {
+            let cache_line_size = 64; // ARM64 typical cache line size
+            let page_addr = virt_addr + (i as u64 * PAGE_SIZE as u64);
+            for offset in (0..PAGE_SIZE).step_by(cache_line_size) {
+                let addr = page_addr + offset as u64;
+                core::arch::asm!(
+                    "dc cvac, {addr}",     // Clean data cache by VA to PoC
+                    addr = in(reg) addr,
+                );
+            }
+        }
+        core::arch::asm!(
+            "dsb ish",                // Ensure cache cleaning completes
+            "ic iallu",               // Invalidate all instruction caches
+            "dsb ish",                // Ensure instruction cache invalidation completes
+            "isb",                    // Synchronize context
+        );
+    }
+
     // Unmap each page in the range
     for i in 0..num_pages {
         let virt = VA::new(virt_addr as usize + (i * PAGE_SIZE));
