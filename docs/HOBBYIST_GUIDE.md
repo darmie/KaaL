@@ -356,42 +356,62 @@ lldb runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 cd kernel && cargo clean
 ```
 
-## Current Status (Chapter 7.5 Complete - October 2025)
+## What Can You Build with KaaL?
 
-🎉 **Major Milestone**: KaaL now has a **complete capability-based microkernel** with working process spawning!
+KaaL provides a capability-based microkernel foundation. Here's what's available:
 
-### ✅ Core Microkernel Complete
+### Available Features
 
-- **Chapter 1**: Bare metal boot, UART output, device tree parsing
-- **Chapter 2**: Frame allocator, MMU setup, 4-level page tables
-- **Chapter 3**: Exception vectors, syscall interface, trap handling
-- **Chapter 4**: Kernel object model (TCB, CNode, Endpoint, Notification, VSpace, Untyped)
-- **Chapter 5**: IPC (shared memory channels, async notifications)
-- **Chapter 6**: Priority-based preemptive scheduler with timer interrupts
-- **Chapter 7**: Root task creation, EL0 transition, userspace execution
-- **Chapter 7.5**: **Capability-based process spawning** (seL4-style sys_retype)
+**Process Management:**
 
-**What You Can Build Today:**
-- ✅ Multiple processes spawned from UntypedMemory capabilities
-- ✅ Preemptive multitasking (timer-based, 5ms timeslice)
-- ✅ Shared memory IPC between processes
-- ✅ Interrupt-driven drivers (UART keyboard input)
-- ✅ Interactive applications (working text editor!)
+- Spawn multiple userspace processes
+- Capability-based memory allocation (UntypedMemory)
+- Preemptive multitasking with configurable priorities
+- Cooperative yielding between processes
 
-**Live Demo - 3 Processes Running:**
-```
-System:
-  ├─ ipc_producer: Sends messages via shared memory
-  ├─ ipc_consumer: Receives and processes messages
-  └─ notepad: Interactive text editor with UART keyboard input
+**Inter-Process Communication:**
 
-All spawned from system_init using capability-based allocation!
-```
+- Shared memory channels between processes
+- Async notifications for event signaling
+- Type-safe message passing via the SDK
 
-### 📋 Next Phase
+**Device Interaction:**
 
-- **Chapter 8**: Verification & hardening (stress testing, Verus proofs)
-- **Chapter 9**: Framework integration (Capability Broker, Memory Manager)
+- UART serial I/O with interrupt support
+- Timer-based preemption (configurable timeslice)
+- Device driver framework via SDK components
+
+**Memory Management:**
+
+- Virtual address spaces (4-level page tables)
+- Physical frame allocation
+- Memory mapping with permission control
+
+### Example Systems You Can Build
+
+**1. Message Passing Services** (Level: Beginner)
+
+- Producer/consumer patterns
+- Event-driven architectures
+- Simple IPC demonstrations
+
+**2. Device Drivers** (Level: Intermediate)
+
+- Serial port drivers (UART example included)
+- Timer drivers
+- GPIO control (on supported hardware)
+
+**3. Interactive Applications** (Level: Intermediate)
+
+- Text editors (notepad example included)
+- Command shells
+- System monitoring tools
+
+**4. Custom Microkernels** (Level: Advanced)
+
+- Add your own syscalls
+- Implement custom scheduling policies
+- Build specialized capability brokers
 
 ## Learning Resources
 
