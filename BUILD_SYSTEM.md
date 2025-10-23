@@ -72,6 +72,11 @@ kernel_offset = "0x400000"    # Kernel
 # Stack location
 stack_top_offset = "0x8000000" # Stack grows down from here
 
+# Capability-based memory delegation (seL4-style)
+# UntypedMemory capabilities delegated from kernel to root-task to system_init
+untyped_root_task_size_bits = "25"    # 32MB (2^25) given to root-task by kernel
+untyped_system_init_size_bits = "24"  # 16MB (2^24) delegated to system_init
+
 # QEMU launch parameters (optional)
 qemu_machine = "virt"
 qemu_cpu = "cortex-a53"
@@ -125,6 +130,61 @@ Solution: Increase roottask_offset in build-config.toml
 
 This prevents runtime crashes from memory corruption that would otherwise only manifest as mysterious boot failures.
 
+### Step 3.5: UntypedMemory Resource Computation
+
+KaaL implements **capability-based process spawning** where processes are spawned from UntypedMemory capabilities rather than direct kernel allocation. The build system configures UntypedMemory sizes ahead-of-time:
+
+**Configuration (`build-config.toml`):**
+```toml
+# Capability-based memory delegation
+untyped_root_task_size_bits = "25"    # 32MB to root-task
+untyped_system_init_size_bits = "24"  # 16MB to system_init
+```
+
+**Delegation Chain:**
+```
+Kernel creates 32MB Untyped
+  └─ root-task receives parent (slot 1)
+      └─ creates 16MB child via sys_retype()
+          └─ delegates to system_init (slot 10)
+              └─ spawns apps using spawn_from_elf_with_untyped()
+```
+
+**Resource Calculation:**
+
+The build system needs to ensure sufficient UntypedMemory for all components that will be spawned by system_init:
+
+```
+Each process needs:
+  - Process memory: next_power_of_two(binary_size + 8KB safety) bytes
+  - Stack memory: 16KB (2^14)
+  - Example: 86KB binary → 128KB (2^17) + 16KB = 144KB total
+
+For system_init to spawn N components:
+  required_memory = Σ(process_memory[i] + stack_memory[i]) for i in 1..N
+```
+
+**Current Configuration:**
+- **16MB child Untyped** allows spawning ~100 small processes or ~10 large ones
+- Configurable at build time based on component registry
+- Future: Automatic calculation from parsed ELF binaries in `components.toml`
+
+**Alignment Requirements:**
+
+UntypedMemory has strict alignment requirements:
+- Region must be aligned to its size: `paddr % (2^size_bits) == 0`
+- Example: 32MB (2^25) Untyped must be at 32MB-aligned address
+- QEMU virt: Uses 0x46000000 (96MB offset = 3 × 32MB, perfectly aligned)
+
+**Memory Layout Impact:**
+```
+RAM: 0x40000000 - 0x48000000 (128MB)
+  Kernel: 0x40400000 - 0x4043c000 (240KB)
+  Root-task: 0x40600000 - 0x40734000 (1.2MB)
+  UntypedMemory region: 0x46000000 - 0x48000000 (32MB at 96MB offset)
+    ↑ This must be 32MB-aligned for the watermark allocator
+```
+
 ### Step 4: Elfloader Build
 
 ```
@@ -163,11 +223,27 @@ kernel.o + roottask.o + linker.ld (generated) → elfloader → bootable image
             │  .data           │
             │  .bss            │
             │  .stack          │
-            └─────────────────┘
-0x48000000  Stack top (elfloader)
+            ├─────────────────┤
+            │  Free RAM        │  ← Available for dynamic allocation
+            │  (kernel heap,   │
+            │   page tables,   │
+            │   TCBs, etc.)    │
+            ├─────────────────┤
+0x46000000  │  UntypedMemory   │  ← Capability-based allocation region (32MB)
+            │  Region          │     Delegated: kernel → root-task → system_init
+            │  (32MB-aligned)  │     Used for spawning userspace processes
+            │                  │
+            │  Apps spawned    │     Current usage:
+            │  from sys_retype │     - ipc_producer: 128KB + 16KB stack
+            │                  │     - ipc_consumer: 128KB + 16KB stack
+            │                  │     - notepad: 128KB + 16KB stack
+            └─────────────────┘     ~15.5MB remaining for future processes
+0x48000000  Stack top (elfloader) / End of RAM
 ```
 
-**Note**: The elfloader embeds both kernel and root-task ELF files, then loads them to their respective addresses (0x40400000 for kernel, 0x40600000 for root-task) before jumping to the kernel.
+**Notes**:
+- The elfloader embeds both kernel and root-task ELF files, then loads them to their respective addresses (0x40400000 for kernel, 0x40600000 for root-task) before jumping to the kernel.
+- **UntypedMemory region (0x46000000 - 0x48000000)** is reserved for capability-based process spawning. This 32MB region must be 32MB-aligned for the watermark allocator. The kernel creates an UntypedMemory capability covering this region and delegates it to root-task, which further delegates a 16MB child to system_init for spawning applications.
 
 ### Raspberry Pi 4 Platform
 
