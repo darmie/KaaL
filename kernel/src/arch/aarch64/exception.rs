@@ -173,6 +173,9 @@ global_asm!(
     "    ldr x1, [sp, #256]",
     "    ldr x2, [sp, #264]",
     "    msr elr_el1, x1",
+    //  Clear IRQ mask bit (I=bit 7) in SPSR before returning to userspace
+    //  Exceptions automatically mask IRQs, but we want them enabled in userspace
+    "    bic x2, x2, #0x80",  // Clear bit 7 (I bit)
     "    msr spsr_el1, x2",
     "    add sp, sp, #288",
     "    eret",
@@ -230,6 +233,8 @@ global_asm!(
     "    ldr x13, [sp, #288]",         // ttbr0_el1 (saved)
     "    msr sp_el0, x10",
     "    msr elr_el1, x11",
+    // Clear IRQ mask bit (I=bit 7) in SPSR before returning to userspace
+    "    bic x12, x12, #0x80",         // Clear bit 7 (I bit) - enable IRQs
     "    msr spsr_el1, x12",
     // Conditional TLB invalidation: Only flush if TTBR0 changed
     // This is critical - unconditional flush breaks kernel memory access!
@@ -311,6 +316,8 @@ global_asm!(
     "    ldr x13, [sp, #288]",         // ttbr0_el1 (saved)
     "    msr sp_el0, x10",
     "    msr elr_el1, x11",
+    // Clear IRQ mask bit (I=bit 7) in SPSR before returning to userspace
+    "    bic x12, x12, #0x80",         // Clear bit 7 (I bit) - enable IRQs
     "    msr spsr_el1, x12",
     // Restore TTBR0 (check if changed, but unlikely for IRQ)
     "    mrs x14, ttbr0_el1",
@@ -415,8 +422,12 @@ extern "C" fn exception_curr_el_spx_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
+            // Debug: log ALL interrupts to diagnose timer issue
+            crate::kprintln!("[IRQ] Received IRQ {}", irq_id);
+
             // Check if this is the timer IRQ (special case - handled by kernel)
             if irq_id == crate::generated::memory_config::IRQ_TIMER {
+                crate::kprintln!("[IRQ] Calling timer_tick()");
                 crate::scheduler::timer::timer_tick();
             } else {
                 // Check if a userspace driver has registered for this IRQ
@@ -516,8 +527,12 @@ extern "C" fn exception_lower_el_aarch64_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
+            // Debug: log ALL interrupts to diagnose timer issue
+            crate::kprintln!("[IRQ] Received IRQ {}", irq_id);
+
             // Check if this is the timer IRQ (special case - handled by kernel)
             if irq_id == crate::generated::memory_config::IRQ_TIMER {
+                crate::kprintln!("[IRQ] Calling timer_tick()");
                 crate::scheduler::timer::timer_tick();
             } else {
                 // Check if a userspace driver has registered for this IRQ
