@@ -422,12 +422,8 @@ extern "C" fn exception_curr_el_spx_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
-            // Debug: log ALL interrupts to diagnose timer issue
-            crate::kprintln!("[IRQ] Received IRQ {}", irq_id);
-
             // Check if this is the timer IRQ (special case - handled by kernel)
             if irq_id == crate::generated::memory_config::IRQ_TIMER {
-                crate::kprintln!("[IRQ] Calling timer_tick()");
                 crate::scheduler::timer::timer_tick();
             } else {
                 // Check if a userspace driver has registered for this IRQ
@@ -527,12 +523,8 @@ extern "C" fn exception_lower_el_aarch64_irq() {
     unsafe {
         // Acknowledge interrupt and get IRQ number from GIC
         if let Some(irq_id) = crate::arch::aarch64::gic::acknowledge_irq() {
-            // Debug: log ALL interrupts to diagnose timer issue
-            crate::kprintln!("[IRQ] Received IRQ {}", irq_id);
-
             // Check if this is the timer IRQ (special case - handled by kernel)
             if irq_id == crate::generated::memory_config::IRQ_TIMER {
-                crate::kprintln!("[IRQ] Calling timer_tick()");
                 crate::scheduler::timer::timer_tick();
             } else {
                 // Check if a userspace driver has registered for this IRQ
