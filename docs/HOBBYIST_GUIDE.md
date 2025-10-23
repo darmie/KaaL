@@ -154,71 +154,123 @@ capabilities: [
 
 ### Step 1: Write the Component
 
-Create `my-component/src/main.rs`:
+Create `components/my-service/src/main.rs`:
 
 ```rust
 #![no_std]
 #![no_main]
 
-// Your component's entry point
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    // Your code here!
-    let message = "Hello from my component!\n";
+use kaal_sdk::{
+    component::Component,
+    printf,
+    syscall,
+};
 
-    // Make a syscall to print
-    unsafe {
-        syscall::print(message);
-    }
-
-    // Component loop
-    loop {
-        // Wait for events
-        syscall::wait();
-    }
+// Declare your component using the SDK macro
+kaal_sdk::component! {
+    name: "my_service",
+    type: Service,
+    version: "0.1.0",
+    capabilities: ["memory:map", "caps:allocate"],
+    impl: MyService
 }
 
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
+/// Your component implementation
+pub struct MyService {
+    counter: usize,
+}
+
+impl Component for MyService {
+    fn init() -> kaal_sdk::Result<Self> {
+        printf!("╔═══════════════════════════════════════╗\n");
+        printf!("║       My Service v0.1.0              ║\n");
+        printf!("╚═══════════════════════════════════════╝\n");
+        printf!("\n");
+        printf!("Service initialized successfully!\n");
+
+        Ok(Self { counter: 0 })
+    }
+
+    fn run(&mut self) -> ! {
+        printf!("Entering main loop...\n");
+
+        loop {
+            // Do useful work
+            self.counter += 1;
+
+            if self.counter % 1000 == 0 {
+                printf!("Service running: {} iterations\n", self.counter);
+            }
+
+            // Yield CPU to other processes
+            syscall::yield_now();
+        }
+    }
 }
 ```
 
 ### Step 2: Configure Your Component
 
-Create `my-component/Cargo.toml`:
+Create `components/my-service/Cargo.toml`:
 
 ```toml
 [package]
-name = "my-component"
+name = "my-service"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Add KaaL runtime dependencies here
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+
+[[bin]]
+name = "my-service"
+path = "src/main.rs"
 
 [profile.release]
 panic = "abort"
 lto = true
 opt-level = "z"
+codegen-units = 1
 ```
 
-### Step 3: Integrate with Build System
+### Step 3: Register in Components Config
 
-Add to `build-config.toml`:
+Add to `components.toml`:
 
 ```toml
-[[components]]
-name = "my-component"
-path = "components/my-component"
+[[component]]
+name = "my_service"
+binary = "my-service"
+type = "service"
+priority = 100
+autostart = false  # Set true to spawn at boot
+spawned_by = "system_init"  # Spawned via capability-based allocation
+capabilities = [
+    "memory:map",      # Can map memory
+    "caps:allocate",   # Can allocate capability slots
+]
 ```
 
 ### Step 4: Build and Test
 
 ```bash
-./build.sh --platform qemu-virt
-# Your component will be included in the boot image
+# Build using the Nushell build system
+nu build.nu
+
+# Run in QEMU
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+
+# If autostart=true, your service will spawn automatically!
+# Otherwise, it will be available for on-demand spawning.
 ```
+
+**What happens:**
+1. Build system compiles your component binary
+2. system_init embeds your component's ELF in its registry
+3. At boot, system_init spawns your component from UntypedMemory
+4. Your `init()` runs, then `run()` loop starts
+5. Component runs alongside other processes (ipc_producer, ipc_consumer, notepad)
 
 ## Incremental Development Path
 
@@ -304,37 +356,42 @@ lldb runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 cd kernel && cargo clean
 ```
 
-## Current Status (Chapter 7 Complete)
+## Current Status (Chapter 7.5 Complete - October 2025)
 
-KaaL is under active development. Here's what works today:
+🎉 **Major Milestone**: KaaL now has a **complete capability-based microkernel** with working process spawning!
 
-### ✅ Implemented (Ready to Use)
+### ✅ Core Microkernel Complete
 
 - **Chapter 1**: Bare metal boot, UART output, device tree parsing
-- **Chapter 2**: Frame allocator, MMU setup, kernel page tables
+- **Chapter 2**: Frame allocator, MMU setup, 4-level page tables
 - **Chapter 3**: Exception vectors, syscall interface, trap handling
+- **Chapter 4**: Kernel object model (TCB, CNode, Endpoint, Notification, VSpace, Untyped)
+- **Chapter 5**: IPC (shared memory channels, async notifications)
+- **Chapter 6**: Priority-based preemptive scheduler with timer interrupts
 - **Chapter 7**: Root task creation, EL0 transition, userspace execution
+- **Chapter 7.5**: **Capability-based process spawning** (seL4-style sys_retype)
 
-**This means you can:**
-- Boot the kernel
-- Run code in userspace
-- Make syscalls
-- Allocate memory
-- Handle exceptions
+**What You Can Build Today:**
+- ✅ Multiple processes spawned from UntypedMemory capabilities
+- ✅ Preemptive multitasking (timer-based, 5ms timeslice)
+- ✅ Shared memory IPC between processes
+- ✅ Interrupt-driven drivers (UART keyboard input)
+- ✅ Interactive applications (working text editor!)
 
-### 🚧 In Progress
+**Live Demo - 3 Processes Running:**
+```
+System:
+  ├─ ipc_producer: Sends messages via shared memory
+  ├─ ipc_consumer: Receives and processes messages
+  └─ notepad: Interactive text editor with UART keyboard input
 
-- **Chapter 4**: Thread Control Blocks (TCBs)
-- **Chapter 5**: IPC endpoints and message passing
-- **Chapter 6**: Capability space management
+All spawned from system_init using capability-based allocation!
+```
 
-### 📝 Planned
+### 📋 Next Phase
 
-- **Chapter 8**: Interrupt handling
-- **Chapter 9**: Virtual memory management
-- **Chapter 10**: Device management
-- **Chapter 11**: Scheduling
-- **Chapter 12**: Advanced features
+- **Chapter 8**: Verification & hardening (stress testing, Verus proofs)
+- **Chapter 9**: Framework integration (Capability Broker, Memory Manager)
 
 ## Learning Resources
 
