@@ -46,6 +46,7 @@ const SYS_POLL: usize = 0x1A;
 const SYS_MEMORY_MAP_INTO: usize = 0x1B;
 const SYS_CAP_INSERT_INTO: usize = 0x1C;
 const SYS_CAP_INSERT_SELF: usize = 0x1D;
+const SYS_RETYPE: usize = 0x26;
 const SYS_YIELD: usize = 0x01;
 
 /// Make a syscall to print a message
@@ -450,6 +451,37 @@ unsafe fn sys_cap_insert_self(cap_slot: usize, cap_type: usize, object_ptr: usiz
         in("x1") cap_type,
         in("x2") object_ptr,
         in("x8") SYS_CAP_INSERT_SELF,
+    );
+    result
+}
+
+/// Retype untyped memory into kernel object (capability-based allocation)
+///
+/// # Arguments
+/// * `untyped_slot` - Capability slot containing UntypedMemory capability
+/// * `object_type` - Type of object (1=Untyped, 4=TCB, 5=CNode, 8=Page)
+/// * `size_bits` - Size as log2 (12=4KB, 20=1MB)
+/// * `dest_cnode` - Destination CNode (0=own CSpace)
+/// * `dest_slot` - Destination slot for new capability
+///
+/// # Returns
+/// Physical address of new object, or usize::MAX on error
+unsafe fn sys_retype(
+    untyped_slot: usize,
+    object_type: usize,
+    size_bits: usize,
+    dest_cnode: usize,
+    dest_slot: usize,
+) -> usize {
+    let result: usize;
+    core::arch::asm!(
+        "svc #0",
+        inout("x0") untyped_slot => result,
+        in("x1") object_type,
+        in("x2") size_bits,
+        in("x3") dest_cnode,
+        in("x4") dest_slot,
+        in("x8") SYS_RETYPE,
     );
     result
 }
