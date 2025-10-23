@@ -137,12 +137,15 @@ pub unsafe fn timer_tick() {
         current_tcb.set_time_slice(timeslice - 1);
     }
 
+    // Check the NEW value after decrementing
+    let new_timeslice = current_tcb.time_slice();
+
     // If timeslice expired, preempt
-    if timeslice <= 1 {
+    if new_timeslice == 0 {
         // Reset timeslice for next run
         current_tcb.refill_time_slice();
 
-        crate::kprintln!("[timer] Timeslice expired for TCB {}, yielding to next thread",
+        crate::kprintln!("[timer] Timeslice expired for TCB {}, preempting",
                          current_tcb.tid());
 
         // Preempt current thread
