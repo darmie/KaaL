@@ -8,6 +8,20 @@ use crate::component_loader::{ComponentDescriptor, ComponentType};
 /// All registered components
 pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
+        name: "system_init",
+        binary: "system-init",
+        component_type: ComponentType::Service,
+        priority: 10,
+        autostart: true,
+        capabilities:     &[
+        "untyped:1",
+        "caps:allocate",
+        "memory:map"
+    ],
+        capabilities_bitmask: 9,
+        binary_data: Some(include_bytes!("../../../../components/system-init/target/aarch64-unknown-none/release/system-init")),
+    },
+    ComponentDescriptor {
         name: "serial_driver",
         binary: "serial-driver",
         component_type: ComponentType::Driver,
@@ -68,7 +82,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-producer",
         component_type: ComponentType::Service,
         priority: 100,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "memory:map",
         "notification:signal",
@@ -83,7 +97,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
         priority: 100,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "memory:map",
         "notification:signal",
@@ -183,4 +197,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 12;
+pub const COMPONENT_COUNT: usize = 13;
