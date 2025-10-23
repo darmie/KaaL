@@ -39,6 +39,7 @@ pub mod numbers {
     pub const SYS_CAP_MOVE: usize = 0x23;
     pub const SYS_MEMORY_REMAP: usize = 0x24;
     pub const SYS_MEMORY_SHARE: usize = 0x25;
+    pub const SYS_RETYPE: usize = 0x26;
 
     // IRQ handling syscalls
     pub const SYS_IRQ_HANDLER_GET: usize = 0x40;
@@ -416,6 +417,59 @@ pub fn memory_allocate(size: usize) -> Result<usize> {
             "svc #0",
             syscall_num = in(reg) numbers::SYS_MEMORY_ALLOCATE,
             inlateout("x0") size => result,
+            lateout("x8") _,
+        );
+        Error::from_syscall(result)
+    }
+}
+
+/// Retype untyped memory into a kernel object (capability-based allocation)
+///
+/// This is the PROPER way for userspace to create kernel objects using
+/// delegated UntypedMemory capabilities. Unlike memory_allocate (which uses
+/// kernel's frame allocator), this uses caller's own Untyped caps.
+///
+/// # Arguments
+/// * `untyped_slot` - Capability slot containing UntypedMemory capability
+/// * `object_type` - Type of object to create:
+///   - 1 = UntypedMemory
+///   - 2 = Endpoint
+///   - 3 = Notification
+///   - 4 = TCB
+///   - 5 = CNode
+///   - 6 = VSpace (page table root)
+///   - 7 = PageTable
+///   - 8 = Page
+/// * `size_bits` - Object size as log2 (12 = 4KB, 20 = 1MB, etc.)
+/// * `dest_cnode` - CNode to insert new capability (0 = caller's own CSpace)
+/// * `dest_slot` - Slot number for the new capability
+///
+/// # Returns
+/// Physical address of the newly created object on success.
+///
+/// # Example
+/// ```no_run
+/// // Retype Untyped at slot 5 into a 4KB TCB, place cap at slot 10
+/// let tcb_paddr = sys_retype(5, 4, 12, 0, 10)?;
+/// ```
+pub fn sys_retype(
+    untyped_slot: usize,
+    object_type: usize,
+    size_bits: usize,
+    dest_cnode: usize,
+    dest_slot: usize,
+) -> Result<usize> {
+    unsafe {
+        let result: usize;
+        core::arch::asm!(
+            "mov x8, {syscall_num}",
+            "svc #0",
+            syscall_num = in(reg) numbers::SYS_RETYPE,
+            inlateout("x0") untyped_slot => result,
+            inlateout("x1") object_type => _,
+            inlateout("x2") size_bits => _,
+            inlateout("x3") dest_cnode => _,
+            inlateout("x4") dest_slot => _,
             lateout("x8") _,
         );
         Error::from_syscall(result)
