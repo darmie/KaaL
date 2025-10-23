@@ -79,12 +79,20 @@ pub fn spawn_from_elf_with_untyped(
         // Process image (with extra page for safety)
         let base_size = elf_info.memory_size();
         let process_size = ((base_size + 8192 + 4095) & !4095); // Round up to pages
-        // Calculate log2 ceiling: if size is power of 2, use log2, else round up
-        let process_size_bits = if process_size.is_power_of_two() {
-            process_size.trailing_zeros() as usize
+        // Calculate log2 ceiling: round up to next power of 2, then take log2
+        let process_size_pow2 = if process_size.is_power_of_two() {
+            process_size
         } else {
-            (32 - process_size.leading_zeros()) as usize
+            process_size.next_power_of_two()
         };
+        let process_size_bits = process_size_pow2.trailing_zeros() as usize;
+
+        // Sanity check: size_bits should be reasonable (12 to 25 = 4KB to 32MB)
+        if process_size_bits < 12 || process_size_bits > 25 {
+            printf!("[spawn_from_elf] ERROR: Invalid process_size_bits={} for size={}\n",
+                    process_size_bits, process_size);
+            return Err(Error::InvalidParameter);
+        }
 
         // Allocate capability slots dynamically to avoid conflicts
         let process_cap_slot = syscall::cap_allocate()?;
