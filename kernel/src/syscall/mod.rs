@@ -63,6 +63,7 @@ static mut SHMEM_REGISTRY: [ShmemEntry; 16] = [ShmemEntry::new(); 16];
 /// - capability is not an Endpoint type
 unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
     use crate::objects::CapType;
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -78,7 +79,7 @@ unsafe fn lookup_endpoint_capability(cap_slot: usize) -> *mut Endpoint {
     }
 
     // Look up capability in CSpace
-    let cnode = &*cspace_root;
+    let cnode = &*(cspace_root as *const CNodeCdt);
     let cap = match cnode.lookup(cap_slot) {
         Some(c) => c,
         None => {
@@ -641,6 +642,7 @@ fn sys_process_create(
 ) -> u64 {
     use crate::memory::{alloc_frame, VirtAddr};
     use crate::objects::{TCB, CNode};
+    use crate::objects::cnode_cdt::CNodeCdt;
     use crate::scheduler;
 
     // Check if caller has process creation capability
@@ -827,19 +829,19 @@ fn sys_process_create(
     // - cspace_root + 0x1000: Capability slots array (256 × 32 = 8KB = 2 pages)
     // This avoids overlap with TCB which is allocated immediately after
     let cnode_phys = PA::new(cspace_root as usize);
-    let cspace_ptr = cspace_root as *mut CNode;
+    let cspace_ptr = cspace_root as *mut CNodeCdt;
     let slots_phys = PA::new((cspace_root as usize) + 0x1000); // Slots start 1 page after CNode
 
-    // Create CNode with 256 slots (2^8 = 256 capabilities)
+    // Create CNodeCdt with 256 slots (2^8 = 256 capabilities)
     unsafe {
-        let cnode = CNode::new(8, slots_phys)  // Use separate slots address!
-            .expect("[FATAL] Failed to create CNode for new process");
+        let cnode_cdt = CNodeCdt::new(8, slots_phys)  // Use separate slots address!
+            .expect("[FATAL] Failed to create CNodeCdt for new process");
 
-        // Write initialized CNode to allocated memory
-        core::ptr::write(cspace_ptr, cnode);
+        // Write initialized CNodeCdt to allocated memory
+        core::ptr::write(cspace_ptr, cnode_cdt);
     }
 
-    ksyscall_debug!("[syscall] process_create: CNode initialized with 256 slots at {:#x}", cspace_root);
+    ksyscall_debug!("[syscall] process_create: CNodeCdt initialized with 256 slots at {:#x}", cspace_root);
 
     // Allocate IPC buffer (for now, placeholder address)
     // TODO: Should allocate actual IPC buffer frame
@@ -849,9 +851,11 @@ fn sys_process_create(
     let tcb_ptr = tcb_frame.as_usize() as *mut TCB;
     unsafe {
         // Use capabilities specified by caller
+        // Note: TCB expects *mut CNode, but we created CNodeCdt. Cast is safe because
+        // CNodeCdt has CNode as first field, so they're layout-compatible at the pointer level.
         let tcb = TCB::new(
             pid,
-            cspace_ptr,
+            cspace_ptr as *mut CNode,
             page_table_root as usize,
             ipc_buffer,
             entry_point,
@@ -1349,6 +1353,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr
     use crate::memory::{PAGE_SIZE, VirtAddr, PhysAddr, PageSize};
     use crate::arch::aarch64::page_table::{PageTable, PageTableFlags};
     use crate::objects::CapType;
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     crate::kprintln!("[syscall] memory_map_into: target_tcb_cap={}, phys={:#x}, size={}, virt={:#x}, perms={:#x}",
               target_tcb_cap, phys_addr, size, virt_addr, permissions);
@@ -1373,7 +1378,7 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr
         }
 
         // Look up target TCB capability
-        let cnode = &*cspace_root;
+        let cnode = &*(cspace_root as *const CNodeCdt);
         let cap = match cnode.lookup(target_tcb_cap as usize) {
             Some(c) => c,
             None => {
@@ -1569,10 +1574,43 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
 
         let dest_cnode = &mut *(dest_cnode_cap_obj as *mut CNodeCdt);
 
-        // 5. Create new capability for the allocated object
-        let new_cap = Capability::new(target_type, obj_paddr.as_u64() as usize);
+        // 5. Initialize the object at the allocated physical address
+        // For UntypedMemory, we need BOTH:
+        //   - A frame for the UntypedMemory struct itself
+        //   - The region it covers (already allocated from parent above)
+        let cap_target_paddr = if target_type == CapType::UntypedMemory {
+            // Allocate a frame for the child UntypedMemory struct
+            let struct_frame = match crate::memory::alloc_frame() {
+                Some(frame) => frame,
+                None => {
+                    crate::kprintln!("[syscall] retype: failed to allocate frame for UntypedMemory struct");
+                    return u64::MAX;
+                }
+            };
+            let struct_paddr = struct_frame.phys_addr();
+            let untyped_ptr = struct_paddr.as_usize() as *mut UntypedMemory;
 
-        // 6. Insert capability into destination CNode
+            // Create UntypedMemory object that COVERS the region allocated from parent
+            // obj_paddr is the region start (from parent.retype())
+            let new_untyped = UntypedMemory::new(obj_paddr, size_bits as u8)
+                .expect("[FATAL] Failed to create child UntypedMemory object");
+            core::ptr::write(untyped_ptr, new_untyped);
+
+            crate::kprintln!("[syscall] retype: UntypedMemory struct at {:#x}, covers region {:#x} - {:#x}",
+                            struct_paddr.as_u64(), obj_paddr.as_u64(),
+                            obj_paddr.as_u64() + (1u64 << size_bits));
+
+            // Capability should point to the STRUCT, not the covered region
+            struct_paddr
+        } else {
+            // For other object types, capability points to the allocated memory
+            obj_paddr
+        };
+
+        // 6. Create new capability for the allocated object
+        let new_cap = Capability::new(target_type, cap_target_paddr.as_u64() as usize);
+
+        // 7. Insert capability into destination CNode
         if let Err(e) = dest_cnode.insert_root(dest_slot as usize, new_cap) {
             crate::kprintln!("[syscall] retype: failed to insert cap into slot {}: {:?}", dest_slot, e);
             return u64::MAX;
@@ -1580,8 +1618,10 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
 
         crate::kprintln!("[syscall] retype: ✓ created {:?} cap at slot {}", target_type, dest_slot);
 
-        // Return physical address of new object
-        obj_paddr.as_u64()
+        // Return physical address of the capability target
+        // For UntypedMemory, this is the struct address
+        // For other types, this is the allocated object address
+        cap_target_paddr.as_u64()
     }
 }
 
@@ -1601,59 +1641,71 @@ fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
 /// capabilities and other resources to spawned components.
 fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
     use crate::objects::{Capability, CapType};
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     crate::kprintln!("[syscall] cap_insert_into: target_tcb={}, slot={}, type={}, obj={:#x}",
               target_tcb_cap, target_slot, cap_type, object_ptr);
 
+    crate::kprintln!("[syscall] cap_insert_into: entering unsafe block...");
     unsafe {
         // Get current thread's CSpace
+        crate::kprintln!("[syscall] cap_insert_into: calling current_thread()...");
         let current_tcb = crate::scheduler::current_thread();
         if current_tcb.is_null() {
-            ksyscall_debug!("[syscall] cap_insert_into: no current thread");
+            crate::kprintln!("[syscall] cap_insert_into: no current thread");
             return u64::MAX;
         }
+        crate::kprintln!("[syscall] cap_insert_into: current_tcb={:#x}", current_tcb as usize);
 
         // Check if caller has capability management capability
         if !(*current_tcb).has_capability(TCB::CAP_CAPS) {
-            ksyscall_debug!("[syscall] cap_insert_into: caller lacks CAP_CAPS capability");
+            crate::kprintln!("[syscall] cap_insert_into: caller lacks CAP_CAPS capability");
             return u64::MAX; // Permission denied
         }
+        crate::kprintln!("[syscall] cap_insert_into: ✓ caller has CAP_CAPS");
 
         let cspace_root = (*current_tcb).cspace_root();
         if cspace_root.is_null() {
-            ksyscall_debug!("[syscall] cap_insert_into: thread has no CSpace root");
+            crate::kprintln!("[syscall] cap_insert_into: thread has no CSpace root");
             return u64::MAX;
         }
+        crate::kprintln!("[syscall] cap_insert_into: cspace_root={:#x}", cspace_root as usize);
 
         // Look up target TCB capability from caller's CSpace
-        let cnode = &*cspace_root;
+        crate::kprintln!("[syscall] cap_insert_into: casting cspace_root to CNodeCdt...");
+        let cnode = &*(cspace_root as *const CNodeCdt);
+        crate::kprintln!("[syscall] cap_insert_into: looking up TCB cap at slot {}...", target_tcb_cap);
         let tcb_cap = match cnode.lookup(target_tcb_cap as usize) {
             Some(c) => c,
             None => {
-                ksyscall_debug!("[syscall] cap_insert_into: TCB cap_slot {} not found", target_tcb_cap);
+                crate::kprintln!("[syscall] cap_insert_into: TCB cap_slot {} not found", target_tcb_cap);
                 return u64::MAX;
             }
         };
+        crate::kprintln!("[syscall] cap_insert_into: ✓ found cap, type={:?}", tcb_cap.cap_type());
 
         // Verify it's a TCB capability
         if tcb_cap.cap_type() != CapType::Tcb {
-            ksyscall_debug!("[syscall] cap_insert_into: cap_slot {} is not a TCB (type={:?})",
+            crate::kprintln!("[syscall] cap_insert_into: cap_slot {} is not a TCB (type={:?})",
                      target_tcb_cap, tcb_cap.cap_type());
             return u64::MAX;
         }
+        crate::kprintln!("[syscall] cap_insert_into: ✓ verified TCB capability");
 
         // Get target TCB and its CSpace
         let target_tcb_ptr = tcb_cap.object_ptr() as *mut TCB;
         if target_tcb_ptr.is_null() {
-            ksyscall_debug!("[syscall] cap_insert_into: null target TCB pointer");
+            crate::kprintln!("[syscall] cap_insert_into: null target TCB pointer");
             return u64::MAX;
         }
+        crate::kprintln!("[syscall] cap_insert_into: target_tcb_ptr={:#x}", target_tcb_ptr as usize);
 
         let target_cspace = (*target_tcb_ptr).cspace_root();
         if target_cspace.is_null() {
-            ksyscall_debug!("[syscall] cap_insert_into: target has no CSpace");
+            crate::kprintln!("[syscall] cap_insert_into: target has no CSpace");
             return u64::MAX;
         }
+        crate::kprintln!("[syscall] cap_insert_into: target_cspace={:#x}", target_cspace as usize);
 
         // Convert cap_type from u64 to CapType enum
         let cap_type_enum = match cap_type {
@@ -1679,7 +1731,7 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
         let cap = Capability::new(cap_type_enum, object_ptr as usize);
 
         // Insert into target's CSpace
-        let target_cnode = &mut *target_cspace;
+        let target_cnode = &mut *(target_cspace as *mut CNodeCdt);
 
         // Debug: Check if slot is already occupied
         if !target_cnode.is_empty(target_slot as usize) {
@@ -1689,7 +1741,7 @@ fn sys_cap_insert_into(target_tcb_cap: u64, target_slot: u64, cap_type: u64, obj
             }
         }
 
-        match target_cnode.insert(target_slot as usize, cap) {
+        match target_cnode.insert_root(target_slot as usize, cap) {
             Ok(()) => {
                 crate::kprintln!("[syscall] cap_insert_into: ✓ inserted {:?} cap at slot {}", cap_type_enum, target_slot);
                 0
@@ -2222,6 +2274,7 @@ fn sys_cap_move(src_cnode_cap: u64, src_slot: u64, dest_cnode_cap: u64, dest_slo
 /// 0 on success, u64::MAX on error
 fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
     use crate::objects::{Capability, CapType};
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     crate::kprintln!("[syscall] cap_insert_self: slot={}, type={}, obj={:#x}",
               cap_slot, cap_type, object_ptr);
@@ -2265,7 +2318,7 @@ fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
         let cap = Capability::new(cap_type_enum, object_ptr as usize);
 
         // Insert into caller's own CSpace
-        let cnode = &mut *cspace_root;
+        let cnode = &mut *(cspace_root as *mut CNodeCdt);
 
         // Debug: Check slot status and CNode size
         crate::kprintln!("[syscall] cap_insert_self: CNode has {} slots, inserting at slot {}",
@@ -2278,7 +2331,7 @@ fn sys_cap_insert_self(cap_slot: u64, cap_type: u64, object_ptr: u64) -> u64 {
             crate::kprintln!("[syscall] cap_insert_self: slot {} is already occupied", cap_slot);
         }
 
-        match cnode.insert(cap_slot as usize, cap) {
+        match cnode.insert_root(cap_slot as usize, cap) {
             Ok(()) => {
                 crate::kprintln!("[syscall] cap_insert_self: ✓ inserted {:?} cap at slot {}", cap_type_enum, cap_slot);
                 0
@@ -2607,6 +2660,7 @@ fn sys_notification_create() -> u64 {
 /// Insert a notification capability into the current thread's CSpace
 unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Notification) -> bool {
     use crate::objects::{Capability, CapType};
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -2625,8 +2679,8 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
     let cap = Capability::new(CapType::Notification, notification as usize);
 
     // Insert into CSpace
-    let cnode = &mut *cspace_root;
-    match cnode.insert(cap_slot, cap) {
+    let cnode = &mut *(cspace_root as *mut CNodeCdt);
+    match cnode.insert_root(cap_slot, cap) {
         Ok(()) => {
             ksyscall_debug!("[syscall] insert_notification: cap_slot {} -> notification {:p}", cap_slot, notification);
             true
@@ -2641,6 +2695,7 @@ unsafe fn insert_notification_capability(cap_slot: usize, notification: *mut Not
 /// Look up a notification capability from the current thread's CSpace
 unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
     use crate::objects::{CapType, Capability, Notification};
+    use crate::objects::cnode_cdt::CNodeCdt;
 
     // Get current thread's CSpace root
     let current_tcb = crate::scheduler::current_thread();
@@ -2656,7 +2711,7 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
     }
 
     // Look up capability in CSpace
-    let cnode = &*cspace_root;
+    let cnode = &*(cspace_root as *const CNodeCdt);
     let cap = match cnode.lookup(cap_slot) {
         Some(c) => c,
         None => {

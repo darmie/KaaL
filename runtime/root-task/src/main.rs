@@ -785,22 +785,22 @@ pub extern "C" fn _start() -> ! {
         if let Some(system_init_tcb) = system_init_tcb_cap {
             sys_print("[root_task] Delegating UntypedMemory to system_init...\n");
 
-            // Root-task has UntypedMemory cap at slot 1 (16MB region from kernel)
+            // Root-task has UntypedMemory cap at slot 1 (32MB region from kernel)
             // Strategy: Retype a CHILD Untyped from parent, give it to system_init
             // This way system_init gets its own isolated Untyped memory region
 
             const PARENT_UNTYPED_SLOT: usize = 1;
             const CAP_TYPE_UNTYPED: usize = 1;
-            const CHILD_UNTYPED_SIZE_BITS: usize = 23; // 8MB (half of parent's 16MB)
+            const CHILD_UNTYPED_SIZE_BITS: usize = 24; // 16MB (half of parent's 32MB)
             const TEMP_CHILD_UNTYPED_SLOT: usize = 50; // Temporary slot in root-task CSpace
-            const SYSTEM_INIT_UNTYPED_SLOT: usize = 1; // Target slot in system_init CSpace
+            const SYSTEM_INIT_UNTYPED_SLOT: usize = 10; // Target slot in system_init CSpace (slots 1-2 are occupied)
 
-            // Step 1: Create child Untyped from parent (8MB region)
-            sys_print("  → Creating child Untyped (8MB) from parent...\n");
+            // Step 1: Create child Untyped from parent (16MB region - enough for 2-4 small components)
+            sys_print("  → Creating child Untyped (16MB) from parent...\n");
             let child_untyped_paddr = sys_retype(
                 PARENT_UNTYPED_SLOT,        // Parent Untyped at slot 1
                 CAP_TYPE_UNTYPED,            // Create another Untyped
-                CHILD_UNTYPED_SIZE_BITS,     // 8MB (2^23)
+                CHILD_UNTYPED_SIZE_BITS,     // 16MB (2^24)
                 0,                           // dest_cnode=0 means own CSpace
                 TEMP_CHILD_UNTYPED_SLOT,     // Put it in slot 50 temporarily
             );
@@ -813,17 +813,17 @@ pub extern "C" fn _start() -> ! {
                 sys_print("\n");
 
                 // Step 2: Insert child Untyped cap into system_init's CSpace
-                sys_print("  → Inserting into system_init CSpace slot 1...\n");
+                sys_print("  → Inserting into system_init CSpace slot 10...\n");
                 let result = sys_cap_insert_into(
                     system_init_tcb,             // system_init's TCB cap
-                    SYSTEM_INIT_UNTYPED_SLOT,   // Slot 1 in system_init
+                    SYSTEM_INIT_UNTYPED_SLOT,   // Slot 10 in system_init (slots 1-2 occupied)
                     CAP_TYPE_UNTYPED,            // UntypedMemory capability
                     child_untyped_paddr,         // Physical address of child Untyped
                 );
 
                 if result == 0 {
                     sys_print("  ✓ UntypedMemory delegated to system_init!\n");
-                    sys_print("    system_init can now use sys_retype(1, ...) to spawn processes\n");
+                    sys_print("    system_init can now use sys_retype(10, ...) to spawn processes\n");
                 } else {
                     sys_print("  ✗ Failed to insert cap into system_init\n");
                 }

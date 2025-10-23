@@ -57,6 +57,8 @@ capabilities = [
     "untyped:1",         # Receives UntypedMemory cap from root-task slot 1
     "caps:allocate",     # Can allocate capability slots
     "memory:map",        # Can map pages into child processes
+    "memory:allocate",   # Can allocate physical memory
+    "process:create",    # Can create new processes (for spawning components)
 ]
 
 # Device Drivers - Low-level hardware access

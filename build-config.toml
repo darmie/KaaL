@@ -20,6 +20,11 @@ kernel_stack_size = "0x4000" # 16KB
 # Root task configuration (applies to all platforms)
 root_task_stack_size = "0x10000" # 64KB
 
+# Capability-based memory delegation (seL4-style)
+# UntypedMemory capabilities delegated from kernel to root-task to system_init
+untyped_root_task_size_bits = "26"    # 64MB (2^26) given to root-task by kernel
+untyped_system_init_size_bits = "25"  # 32MB (2^25) delegated to system_init for spawning components
+
 # =============================================================================
 # QEMU virt platform (ARM64 Cortex-A53)
 # =============================================================================

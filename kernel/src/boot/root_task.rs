@@ -425,20 +425,27 @@ pub unsafe fn create_and_start_root_task() -> ! {
     crate::kprintln!("  Creating UntypedMemory capability...");
 
     // Allocate frame for UntypedMemory object
+    crate::kprintln!("  → Allocating frame for UntypedMemory object...");
     let untyped_frame = crate::memory::alloc_frame()
         .expect("[FATAL] Failed to allocate UntypedMemory frame");
+    crate::kprintln!("  → Frame allocated at {:#x}", untyped_frame.phys_addr().as_u64());
     let untyped_phys = untyped_frame.phys_addr();
     let untyped_ptr = untyped_phys.as_usize() as *mut crate::objects::UntypedMemory;
 
-    // Create UntypedMemory object covering 16MB of free RAM for delegation
-    // This will be used by root-task to delegate to system_init
-    // Start after kernel/root-task allocations (~80MB into RAM)
-    let untyped_region_start = PhysAddr::new((memory_config::RAM_BASE + 0x05000000) as usize); // 80MB offset
-    let untyped_region_size_bits = 24; // 16MB (2^24 = 16777216 bytes)
+    // Create UntypedMemory object covering 32MB of free RAM for delegation
+    // This will be used by root-task to delegate to system_init for spawning multiple components
+    // Must be aligned to 32MB boundary: 0x46000000 (96MB) is 32MB-aligned
+    // RAM ends at 0x48000000 (128MB), so we have exactly 32MB from 0x46000000
+    let untyped_region_start = PhysAddr::new((memory_config::RAM_BASE + 0x06000000) as usize); // 96MB offset (32MB-aligned)
+    let untyped_region_size_bits = 25; // 32MB (2^25 = 33554432 bytes)
 
+    crate::kprintln!("  → Creating UntypedMemory object: start={:#x}, size_bits={}",
+                      untyped_region_start.as_u64(), untyped_region_size_bits);
     let untyped_obj = crate::objects::UntypedMemory::new(untyped_region_start, untyped_region_size_bits)
         .expect("[FATAL] Failed to create UntypedMemory object");
+    crate::kprintln!("  → UntypedMemory object created successfully");
     core::ptr::write(untyped_ptr, untyped_obj);
+    crate::kprintln!("  → UntypedMemory written to {:#x}", untyped_ptr as usize);
 
     // Create UntypedMemory capability
     let untyped_cap = crate::objects::Capability::new(

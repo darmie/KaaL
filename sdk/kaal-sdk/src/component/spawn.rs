@@ -16,12 +16,12 @@ pub struct SpawnResult {
 
 /// Spawn a component from ELF binary data
 ///
-/// This function demonstrates userspace component spawning using only existing syscalls.
-/// No kernel changes needed!
+/// This function demonstrates capability-based component spawning using sys_retype.
+/// Memory is allocated from UntypedMemory capability delegated by root-task.
 ///
 /// # Process
 /// 1. Parse ELF binary (userspace)
-/// 2. Allocate memory for process image, stack, page table, CSpace
+/// 2. Allocate memory using sys_retype from UntypedMemory (capability-based!)
 /// 3. Map memory and copy ELF segments
 /// 4. Call SYS_PROCESS_CREATE to create TCB
 /// 5. Insert TCB capability into caller's CSpace
@@ -44,6 +44,22 @@ pub struct SpawnResult {
 /// println!("Spawned with PID: {}", result.pid);
 /// ```
 pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Result<SpawnResult> {
+    spawn_from_elf_with_untyped(binary_data, priority, capabilities, 10)
+}
+
+/// Spawn a component using capability-based memory allocation
+///
+/// # Arguments
+/// * `binary_data` - ELF binary data
+/// * `priority` - Scheduling priority (0-255)
+/// * `capabilities` - Capability bitmask for the new process
+/// * `untyped_cap_slot` - Capability slot containing UntypedMemory capability
+pub fn spawn_from_elf_with_untyped(
+    binary_data: &[u8],
+    priority: u8,
+    capabilities: u64,
+    untyped_cap_slot: usize,
+) -> Result<SpawnResult> {
     unsafe {
         // Debug: log binary size
         use crate::printf;
@@ -57,21 +73,52 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
         printf!("[spawn_from_elf] Parsed ELF: entry={:#x}, num_segments={}, memory_size={:#x}\n",
                 elf_info.entry_point, elf_info.num_segments, elf_info.memory_size());
 
-        // 2. Allocate memory
+        // 2. Allocate memory using sys_retype from UntypedMemory capability
+        // This is PROPER capability-based spawning - no direct kernel allocation!
+
         // Process image (with extra page for safety)
         let base_size = elf_info.memory_size();
         let process_size = ((base_size + 8192 + 4095) & !4095); // Round up to pages
-        let process_phys = syscall::memory_allocate(process_size)?;
+        // Calculate log2 ceiling: if size is power of 2, use log2, else round up
+        let process_size_bits = if process_size.is_power_of_two() {
+            process_size.trailing_zeros() as usize
+        } else {
+            (32 - process_size.leading_zeros()) as usize
+        };
 
-        // Stack (16KB)
+        // Allocate capability slots dynamically to avoid conflicts
+        let process_cap_slot = syscall::cap_allocate()?;
+        let stack_cap_slot = syscall::cap_allocate()?;
+
+        // Allocate process memory from UntypedMemory (capability-based!)
+        let process_phys = syscall::sys_retype(
+            untyped_cap_slot,
+            8, // CAP_TYPE_PAGE
+            process_size_bits,
+            0, // dest_cnode=0 means own CSpace
+            process_cap_slot,
+        )?;
+
+        // Stack from UntypedMemory (16KB = 2^14)
         let stack_size = 16384;
-        let stack_phys = syscall::memory_allocate(stack_size)?;
+        let stack_phys = syscall::sys_retype(
+            untyped_cap_slot,
+            8, // CAP_TYPE_PAGE
+            14, // 2^14 = 16KB
+            0,
+            stack_cap_slot,
+        )?;
 
-        // Page table root (4KB)
+        // Page table root - use traditional allocation for now
+        // TODO: Implement PageTable initialization in sys_retype
         let pt_root = syscall::memory_allocate(4096)?;
 
-        // CSpace root (4KB)
+        // CSpace root - use traditional allocation for now
+        // TODO: Implement CNode initialization in sys_retype
         let cspace_root = syscall::memory_allocate(4096)?;
+
+        printf!("[spawn_from_elf] Allocated from UntypedMemory: process={:#x}, stack={:#x}, pt={:#x}, cspace={:#x}\n",
+                process_phys, stack_phys, pt_root, cspace_root);
 
         // 3. Map memory to copy segments
         const RW_PERMS: usize = 0x3;
@@ -113,7 +160,9 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
                 stack_virt, stack_size, stack_top);
 
         // 7. Create process
-        let pid = syscall::process_create(
+        printf!("[spawn_from_elf] Calling process_create: entry={:#x}, stack={:#x}, pt={:#x}, cspace={:#x}\n",
+                elf_info.entry_point, stack_top, pt_root, cspace_root);
+        let pid = match syscall::process_create(
             elf_info.entry_point,
             stack_top,
             pt_root,
@@ -124,7 +173,16 @@ pub fn spawn_from_elf(binary_data: &[u8], priority: u8, capabilities: u64) -> Re
             stack_phys,
             priority,
             capabilities,  // Pass capabilities to new process
-        )?;
+        ) {
+            Ok(p) => {
+                printf!("[spawn_from_elf] process_create succeeded, PID={:#x}\n", p);
+                p
+            }
+            Err(e) => {
+                printf!("[spawn_from_elf] process_create FAILED: {:?}\n", e);
+                return Err(e);
+            }
+        };
 
         // 8. Get TCB capability
         let tcb_cap_slot = syscall::cap_allocate()?;

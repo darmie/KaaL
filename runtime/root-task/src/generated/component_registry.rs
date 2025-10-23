@@ -16,9 +16,11 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         capabilities:     &[
         "untyped:1",
         "caps:allocate",
-        "memory:map"
+        "memory:map",
+        "memory:allocate",
+        "process:create"
     ],
-        capabilities_bitmask: 9,
+        capabilities_bitmask: 11,
         binary_data: Some(include_bytes!("../../../../components/system-init/target/aarch64-unknown-none/release/system-init")),
     },
     ComponentDescriptor {
