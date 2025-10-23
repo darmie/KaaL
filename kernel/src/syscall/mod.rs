@@ -315,6 +315,9 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
             return u64::MAX; // Error: no current thread
         }
 
+        let current_tid = (*current).tid();
+        crate::kprintln!("[syscall] sys_yield: current TCB {:p} (TID {}) yielding", current, current_tid);
+
         // Save current thread's full context to its TCB
         // The TrapFrame passed to us contains the saved userspace registers
         *(*current).context_mut() = *tf;
@@ -327,9 +330,12 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         let next = crate::scheduler::schedule();
         if next.is_null() {
             // No threads available - this shouldn't happen with idle thread
+            crate::kprintln!("[syscall] sys_yield: schedule() returned null, continuing current");
             (*current).set_state(crate::objects::ThreadState::Running);
             return 0;
         }
+
+        let next_tid = (*next).tid();
 
         if next == current {
             // Scheduler picked the same thread because:
@@ -337,11 +343,15 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
             // - schedule() immediately dequeued it (was head of queue)
             // - This means current was the ONLY thread at its priority
             // Keep it running, no context switch needed
+            crate::kprintln!("[syscall] sys_yield: schedule() returned SAME thread {}, no switch", next_tid);
             (*current).set_state(crate::objects::ThreadState::Running);
             // NOTE: thread is NO LONGER in queue after schedule() dequeued it
             // This is correct - running thread shouldn't be in ready queue
             return 0;
         }
+
+        crate::kprintln!("[syscall] sys_yield: switching from TCB {:p} (TID {}) to TCB {:p} (TID {})",
+                         current, current_tid, next, next_tid);
 
         // Switch to next thread
         let next_tcb = &mut *next;
@@ -352,6 +362,8 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
         let next_context = next_tcb.context();
+        crate::kprintln!("[syscall] sys_yield: next thread PC=0x{:x}, SP=0x{:x}, TTBR0=0x{:x}",
+                         next_context.elr_el1, next_context.sp_el0, next_context.saved_ttbr0);
         *tf = *next_context;
 
         // CRITICAL: Switch TTBR0 NOW to the next thread's page table
@@ -2472,13 +2484,13 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
 ///
 /// Returns: 0 on success, u64::MAX on error
 fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
-    ksyscall_debug!("[syscall] Signal: notification={}, badge=0x{:x}", notification_cap_slot, badge);
+    crate::kprintln!("[syscall] sys_signal called: slot={}, badge=0x{:x}", notification_cap_slot, badge);
 
     unsafe {
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
         if notification_ptr.is_null() {
-            ksyscall_debug!("[syscall] Signal -> error: notification not found for cap_slot {}", notification_cap_slot);
+            crate::kprintln!("[syscall] sys_signal: ERROR - notification not found for slot {}", notification_cap_slot);
             return u64::MAX;
         }
 
@@ -2487,7 +2499,7 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
         // Signal the notification
         notification.signal(badge);
 
-        ksyscall_debug!("[syscall] Signal -> success, signaled with badge 0x{:x}", badge);
+        crate::kprintln!("[syscall] sys_signal: SUCCESS - returning to userspace");
         0
     }
 }
