@@ -747,6 +747,9 @@ pub extern "C" fn _start() -> ! {
     unsafe {
         // Spawn all autostart components
         sys_print("[root_task] Spawning components...\n");
+
+        let mut system_init_tcb_cap: Option<usize> = None;
+
         for component in generated::component_registry::get_autostart_components() {
             sys_print("  → ");
             sys_print(component.name);
@@ -756,6 +759,11 @@ pub extern "C" fn _start() -> ! {
                     sys_print(" (PID: ");
                     print_number(result.pid);
                     sys_print(")\n");
+
+                    // Remember system_init's TCB capability for delegation
+                    if component.name == "system_init" {
+                        system_init_tcb_cap = Some(result.tcb_cap_slot);
+                    }
                 }
                 Err(e) => {
                     sys_print(" - Failed: ");
@@ -770,6 +778,33 @@ pub extern "C" fn _start() -> ! {
                     sys_print("\n");
                 }
             }
+        }
+        sys_print("\n");
+
+        // Delegate UntypedMemory capability to system_init
+        if let Some(system_init_tcb) = system_init_tcb_cap {
+            sys_print("[root_task] Delegating UntypedMemory to system_init...\n");
+
+            // Root-task has UntypedMemory cap at slot 1 (created by kernel at boot)
+            // Kernel created Untyped object at ~0x408d2000 (logged at boot)
+            // We need to insert this same cap into system_init's CSpace
+
+            // Strategy: Use sys_cap_insert_into to copy Untyped capability
+            // - Root-task has Untyped at slot 1 (from kernel)
+            // - Insert into system_init's slot 1 (matching components.toml config: "untyped:1")
+
+            // CAP_TYPE_UNTYPED = 1 (from kernel CapType enum)
+            const CAP_TYPE_UNTYPED: usize = 1;
+            const UNTYPED_SLOT_IN_SYSTEM_INIT: usize = 1;
+
+            // We need to get the Untyped object's physical address
+            // Unfortunately, we can't easily read it from our CSpace
+            // WORKAROUND: For now, system_init will use the SAME Untyped object
+            // by having kernel insert it into system_init's CSpace during spawn
+
+            sys_print("  → NOTE: Untyped delegation requires kernel support\n");
+            sys_print("  → For now, system_init will need kernel to provide Untyped cap\n");
+            sys_print("  → Target: system_init CSpace slot 1\n");
         }
         sys_print("\n");
 

@@ -44,23 +44,20 @@
 #
 # Add your components below in the desired spawn order:
 
-# System Initializer - REMOVED (architectural decision)
-# Root-task now spawns all autostart components directly (proven reliable).
-# system_init was causing multi-spawn bugs - only first spawned process would run.
-# If we need runtime process management later, we can implement a simpler service.
-#
-# [[component]]
-# name = "system_init"
-# binary = "system-init"
-# type = "service"
-# priority = 10
-# autostart = false
-# capabilities = [
-#     "process:create",
-#     "memory:allocate",
-#     "ipc:*",
-#     "caps:allocate",
-# ]
+# System Initializer - Capability-based process spawning
+# Uses delegated UntypedMemory capability from root-task to spawn components
+# This is the PROPER seL4-style architecture for userspace spawning
+[[component]]
+name = "system_init"
+binary = "system-init"
+type = "service"
+priority = 10  # High priority - spawns other components at boot
+autostart = true  # Spawned by root-task, receives Untyped cap
+capabilities = [
+    "untyped:1",         # Receives UntypedMemory cap from root-task slot 1
+    "caps:allocate",     # Can allocate capability slots
+    "memory:map",        # Can map pages into child processes
+]
 
 # Device Drivers - Low-level hardware access
 [[component]]
@@ -113,12 +110,14 @@ capabilities = [
 ]
 
 # Test Components - IPC Testing (Phase 5)
+# These will be spawned BY system_init using capability-based spawning
 [[component]]
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = true # Spawned by root-task at boot
+autostart = false # Will be spawned by system_init via sys_retype
+spawned_by = "system_init"
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -131,7 +130,8 @@ name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = true # Spawned by root-task at boot
+autostart = false # Will be spawned by system_init via sys_retype
+spawned_by = "system_init"
 capabilities = [
     "memory:map",
     "notification:signal",
