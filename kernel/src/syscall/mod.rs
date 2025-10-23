@@ -362,9 +362,22 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
         let next_context = next_tcb.context();
-        crate::kprintln!("[syscall] sys_yield: next thread PC=0x{:x}, SP=0x{:x}, TTBR0=0x{:x}",
-                         next_context.elr_el1, next_context.sp_el0, next_context.saved_ttbr0);
+        crate::kprintln!("[syscall] sys_yield: next TCB={:p}, context at {:p}", next, next_context as *const _);
+        crate::kprintln!("[syscall] sys_yield: next thread PC=0x{:x}, SP=0x{:x}, x29=0x{:x}, TTBR0=0x{:x}",
+                         next_context.elr_el1, next_context.sp_el0, next_context.x29, next_context.saved_ttbr0);
         *tf = *next_context;
+
+        // CRITICAL: Ensure TrapFrame write completes before exception handler reads it
+        unsafe {
+            core::arch::asm!(
+                "dsb sy",  // Data Synchronization Barrier (full system)
+                options(nostack),
+            );
+        }
+
+        // DEBUG: Verify TrapFrame was copied correctly
+        crate::kprintln!("[syscall] sys_yield: AFTER COPY - tf.sp_el0=0x{:x}, tf.elr_el1=0x{:x}, tf.x29=0x{:x}",
+                         tf.sp_el0, tf.elr_el1, tf.x29);
 
         // CRITICAL: Switch TTBR0 NOW to the next thread's page table
         // The exception handler will restore this same value when we eret,
@@ -850,6 +863,11 @@ fn sys_process_create(
         (*tcb_ptr).context_mut().saved_ttbr0 = page_table_root;
         crate::kprintln!("[syscall] process_create: set saved_ttbr0={:#x} for TCB={:#x}",
                         page_table_root, tcb_ptr as usize);
+
+        // DEBUG: Verify TCB context was initialized correctly
+        let ctx = (*tcb_ptr).context();
+        crate::kprintln!("[syscall] process_create: TCB context AFTER init - PC={:#x}, SP={:#x}, x29={:#x}, TTBR0={:#x}",
+                         ctx.elr_el1, ctx.sp_el0, ctx.x29, ctx.saved_ttbr0);
 
         // Set the priority from the component manifest
         // NOTE: In our scheduler, lower numbers = higher priority!
