@@ -762,6 +762,15 @@ fn sys_process_create(
         }
     }
 
+    // Flush instruction cache for code pages to ensure CPU sees latest mappings
+    unsafe {
+        core::arch::asm!(
+            "ic iallu",           // Invalidate all instruction caches
+            "dsb ish",            // Data synchronization barrier
+            "isb",                // Instruction synchronization barrier
+        );
+    }
+
     ksyscall_debug!("[syscall] process_create: code mapped successfully");
     ksyscall_debug!("[syscall] process_create: entry_point={:#x} should be in mapped range {:#x}-{:#x}",
              entry_point, code_virt_base, code_virt_base + (code_pages * PAGE_SIZE));
