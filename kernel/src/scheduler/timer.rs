@@ -145,8 +145,8 @@ pub unsafe fn timer_tick() {
         // Reset timeslice for next run
         current_tcb.refill_time_slice();
 
-        crate::kprintln!("[timer] Timeslice expired for TCB {}, preempting",
-                         current_tcb.tid());
+        // crate::kprintln!("[timer] Timeslice expired for TCB {}, preempting",
+        //                  current_tcb.tid());
 
         // Preempt current thread
         crate::scheduler::yield_current();

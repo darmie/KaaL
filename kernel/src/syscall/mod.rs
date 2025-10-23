@@ -318,7 +318,7 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         }
 
         let current_tid = (*current).tid();
-        crate::kprintln!("[syscall] sys_yield: current TCB {:p} (TID {}) yielding", current, current_tid);
+        // crate::kprintln!("[syscall] sys_yield: current TCB {:p} (TID {}) yielding", current, current_tid);
 
         // Save current thread's full context to its TCB
         // The TrapFrame passed to us contains the saved userspace registers
@@ -345,15 +345,15 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
             // - schedule() immediately dequeued it (was head of queue)
             // - This means current was the ONLY thread at its priority
             // Keep it running, no context switch needed
-            crate::kprintln!("[syscall] sys_yield: schedule() returned SAME thread {}, no switch", next_tid);
+            // crate::kprintln!("[syscall] sys_yield: schedule() returned SAME thread {}, no switch", next_tid);
             (*current).set_state(crate::objects::ThreadState::Running);
             // NOTE: thread is NO LONGER in queue after schedule() dequeued it
             // This is correct - running thread shouldn't be in ready queue
             return 0;
         }
 
-        crate::kprintln!("[syscall] sys_yield: switching from TCB {:p} (TID {}) to TCB {:p} (TID {})",
-                         current, current_tid, next, next_tid);
+        // crate::kprintln!("[syscall] sys_yield: switching from TCB {:p} (TID {}) to TCB {:p} (TID {})",
+        //                  current, current_tid, next, next_tid);
 
         // Switch to next thread
         let next_tcb = &mut *next;
@@ -364,9 +364,9 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         // When we return from this syscall, the exception handler will restore
         // the next thread's context and eret to it
         let next_context = next_tcb.context();
-        crate::kprintln!("[syscall] sys_yield: next TCB={:p}, context at {:p}", next, next_context as *const _);
-        crate::kprintln!("[syscall] sys_yield: next thread PC=0x{:x}, SP=0x{:x}, x29=0x{:x}, TTBR0=0x{:x}",
-                         next_context.elr_el1, next_context.sp_el0, next_context.x29, next_context.saved_ttbr0);
+        // crate::kprintln!("[syscall] sys_yield: next TCB={:p}, context at {:p}", next, next_context as *const _);
+        // crate::kprintln!("[syscall] sys_yield: next thread PC=0x{:x}, SP=0x{:x}, x29=0x{:x}, TTBR0=0x{:x}",
+        //                  next_context.elr_el1, next_context.sp_el0, next_context.x29, next_context.saved_ttbr0);
         *tf = *next_context;
 
         // CRITICAL: Ensure TrapFrame write completes before exception handler reads it
@@ -378,8 +378,8 @@ fn sys_yield(tf: &mut TrapFrame) -> u64 {
         }
 
         // DEBUG: Verify TrapFrame was copied correctly
-        crate::kprintln!("[syscall] sys_yield: AFTER COPY - tf.sp_el0=0x{:x}, tf.elr_el1=0x{:x}, tf.x29=0x{:x}",
-                         tf.sp_el0, tf.elr_el1, tf.x29);
+        // crate::kprintln!("[syscall] sys_yield: AFTER COPY - tf.sp_el0=0x{:x}, tf.elr_el1=0x{:x}, tf.x29=0x{:x}",
+        //                  tf.sp_el0, tf.elr_el1, tf.x29);
 
         // CRITICAL: Switch TTBR0 NOW to the next thread's page table
         // The exception handler will restore this same value when we eret,
@@ -2766,7 +2766,7 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
 ///
 /// Returns: signal bits (non-zero), or u64::MAX on error
 fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
-    crate::kprintln!("[syscall] sys_wait called: notification_cap_slot={}", notification_cap_slot);
+    // crate::kprintln!("[syscall] sys_wait called: notification_cap_slot={}", notification_cap_slot);
     ksyscall_debug!("[syscall] Wait: notification={}", notification_cap_slot);
 
     unsafe {
@@ -2810,7 +2810,7 @@ fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
             None => {
                 // No signals pending - thread has been blocked
                 // Now we need to schedule the next thread
-                crate::kprintln!("[syscall] sys_wait: no signals, blocking thread TCB={:#x}", current as usize);
+                // crate::kprintln!("[syscall] sys_wait: no signals, blocking thread TCB={:#x}", current as usize);
                 let next = crate::scheduler::schedule();
                 if next.is_null() || next == current {
                     // No other thread available - this shouldn't happen if we blocked

@@ -153,7 +153,7 @@ pub unsafe fn enqueue(tcb: *mut TCB) {
 
     let priority = (*tcb).priority();
     let tid = (*tcb).tid();
-    crate::kprintln!("[sched] enqueue: adding TCB {:p} (TID {}, priority {}) to scheduler", tcb, tid, priority);
+    // crate::kprintln!("[sched] enqueue: adding TCB {:p} (TID {}, priority {}) to scheduler", tcb, tid, priority);
     scheduler().enqueue(tcb);
 }
 
