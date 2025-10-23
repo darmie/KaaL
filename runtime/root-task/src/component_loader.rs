@@ -373,11 +373,12 @@ impl ComponentLoader {
         crate::sys_print("\n");
 
         // 9. Unmap the memory (we're done writing to it)
-        crate::sys_print("[loader] Unmapping virt 0x");
+        // TEMPORARILY DISABLED to test if unmap is causing second process hang bug
+        crate::sys_print("[loader] SKIPPING unmap of virt 0x");
         crate::print_hex(virt_mem);
-        crate::sys_print("\n");
-        crate::sys_memory_unmap(virt_mem, process_size);
-        crate::sys_print("[loader] Unmap complete\n");
+        crate::sys_print(" (testing if unmap causes bug)\n");
+        // crate::sys_memory_unmap(virt_mem, process_size);
+        // crate::sys_print("[loader] Unmap complete\n");
 
         // 10. Map stack memory to get unique virtual address for this process
         // This ensures each process has its own stack and prevents stack collisions
