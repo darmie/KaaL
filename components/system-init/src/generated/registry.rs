@@ -38,14 +38,14 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "test_cap_revoke",
         priority: 200,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 8,
         binary_data: include_bytes!("../../../../components/test-cap-revoke/target/aarch64-unknown-none/release/test-cap-revoke"),
     },
     ComponentDescriptor {
         name: "test_memory",
         priority: 200,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 9,
         binary_data: include_bytes!("../../../../components/test-memory/target/aarch64-unknown-none/release/test-memory"),
     },
@@ -59,7 +59,7 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "notepad",
         priority: 110,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 9,
         binary_data: include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad"),
     },

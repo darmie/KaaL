@@ -253,6 +253,7 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_MEMORY_UNMAP => sys_memory_unmap(args[0], args[1]),
         numbers::SYS_MEMORY_REMAP => sys_memory_remap(args[0], args[1], args[2]),
         numbers::SYS_MEMORY_SHARE => sys_memory_share(args[0], args[1], args[2], args[3], args[4]),
+        numbers::SYS_RETYPE => sys_retype(args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_MEMORY_MAP_INTO => sys_memory_map_into(args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_CAP_INSERT_INTO => sys_cap_insert_into(args[0], args[1], args[2], args[3]),
         numbers::SYS_CAP_INSERT_SELF => sys_cap_insert_self(args[0], args[1], args[2]),
@@ -1445,12 +1446,143 @@ fn sys_memory_map_into(target_tcb_cap: u64, phys_addr: u64, size: u64, virt_addr
     }
 }
 
+/// Retype untyped memory into a kernel object (seL4-style capability-based spawning)
+///
+/// Args:
+/// - untyped_cap_slot: Capability slot containing UntypedMemory capability
+/// - object_type: Type of object to create (1=Untyped, 4=TCB, 5=CNode, 8=Page, etc.)
+/// - size_bits: Size of object as log2 (e.g., 12 = 4KB, 20 = 1MB)
+/// - dest_cnode_cap: CNode capability where new cap should be inserted
+/// - dest_slot: Slot in dest CNode for new capability
+///
+/// Returns: Physical address of new object on success, u64::MAX on error
+///
+/// This is the PROPER way for userspace to spawn processes:
+/// 1. Caller must have UntypedMemory capability (delegated from root-task)
+/// 2. Kernel carves object from untyped using watermark allocator
+/// 3. New capability is inserted into caller's CSpace
+/// 4. Original untyped tracks child for revocation
+///
+/// Security: Can ONLY create objects from Untyped caps caller already has.
+/// Cannot forge capabilities or access other processes' memory.
+fn sys_retype(untyped_cap_slot: u64, object_type: u64, size_bits: u64,
+              dest_cnode_cap: u64, dest_slot: u64) -> u64 {
+    use crate::objects::{Capability, CapType, UntypedMemory};
+    use crate::objects::cnode_cdt::CNodeCdt;
+    use crate::memory::PhysAddr;
+
+    crate::kprintln!("[syscall] retype: untyped_slot={}, obj_type={}, size_bits={}, dest_cnode={}, dest_slot={}",
+              untyped_cap_slot, object_type, size_bits, dest_cnode_cap, dest_slot);
+
+    unsafe {
+        // Get caller's CSpace
+        let current_tcb = crate::scheduler::current_thread();
+        if current_tcb.is_null() {
+            crate::kprintln!("[syscall] retype: no current thread");
+            return u64::MAX;
+        }
+
+        let cspace_root = (*current_tcb).cspace_root();
+        if cspace_root.is_null() {
+            crate::kprintln!("[syscall] retype: no CSpace root");
+            return u64::MAX;
+        }
+
+        let caller_cspace = &mut *(cspace_root as *mut CNodeCdt);
+
+        // 1. Lookup UntypedMemory capability
+        let untyped_cap = match caller_cspace.lookup(untyped_cap_slot as usize) {
+            Some(cap) => cap,
+            None => {
+                crate::kprintln!("[syscall] retype: untyped cap not found at slot {}", untyped_cap_slot);
+                return u64::MAX;
+            }
+        };
+
+        // Verify it's an UntypedMemory capability
+        if untyped_cap.cap_type() != CapType::UntypedMemory {
+            crate::kprintln!("[syscall] retype: slot {} is not UntypedMemory (found {:?})",
+                            untyped_cap_slot, untyped_cap.cap_type());
+            return u64::MAX;
+        }
+
+        // Get mutable reference to UntypedMemory object
+        let untyped_ptr = untyped_cap.object_ptr() as *mut UntypedMemory;
+        if untyped_ptr.is_null() {
+            crate::kprintln!("[syscall] retype: untyped object pointer is null");
+            return u64::MAX;
+        }
+
+        let untyped = &mut *untyped_ptr;
+
+        // 2. Convert object_type number to CapType enum
+        let target_type = match object_type {
+            1 => CapType::UntypedMemory,
+            2 => CapType::Endpoint,
+            3 => CapType::Notification,
+            4 => CapType::Tcb,
+            5 => CapType::CNode,
+            6 => CapType::VSpace,
+            7 => CapType::PageTable,
+            8 => CapType::Page,
+            _ => {
+                crate::kprintln!("[syscall] retype: invalid object type {}", object_type);
+                return u64::MAX;
+            }
+        };
+
+        // 3. Retype: allocate from untyped memory
+        let obj_paddr = match untyped.retype(target_type, size_bits as u8) {
+            Ok(paddr) => paddr,
+            Err(e) => {
+                crate::kprintln!("[syscall] retype: failed to retype - {:?}", e);
+                return u64::MAX;
+            }
+        };
+
+        crate::kprintln!("[syscall] retype: allocated {:?} at phys={:#x}, size=2^{} bytes",
+                        target_type, obj_paddr.as_u64(), size_bits);
+
+        // 4. Lookup destination CNode capability
+        let dest_cnode_cap_obj = if dest_cnode_cap == 0 {
+            // 0 means "use caller's own CSpace"
+            cspace_root as *const CNodeCdt
+        } else {
+            match caller_cspace.lookup(dest_cnode_cap as usize) {
+                Some(cap) if cap.cap_type() == CapType::CNode => {
+                    cap.object_ptr() as *const CNodeCdt
+                }
+                _ => {
+                    crate::kprintln!("[syscall] retype: dest_cnode_cap {} not found or not CNode", dest_cnode_cap);
+                    return u64::MAX;
+                }
+            }
+        };
+
+        let dest_cnode = &mut *(dest_cnode_cap_obj as *mut CNodeCdt);
+
+        // 5. Create new capability for the allocated object
+        let new_cap = Capability::new(target_type, obj_paddr.as_u64() as usize);
+
+        // 6. Insert capability into destination CNode
+        if let Err(e) = dest_cnode.insert(dest_slot as usize, new_cap) {
+            crate::kprintln!("[syscall] retype: failed to insert cap into slot {}: {:?}", dest_slot, e);
+            return u64::MAX;
+        }
+
+        crate::kprintln!("[syscall] retype: ✓ created {:?} cap at slot {}", target_type, dest_slot);
+
+        // Return physical address of new object
+        obj_paddr.as_u64()
+    }
+}
+
 /// Insert capability into target process's CSpace (Phase 5)
 ///
 /// Args:
 /// - target_tcb_cap: Capability slot for target process's TCB
-/// - target_slot: Slot number in target's CSpace to insert into
-/// - cap_type: Type of capability (Notification=3, Tcb=4, etc.)
+/// - target_slot: Slot in target's CSpace to insert capability
+/// - cap_type: Type of capability to insert
 /// - object_ptr: Physical address of the capability object
 ///
 /// Returns: 0 on success, u64::MAX on error

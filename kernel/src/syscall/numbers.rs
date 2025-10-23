@@ -229,6 +229,24 @@ pub const SYS_IRQ_HANDLER_ACK: u64 = 0x41;
 /// Returns: Does not return
 pub const SYS_SHUTDOWN: u64 = 0x50;
 
+/// Retype untyped memory into kernel objects (seL4-style capability-based spawning)
+/// Args: untyped_cap_slot, object_type, size_bits, dest_cnode_cap, dest_slot
+/// Returns: physical address of new object on success, -1 on error
+///
+/// This is the PROPER way for userspace to create kernel objects:
+/// 1. Caller must have UntypedMemory capability in their CSpace
+/// 2. Kernel carves object from untyped region (watermark allocator)
+/// 3. New capability is inserted into dest_cnode at dest_slot
+/// 4. Original untyped tracks the child for revocation
+///
+/// Object types:
+///   1 = UntypedMemory, 2 = Endpoint, 3 = Notification, 4 = TCB,
+///   5 = CNode, 6 = VSpace, 7 = PageTable, 8 = Page
+///
+/// Security: Can ONLY create objects from Untyped caps caller already has.
+/// Cannot forge capabilities or access root-task's memory.
+pub const SYS_RETYPE: u64 = 0x26;
+
 /// Register current process as root-task for yield (temporary)
 /// Args: vspace_root (TTBR0 physical address)
 /// Returns: 0 on success
