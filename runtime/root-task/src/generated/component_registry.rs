@@ -12,7 +12,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "system-init",
         component_type: ComponentType::Service,
         priority: 10,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "process:create",
         "memory:allocate",
@@ -83,7 +83,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-producer",
         component_type: ComponentType::Service,
         priority: 100,
-        autostart: false,
+        autostart: true,
         capabilities:     &[
         "memory:map",
         "notification:signal",
@@ -98,7 +98,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "ipc-consumer",
         component_type: ComponentType::Service,
         priority: 100,
-        autostart: false,
+        autostart: true,
         capabilities:     &[
         "memory:map",
         "notification:signal",

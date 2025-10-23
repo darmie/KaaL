@@ -39,14 +39,14 @@
 #
 # Add your components below in the desired spawn order:
 
-# System Initializer - First component spawned
+# System Initializer - TEMPORARILY DISABLED to test if root-task can spawn multiple processes
 # This is the "system_init" component that bootstraps the rest of the system
 [[component]]
 name = "system_init"
 binary = "system-init"
 type = "service"
 priority = 10 # Highest priority - finishes quickly, bootstraps system
-autostart = true
+autostart = false  # DISABLED FOR TESTING
 capabilities = [
     "process:create",  # Can spawn other processes
     "memory:allocate", # Can allocate memory
@@ -105,13 +105,14 @@ capabilities = [
 ]
 
 # Test Components - IPC Testing (Phase 5)
+# TEMPORARILY ENABLED TO TEST ROOT-TASK SPAWNING MULTIPLE PROCESSES
 [[component]]
 name = "ipc_producer"
 binary = "ipc-producer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = false # Spawned by system_init
-spawned_by = "system_init" # Delegation enabled - system_init has capabilities
+autostart = true # TESTING: Spawned by root-task instead of system_init
+#spawned_by = "system_init" # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
@@ -124,8 +125,8 @@ name = "ipc_consumer"
 binary = "ipc-consumer"
 type = "service"
 priority = 100 # Medium priority - actual workload
-autostart = false # Spawned by system_init
-spawned_by = "system_init" # Delegation enabled - system_init has capabilities
+autostart = true # TESTING: Spawned by root-task instead of system_init
+#spawned_by = "system_init" # Delegation enabled - system_init has capabilities
 capabilities = [
     "memory:map",
     "notification:signal",
