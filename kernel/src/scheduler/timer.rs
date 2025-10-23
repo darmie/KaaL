@@ -85,15 +85,16 @@ pub unsafe fn init() {
 /// - Timer must be initialized (init() called)
 pub unsafe fn start_timer() {
     // Set timer value (counts down from this value)
+    // Use VIRTUAL timer (cntv) instead of physical (cntp) so it fires at EL0
     asm!(
-        "msr cntp_tval_el0, {}",
+        "msr cntv_tval_el0, {}",
         in(reg) TIMESLICE_TICKS
     );
 
     // Enable timer and unmask interrupt
-    // CNTP_CTL_EL0: bit 0 = enable, bit 1 = imask (0 = not masked)
+    // CNTV_CTL_EL0: bit 0 = enable, bit 1 = imask (0 = not masked)
     asm!(
-        "msr cntp_ctl_el0, {val}",
+        "msr cntv_ctl_el0, {val}",
         val = in(reg) 0b01u64  // Enable=1, IMask=0
     );
 }
@@ -104,7 +105,7 @@ pub unsafe fn start_timer() {
 pub unsafe fn stop_timer() {
     // Disable timer (clear enable bit)
     asm!(
-        "msr cntp_ctl_el0, {val}",
+        "msr cntv_ctl_el0, {val}",
         val = in(reg) 0b00u64  // Enable=0
     );
 }
