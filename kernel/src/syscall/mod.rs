@@ -19,6 +19,7 @@ struct ShmemEntry {
     name_len: usize,     // Actual length of name
     phys_addr: usize,    // Physical address of shared memory
     size: usize,         // Size in bytes
+    notification_obj: usize, // Kernel notification object pointer (for cross-CSpace signaling)
     valid: bool,         // Whether this entry is in use
 }
 
@@ -29,6 +30,7 @@ impl ShmemEntry {
             name_len: 0,
             phys_addr: 0,
             size: 0,
+            notification_obj: 0,
             valid: false,
         }
     }
@@ -277,8 +279,9 @@ pub fn handle_syscall(tf: &mut TrapFrame) {
         numbers::SYS_CHANNEL_CLOSE => channel::sys_channel_close(args[0]),
 
         // Shared memory registry syscalls
-        numbers::SYS_SHMEM_REGISTER => sys_shmem_register(tf, args[0], args[1], args[2], args[3]),
+        numbers::SYS_SHMEM_REGISTER => sys_shmem_register(tf, args[0], args[1], args[2], args[3], args[4]),
         numbers::SYS_SHMEM_QUERY => sys_shmem_query(tf, args[0], args[1]),
+        numbers::SYS_SHMEM_GET_NOTIFICATION => sys_shmem_get_notification(tf, args[0], args[1], args[2]),
 
         // IRQ handling syscalls
         numbers::SYS_IRQ_HANDLER_GET => sys_irq_handler_get(tf, args[0], args[1], args[2], args[3]),
@@ -963,8 +966,6 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
         }
     }
 
-    crate::kprintln!("[syscall] memory_map: phys={:#x}, size={:#x}, perms={:#x}", phys_addr, size, permissions);
-
     // Round size up to page boundary
     let page_size = PAGE_SIZE as u64;
     let num_pages = size.div_ceil(page_size) as usize;
@@ -979,9 +980,6 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
 
     // Allocate virtual address from the caller's per-thread allocator
     let virt_addr = unsafe { (*current_tcb).alloc_virt_range(aligned_size) };
-
-    crate::kprintln!("[syscall] memory_map: allocated virt range {:#x} - {:#x}, mapping {} pages",
-              virt_addr, virt_addr + aligned_size, num_pages);
 
     // Use USER_DATA preset for userspace read-write data
     // This includes: VALID, TABLE_OR_PAGE, AP_RW_ALL, ACCESSED, INNER_SHARE,
@@ -1024,7 +1022,6 @@ fn sys_memory_map(tf: &mut TrapFrame, phys_addr: u64, size: u64, permissions: u6
     // For new mappings, the TLB won't have stale entries since these addresses weren't mapped before
     // So we don't need explicit TLB invalidation here
 
-    crate::kprintln!("[syscall] memory_map: SUCCESS - returning virt={:#x}", virt_addr);
     virt_addr
 }
 
@@ -2739,8 +2736,6 @@ unsafe fn lookup_notification_capability(cap_slot: usize) -> *mut Notification {
 ///
 /// Returns: 0 on success, u64::MAX on error
 fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
-    // crate::kprintln!("[syscall] sys_signal called: slot={}, badge=0x{:x}", notification_cap_slot, badge);
-
     unsafe {
         // Look up notification from capability slot
         let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
@@ -2766,9 +2761,6 @@ fn sys_signal(notification_cap_slot: u64, badge: u64) -> u64 {
 ///
 /// Returns: signal bits (non-zero), or u64::MAX on error
 fn sys_wait(tf: &mut TrapFrame, notification_cap_slot: u64) -> u64 {
-    // crate::kprintln!("[syscall] sys_wait called: notification_cap_slot={}", notification_cap_slot);
-    ksyscall_debug!("[syscall] Wait: notification={}", notification_cap_slot);
-
     unsafe {
         // Get current thread
         let current = crate::scheduler::current_thread();
@@ -2869,9 +2861,9 @@ fn sys_poll(notification_cap_slot: u64) -> u64 {
 }
 
 /// Register shared memory with the kernel registry
-/// Args: name_ptr, name_len, phys_addr, size
+/// Args: name_ptr, name_len, phys_addr, size, notification_cap_slot
 /// Returns: 0 on success, u64::MAX on error
-fn sys_shmem_register(tf: &TrapFrame, name_ptr: u64, name_len: u64, phys_addr: u64, size: u64) -> u64 {
+fn sys_shmem_register(tf: &TrapFrame, name_ptr: u64, name_len: u64, phys_addr: u64, size: u64, notification_cap_slot: u64) -> u64 {
     use core::cmp::min;
 
     if name_len == 0 || name_len > 32 {
@@ -2886,6 +2878,19 @@ fn sys_shmem_register(tf: &TrapFrame, name_ptr: u64, name_len: u64, phys_addr: u
         return u64::MAX;
     }
 
+    // Look up the notification capability to get the kernel object pointer
+    let notification_obj = if notification_cap_slot != 0 {
+        unsafe {
+            let notification_ptr = lookup_notification_capability(notification_cap_slot as usize);
+            if notification_ptr.is_null() {
+                return u64::MAX;
+            }
+            notification_ptr as usize
+        }
+    } else {
+        0 // No notification (polling mode)
+    };
+
     // Find free slot in registry
     unsafe {
         for entry in SHMEM_REGISTRY.iter_mut() {
@@ -2896,11 +2901,8 @@ fn sys_shmem_register(tf: &TrapFrame, name_ptr: u64, name_len: u64, phys_addr: u
                 entry.name_len = len;
                 entry.phys_addr = phys_addr as usize;
                 entry.size = size as usize;
+                entry.notification_obj = notification_obj;
                 entry.valid = true;
-
-                kprintln!("[syscall] shmem_register: registered '{}' at phys={:#x}, size={:#x}",
-                         core::str::from_utf8(&name_buf[..len]).unwrap_or("<invalid>"),
-                         phys_addr, size);
                 return 0;
             }
         }
@@ -2932,17 +2934,68 @@ fn sys_shmem_query(tf: &TrapFrame, name_ptr: u64, name_len: u64) -> u64 {
                 && entry.name[..entry.name_len] == name_buf[..name_len as usize] {
                     // Found it - return phys_addr in lower 32 bits, size in upper 32 bits
                     // Actually, let's just return phys_addr and use a separate syscall for size
-                    kprintln!("[syscall] shmem_query: found '{}' at phys={:#x}, size={:#x}",
-                             core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"),
-                             entry.phys_addr, entry.size);
                     return entry.phys_addr as u64;
                 }
         }
     }
 
-    kprintln!("[syscall] shmem_query: not found '{}'",
-             core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"));
     0
+}
+
+/// Get notification capability for a shared memory channel
+/// This allows the consumer to get a capability to signal the producer's notification
+/// Args: name_ptr, name_len, dest_cnode_slot, dest_cap_slot
+/// Returns: 0 on success, u64::MAX on error
+fn sys_shmem_get_notification(tf: &TrapFrame, name_ptr: u64, name_len: u64, dest_cap_slot: u64) -> u64 {
+    if name_len == 0 || name_len > 32 {
+        return u64::MAX;
+    }
+
+    // Copy channel name from userspace
+    let mut name_buf = [0u8; 32];
+    if !unsafe { copy_from_user(name_ptr, &mut name_buf[..name_len as usize], name_len as usize, tf.saved_ttbr0) } {
+        kprintln!("[syscall] shmem_get_notification: failed to copy name from userspace");
+        return u64::MAX;
+    }
+
+    // Search for matching entry and create capability
+    unsafe {
+        let mut found_obj: usize = 0;
+        for entry in SHMEM_REGISTRY.iter() {
+            if entry.valid && entry.name_len == name_len as usize
+                && entry.name[..entry.name_len] == name_buf[..name_len as usize] {
+                    found_obj = entry.notification_obj;
+                    break;
+                }
+        }
+
+        if found_obj == 0 {
+            kprintln!("[syscall] shmem_get_notification: no notification for '{}'",
+                     core::str::from_utf8(&name_buf[..name_len as usize]).unwrap_or("<invalid>"));
+            return u64::MAX;
+        }
+
+        // Create a new capability in the caller's CSpace pointing to the notification object
+        let current_tcb = crate::scheduler::current_thread();
+        let cspace_root = (*current_tcb).cspace_root();
+
+        if cspace_root.is_null() {
+            kprintln!("[syscall] shmem_get_notification: null cspace_root");
+            return u64::MAX;
+        }
+
+        use crate::objects::cnode_cdt::CNodeCdt;
+        use crate::objects::{CapType, Capability};
+        let cspace = &mut *(cspace_root as *mut CNodeCdt);
+
+        // Create and insert notification capability into caller's CSpace
+        let notification_cap = Capability::new(CapType::Notification, found_obj);
+        if let Err(_) = cspace.insert_root(dest_cap_slot as usize, notification_cap) {
+            return u64::MAX;
+        }
+    }
+
+    0 // Return success
 }
 
 // ==============================================================================

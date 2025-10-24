@@ -120,21 +120,20 @@ impl IRQHandler {
     /// Acknowledge IRQ and re-enable it
     ///
     /// This is called by the userspace driver after it has serviced the interrupt.
-    /// It unmasks the IRQ at the GIC, allowing future interrupts to be delivered.
+    /// It performs EOI (End Of Interrupt) and unmasks the IRQ at the GIC.
     ///
     /// # Safety
     /// Must be called from the owning driver thread
     pub unsafe fn ack(&mut self) {
-        // Enable IRQ at GIC
-        if !self.enabled {
-            // First ack - enable IRQ for the first time
-            gic::enable_irq(self.irq_num);
-            self.enabled = true;
-        } else {
-            // Subsequent ack - IRQ is already enabled in GIC configuration,
-            // we just need to ensure it's not masked
-            // (The EOI in the IRQ handler already unmasks it)
-        }
+        // Signal End Of Interrupt to the GIC
+        // This is deferred from the IRQ handler to ensure the device has cleared
+        // its interrupt line before we tell the GIC the interrupt is complete.
+        // For level-sensitive interrupts, EOI before device clear causes spurious re-trigger.
+        gic::end_of_interrupt(self.irq_num);
+
+        // Enable/unmask the IRQ at the GIC for the next interrupt
+        gic::enable_irq(self.irq_num);
+        self.enabled = true;
     }
 
     /// Signal the notification (called by kernel IRQ handler)

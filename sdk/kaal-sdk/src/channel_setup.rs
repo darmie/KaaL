@@ -64,6 +64,8 @@ pub fn establish_channel(
     buffer_size: usize,
     role: ChannelRole,
 ) -> Result<ChannelConfig, &'static str> {
+    use crate::printf;
+
     // Validate inputs
     if channel_name.is_empty() || channel_name.len() > 32 {
         return Err("Channel name must be 1-32 characters");
@@ -86,6 +88,8 @@ pub fn establish_channel(
                 Ok(addr) => addr,
                 Err(_) => return Err("Failed to map buffer into address space"),
             };
+            // WORKAROUND: This prevents optimization bug - DO NOT REMOVE
+            if buffer_virt == 0 { printf!(""); }
 
             // Create notification BEFORE registering (so SharedRing can be initialized)
             let notification_cap = match syscall::notification_create() {
@@ -126,18 +130,12 @@ pub fn establish_channel(
                 ptr::write(value_ptr, notification_cap as u64);
             }
 
-            // Register the physical address with the kernel broker
-            // After this point, consumers can query and map the memory
-            use crate::printf;
-            printf!("[channel_setup] About to register with broker\n");
+            // Register the physical address and notification with the kernel broker
+            // After this point, consumers can query and map the memory, and get the notification
             unsafe {
-                syscall::shmem_register(channel_name, buffer_phys, buffer_size)
+                syscall::shmem_register(channel_name, buffer_phys, buffer_size, notification_cap)
                     .map_err(|_| "Failed to register shared memory with broker")?;
             }
-            printf!("[channel_setup] Registered successfully\n");
-
-            printf!("[channel_setup] Returning: buffer_virt={:#x}, notification_cap={}\n",
-                    buffer_virt, notification_cap);
             (buffer_phys, buffer_virt, Some(notification_cap))
         }
         ChannelRole::Consumer => {
@@ -153,42 +151,32 @@ pub fn establish_channel(
                 Err(_) => return Err("Failed to map shared buffer into address space"),
             };
 
-            (buffer_phys, buffer_virt, None)
+            // Get notification capability from the kernel broker
+            // This creates a capability in our CSpace pointing to the producer's notification object
+            const CONSUMER_NOTIFY_SLOT: usize = 103; // Allocate slot 103 for the notification
+            unsafe {
+                syscall::shmem_get_notification(channel_name, CONSUMER_NOTIFY_SLOT)
+                    .map_err(|_| "Failed to get notification capability from broker")?;
+            }
+
+            (buffer_phys, buffer_virt, Some(CONSUMER_NOTIFY_SLOT))
         }
     };
 
-    // Step 3: Extract notification (already created by producer if applicable)
+    // Step 3: Determine notification capability
+    // Producer has notification for signaling consumer (not used yet - polling instead)
+    // Consumer has no notification (will use polling)
     let notification_cap = match producer_notification {
-        Some(cap) => cap, // Producer already created it
-        None => {
-            // Consumer extracts notification from SharedRing created by producer
-            // The producer has already initialized the SharedRing with the notification
-            use crate::ipc::SharedRing;
-            use crate::printf;
-            let ring_ptr = virt_addr as *const SharedRing<u8, 256>;
-            let ring = unsafe { &*ring_ptr };
-
-            printf!("[channel_setup] Consumer reading notification from SharedRing at {:#x}\n", ring_ptr as usize);
-            // Extract the consumer_notify field that producer set up
-            match ring.get_consumer_notify() {
-                Some(notify_cap) => {
-                    printf!("[channel_setup] Consumer extracted notification: {}\n", notify_cap);
-                    notify_cap as usize
-                }
-                None => {
-                    printf!("[channel_setup] ERROR: SharedRing consumer_notify is None!\n");
-                    return Err("Producer has not initialized SharedRing with notification")
-                }
-            }
-        }
+        Some(cap) => cap, // Producer has notification (unused for now)
+        None => 0,  // Consumer doesn't need notification for polling
     };
 
     // WORKAROUND: This printf prevents a heisenbug where buffer_addr gets corrupted
     // The bug appears to be related to compiler optimization or stack layout
-    // Removing this line causes notepad to crash with FAR=0x164 (wrong buffer address)
+    // Removing this line causes crashes with FAR=0x66/0x164 (wrong buffer address)
     // Root cause: likely printf! macro's static mut globals affecting register allocation
-    use crate::printf;
-    printf!("[channel_setup] virt_addr={:#x}\n", virt_addr);
+    // This line MUST remain for correctness even though it produces debug output
+    printf!("[IPC] Channel established: {:#x}\n", virt_addr);
 
     // TODO: For proper IPC, we need to:
     // - Share the physical address with the other component via broker

@@ -532,13 +532,15 @@ extern "C" fn exception_lower_el_aarch64_irq() {
             // Check if this is the timer IRQ (special case - handled by kernel)
             if irq_id == crate::generated::memory_config::IRQ_TIMER {
                 crate::scheduler::timer::timer_tick();
+                // Timer is kernel-handled, so EOI immediately
+                crate::arch::aarch64::gic::end_of_interrupt(irq_id);
             } else {
-                // Check if a userspace driver has registered for this IRQ
+                // Userspace IRQ - signal driver and DEFER EOI until IRQHandler_Ack
+                // The IRQ is now masked at GIC (IAR read masks it)
+                // Driver will service device, then call IRQHandler_Ack to EOI and unmask
                 crate::objects::irq_handler::handle_irq(irq_id);
+                // DO NOT call end_of_interrupt here - deferred until userspace acks
             }
-
-            // Signal end of interrupt to GIC
-            crate::arch::aarch64::gic::end_of_interrupt(irq_id);
         }
         // Spurious IRQ if None - just return
     }

@@ -26,6 +26,7 @@ pub mod numbers {
 
     pub const SYS_SHMEM_REGISTER: usize = 0x33;
     pub const SYS_SHMEM_QUERY: usize = 0x34;
+    pub const SYS_SHMEM_GET_NOTIFICATION: usize = 0x35;
 
     // Privileged syscalls for root-task
     pub const SYS_MEMORY_MAP_INTO: usize = 0x1B;
@@ -997,13 +998,14 @@ macro_rules! syscall {
 /// Register shared memory with the kernel registry
 ///
 /// Allows producer to publish physical address for consumers to discover
-pub unsafe fn shmem_register(channel_name: &str, phys_addr: usize, size: usize) -> crate::Result<()> {
+pub unsafe fn shmem_register(channel_name: &str, phys_addr: usize, size: usize, notification_cap: usize) -> crate::Result<()> {
     let result = crate::syscall!(
         numbers::SYS_SHMEM_REGISTER,
         channel_name.as_ptr(),
         channel_name.len(),
         phys_addr,
-        size
+        size,
+        notification_cap
     );
 
     if result == usize::MAX {
@@ -1027,6 +1029,24 @@ pub unsafe fn shmem_query(channel_name: &str) -> crate::Result<usize> {
         Err(crate::Error::SyscallFailed)
     } else {
         Ok(phys_addr)
+    }
+}
+
+/// Get notification capability for a shared memory channel
+///
+/// Allows consumer to get a capability to the producer's notification for signaling
+pub unsafe fn shmem_get_notification(channel_name: &str, dest_cap_slot: usize) -> crate::Result<()> {
+    let result = crate::syscall!(
+        numbers::SYS_SHMEM_GET_NOTIFICATION,
+        channel_name.as_ptr(),
+        channel_name.len(),
+        dest_cap_slot
+    );
+
+    if result == usize::MAX {
+        Err(crate::Error::SyscallFailed)
+    } else {
+        Ok(())
     }
 }
 

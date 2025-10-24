@@ -102,22 +102,18 @@ impl Component for Notepad {
         printf!("  Ctrl+Q (^Q) - Quit and shutdown\n");
         printf!("\n");
         printf!("Ready. Start typing!\n");
-        printf!("> ");
 
         // Establish IPC channel with UART driver for input
         // Retry until uart_driver is ready (it may not have started yet)
-        printf!("[notepad] Waiting for UART driver to be ready...\n");
         let input_channel = loop {
             match establish_channel("kaal.uart.output", IPC_BUFFER_SIZE, ChannelRole::Consumer) {
                 Ok(config) => {
-                    printf!("[notepad] Connected to UART driver (buffer: {:#x})\n", config.buffer_addr);
-                    printf!("[notepad] Using notification cap: {}\n", config.notification_cap);
-
                     let msg_config = MsgChannelConfig {
                         shared_memory: config.buffer_addr,
                         receiver_notify: config.notification_cap as u64,
                         sender_notify: config.notification_cap as u64,
                     };
+
                     break unsafe { Channel::receiver(msg_config) };
                 }
                 Err(_) => {
@@ -126,6 +122,9 @@ impl Component for Notepad {
                 }
             }
         };
+
+        // Print prompt AFTER channel establishment (so IPC debug message doesn't interrupt)
+        printf!("> ");
 
         Ok(Self {
             lines: [Line::new(); 32],
@@ -138,17 +137,15 @@ impl Component for Notepad {
     }
 
     fn run(&mut self) -> ! {
-        printf!("[notepad] Entering main loop, waiting for input...\n");
-
         loop {
-            // Receive character from UART driver via IPC
+            // Receive character from UART driver via IPC (blocking on notification)
             match self.input_channel.receive() {
                 Ok(ch) => {
                     // Process the character
                     self.process_char(ch);
                 }
                 Err(_) => {
-                    // No character available, yield
+                    // Error receiving, yield and try again
                     syscall::yield_now();
                 }
             }

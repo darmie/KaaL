@@ -73,6 +73,7 @@ pub struct ChannelConfig {
 pub struct Channel<T: Copy + 'static> {
     ring: &'static SharedRing<T, 256>,
     role: ChannelRole,
+    my_notification: u64, // My notification cap for waiting (receiver) or signaling back (sender)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +99,7 @@ impl<T: Copy + 'static> Channel<T> {
         Self {
             ring,
             role: ChannelRole::Sender,
+            my_notification: config.receiver_notify, // Sender signals the RECEIVER's notification
         }
     }
 
@@ -117,6 +119,7 @@ impl<T: Copy + 'static> Channel<T> {
         Self {
             ring,
             role: ChannelRole::Receiver,
+            my_notification: config.receiver_notify,
         }
     }
 
@@ -185,16 +188,24 @@ impl<T: Copy + 'static> Channel<T> {
     pub fn receive(&self) -> Result<T, IpcError> {
         assert_eq!(self.role, ChannelRole::Receiver, "receive() called on sender channel");
 
+        // Streaming receive model: keep trying to read from ring buffer
         loop {
             match self.ring.pop() {
                 Ok(message) => {
-                    // Message received successfully
-                    // Sender is automatically signaled by SharedRing
+                    // Got message from stream
                     return Ok(message);
                 }
                 Err(IpcError::BufferEmpty) => {
-                    // Channel empty - wait for sender to produce data
-                    self.ring.wait_consumer()?;
+                    // Stream empty - block until producer signals more data available
+                    use crate::syscall;
+                    match syscall::wait(self.my_notification as usize) {
+                        Ok(_signals) => {
+                            // Producer signaled - loop back to try reading from stream again
+                        }
+                        Err(_) => {
+                            return Err(IpcError::NotificationFailed);
+                        }
+                    }
                 }
                 Err(e) => return Err(e),
             }

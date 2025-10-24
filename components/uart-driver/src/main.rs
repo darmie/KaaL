@@ -85,7 +85,7 @@ impl Component for UartDriver {
         let irq_handler_slot = syscall::cap_allocate()?;
 
         // Bind UART IRQ to IRQ notification
-        printf!("[uart_driver] Binding IRQ {} to notification\n", UART0_IRQ);
+        printf!("[uart_driver] Binding IRQ {} to notification {}\n", UART0_IRQ, irq_notification_cap);
         match unsafe {
             syscall::irq_handler_get(
                 IRQ_CONTROL_SLOT,
@@ -140,24 +140,32 @@ impl Component for UartDriver {
 
     fn run(&mut self) -> ! {
         loop {
-            // Wait for notification (blocks until IRQ fires)
+            // Wait for IRQ notification - this blocks until hardware interrupt fires
             match syscall::wait(self.notification_cap) {
                 Ok(_badge) => {
                     self.irq_count += 1;
 
-                    // Handle RX interrupt
+                    // Check if this is a real UART interrupt
                     if self.uart.has_rx_interrupt() {
+                        // Process RX interrupt
                         self.handle_rx_interrupt();
                         self.uart.clear_rx_interrupts();
-                    }
 
-                    // Acknowledge IRQ to re-enable it
-                    if let Err(_) = unsafe { syscall::irq_handler_ack(self.irq_handler_slot) } {
-                        printf!("[uart_driver] ERROR: Failed to ACK IRQ\n");
+                        // Acknowledge IRQ to kernel (performs EOI and re-enables interrupt)
+                        match unsafe { syscall::irq_handler_ack(self.irq_handler_slot) } {
+                            Ok(_) => {}
+                            Err(_) => {
+                                printf!("[uart_driver] ERROR: Failed to ACK IRQ!\n");
+                            }
+                        }
+                    } else {
+                        // Spurious interrupt - clear and ack anyway
+                        self.uart.clear_interrupts(0xFF);
+                        let _ = unsafe { syscall::irq_handler_ack(self.irq_handler_slot) };
                     }
                 }
                 Err(_) => {
-                    // Wait failed - yield and retry
+                    printf!("[uart_driver] ERROR: wait() failed!\n");
                     syscall::yield_now();
                 }
             }
@@ -168,17 +176,21 @@ impl Component for UartDriver {
 impl UartDriver {
     /// Handle receive interrupt - buffer incoming data
     fn handle_rx_interrupt(&mut self) {
-        // Read all available bytes from UART FIFO
+        // Read ALL available bytes from UART FIFO (streaming model)
         while let Some(byte) = self.uart.read_byte() {
             self.char_count += 1;
 
-            // Echo character back to UART
+            // Echo character back to UART for user feedback
             self.uart.write_byte(byte);
 
-            // Send to notepad via IPC channel if established
+            // Push to stream (SharedRing buffer) - notepad will consume from stream
             if let Some(ref mut channel) = self.output_channel {
-                if let Err(_) = channel.send(byte) {
-                    printf!("[uart_driver] WARN: Failed to send char to notepad\n");
+                // Use try_send (non-blocking) - driver should never block
+                if let Err(e) = channel.try_send(byte) {
+                    use kaal_sdk::ipc::IpcError;
+                    if !matches!(e, IpcError::BufferFull { .. }) {
+                        printf!("[uart_driver] WARN: Failed to send: {:?}\n", e);
+                    }
                 }
             } else {
                 // No channel - store in buffer

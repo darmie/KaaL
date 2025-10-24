@@ -208,6 +208,12 @@ pub const SYS_SHMEM_REGISTER: u64 = 0x33;
 /// Allows consumer to discover the physical address allocated by producer
 pub const SYS_SHMEM_QUERY: u64 = 0x34;
 
+/// Get notification capability for a shared memory channel
+/// Args: channel_name_ptr, channel_name_len, dest_cap_slot
+/// Returns: 0 on success, u64::MAX on error
+/// Creates a capability in the caller's CSpace pointing to the producer's notification
+pub const SYS_SHMEM_GET_NOTIFICATION: u64 = 0x35;
+
 // IRQ handling syscalls
 
 /// IRQControl_Get - Allocate an IRQ handler (requires IRQControl capability)
