@@ -95,14 +95,25 @@ pub fn establish_channel(
 
             // Initialize SharedRing in the mapped memory with the notification
             // This MUST happen before shmem_register so consumers see initialized memory
-            use crate::ipc::SharedRing;
             use core::ptr;
-            let ring_ptr = buffer_virt as *mut SharedRing<u8, 256>;
+
+            // Zero the entire buffer first (includes the ring buffer and atomics)
             unsafe {
-                ptr::write(ring_ptr, SharedRing::with_notifications(
-                    notification_cap as u64,  // consumer_notify
-                    0,                         // producer_notify (not used)
-                ));
+                ptr::write_bytes(buffer_virt as *mut u8, 0, buffer_size);
+            }
+
+            // Now set the notification field at the correct offset
+            // SharedRing layout: buffer[256], head(usize), tail(usize), consumer_notify(Option<u64>), producer_notify(Option<u64>)
+            // Offset calculations:
+            // - buffer: 0..256
+            // - head: 256..264 (AtomicUsize = usize = 8 bytes)
+            // - tail: 264..272
+            // - consumer_notify: 272..288 (Option<u64> = 16 bytes with discriminant)
+            // - producer_notify: 288..304
+            let consumer_notify_offset = 256 + 8 + 8; // After buffer + head + tail
+            let consumer_notify_ptr = (buffer_virt + consumer_notify_offset) as *mut Option<u64>;
+            unsafe {
+                ptr::write(consumer_notify_ptr, Some(notification_cap as u64));
             }
 
             // Register the physical address with the kernel broker
