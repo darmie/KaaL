@@ -191,8 +191,20 @@ name = "notepad"
 binary = "notepad"
 type = "application"
 priority = 110   # Medium priority - text editor
-autostart = true # Testing UART input/output
+autostart = false # Disabled in favor of todo_app for testing
 spawned_by = "system_init" # Spawned by system_init using capability-based spawning
+capabilities = [
+    "memory:map",     # Needs to map shared IPC buffer from UART driver
+    "caps:allocate",  # Needs to allocate capability slot for notification
+]
+
+[[component]]
+name = "todo_app"
+binary = "todo-app"
+type = "application"
+priority = 105   # Medium priority - task manager
+autostart = true # Launch at boot to test TUI
+spawned_by = "system_init"
 capabilities = [
     "memory:map",     # Needs to map shared IPC buffer from UART driver
     "caps:allocate",  # Needs to allocate capability slot for notification

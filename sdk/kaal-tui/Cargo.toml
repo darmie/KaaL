@@ -1,17 +1,23 @@
 [package]
-name = "notepad"
+name = "kaal-tui"
 version = "0.1.0"
 edition = "2021"
 
 [workspace]
 # Opt out of parent workspace
 
+[lib]
+name = "kaal_tui"
+path = "src/lib.rs"
+
 [dependencies]
-kaal-sdk = { path = "../../sdk/kaal-sdk" }
-kaal-tui = { path = "../../sdk/kaal-tui" }
+kaal-sdk = { path = "../kaal-sdk" }
+
+[profile.dev]
+panic = "abort"
 
 [profile.release]
+panic = "abort"
 opt-level = "z"
 lto = true
 codegen-units = 1
-panic = "abort"

@@ -129,7 +129,7 @@ rustup default nightly
 rustup target add aarch64-unknown-none
 ```
 
-### Building a Bootable Image
+### Building and Running
 
 KaaL uses a Nushell-based build system to create bootable images for any configured platform:
 
@@ -140,14 +140,9 @@ nu build.nu
 # Build and run in QEMU
 nu build.nu --run
 
-# Build for specific platform
-nu build.nu --platform rpi4
-
-# Clean build
-nu build.nu --clean
-
-# List available platforms
-nu build.nu --list-platforms
+# Or run manually
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
 ```
 
 The build system:
@@ -157,6 +152,39 @@ The build system:
 4. Generates component registry for system_init
 5. Builds system_init (with embedded component binaries)
 6. Packages kernel + root-task into bootable ELF image
+
+### Try the Demo Apps
+
+KaaL includes fully functional TUI (Terminal User Interface) applications:
+
+**📝 Notepad** - A line-based text editor with screen clearing:
+```bash
+# notepad is enabled by default
+nu build.nu
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+```
+
+**✅ Todo App** - A vi-style task manager with rich TUI:
+```bash
+# Enable todo-app in components.toml (set autostart = true)
+nu build.nu
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -m 128M -nographic \
+  -kernel runtime/elfloader/target/aarch64-unknown-none-elf/release/elfloader
+```
+
+**Todo App Features:**
+- Vi-style navigation (j/k keys)
+- Add/delete/toggle todos
+- Visual checkboxes and highlighting
+- Full-screen TUI with box drawing
+- Color-coded status bar
+
+Both apps demonstrate:
+- **kaal-tui** library: ANSI escape sequences for colors, cursor control, and drawing
+- **Keyboard input**: IRQ-driven UART with proper EOI handling
+- **IPC**: Cross-CSpace notification sharing between UART driver and apps
+- **Screen clearing**: Clean startup without kernel boot messages
 
 Configure platforms in [build-config.toml](build-config.toml).
 
@@ -182,6 +210,7 @@ Configure platforms in [build-config.toml](build-config.toml).
 ### SDK
 
 - **kaal-sdk**: Syscall wrappers, component patterns, spawning helpers
+- **kaal-tui**: Terminal UI library with ANSI escape sequences (colors, cursor control, box drawing)
 - **Capability API**: Allocate, transfer, manage capabilities
 - **Memory API**: Allocate, map, unmap physical memory
 - **IPC API**: Shared memory channels, notifications, typed messaging

@@ -20,6 +20,7 @@ use kaal_sdk::{
     message::{Channel, ChannelConfig as MsgChannelConfig},
     channel_setup::{establish_channel, ChannelRole},
 };
+use kaal_tui::{screen, cursor};
 
 // Declare as application component
 kaal_sdk::component! {
@@ -86,6 +87,10 @@ impl Line {
 
 impl Component for Notepad {
     fn init() -> kaal_sdk::Result<Self> {
+        // Clear screen and reset cursor
+        screen::clear();
+        cursor::home();
+
         printf!("\n");
         printf!("╔═══════════════════════════════════════╗\n");
         printf!("║        KaaL Notepad v0.1.0            ║\n");
