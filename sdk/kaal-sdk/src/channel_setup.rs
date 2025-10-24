@@ -73,7 +73,7 @@ pub fn establish_channel(
         return Err("Buffer size must be non-zero and page-aligned");
     }
 
-    let (phys_addr, virt_addr) = match role {
+    let (phys_addr, virt_addr, producer_notification) = match role {
         ChannelRole::Producer => {
             // Producer allocates the shared buffer physical memory
             let buffer_phys = match syscall::memory_allocate(buffer_size) {
@@ -87,13 +87,32 @@ pub fn establish_channel(
                 Err(_) => return Err("Failed to map buffer into address space"),
             };
 
+            // Create notification BEFORE registering (so SharedRing can be initialized)
+            let notification_cap = match syscall::notification_create() {
+                Ok(cap) => cap,
+                Err(_) => return Err("Failed to create notification"),
+            };
+
+            // Initialize SharedRing in the mapped memory with the notification
+            // This MUST happen before shmem_register so consumers see initialized memory
+            use crate::ipc::SharedRing;
+            use core::ptr;
+            let ring_ptr = buffer_virt as *mut SharedRing<u8, 256>;
+            unsafe {
+                ptr::write(ring_ptr, SharedRing::with_notifications(
+                    notification_cap as u64,  // consumer_notify
+                    0,                         // producer_notify (not used)
+                ));
+            }
+
             // Register the physical address with the kernel broker
+            // After this point, consumers can query and map the memory
             unsafe {
                 syscall::shmem_register(channel_name, buffer_phys, buffer_size)
                     .map_err(|_| "Failed to register shared memory with broker")?;
             }
 
-            (buffer_phys, buffer_virt)
+            (buffer_phys, buffer_virt, Some(notification_cap))
         }
         ChannelRole::Consumer => {
             // Query the broker for the physical address
@@ -108,20 +127,14 @@ pub fn establish_channel(
                 Err(_) => return Err("Failed to map shared buffer into address space"),
             };
 
-            (buffer_phys, buffer_virt)
+            (buffer_phys, buffer_virt, None)
         }
     };
 
-    // Step 3: Create or extract notification for signaling
-    let notification_cap = match role {
-        ChannelRole::Producer => {
-            // Producer creates the notification
-            match syscall::notification_create() {
-                Ok(cap) => cap,
-                Err(_) => return Err("Failed to create notification"),
-            }
-        }
-        ChannelRole::Consumer => {
+    // Step 3: Extract notification (already created by producer if applicable)
+    let notification_cap = match producer_notification {
+        Some(cap) => cap, // Producer already created it
+        None => {
             // Consumer extracts notification from SharedRing created by producer
             // The producer has already initialized the SharedRing with the notification
             use crate::ipc::SharedRing;

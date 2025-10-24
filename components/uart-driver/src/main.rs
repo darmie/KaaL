@@ -111,21 +111,7 @@ impl Component for UartDriver {
             Ok(config) => {
                 printf!("[uart_driver] Output channel established (buffer: {:#x})\n", config.buffer_addr);
                 printf!("[uart_driver] IPC notification cap: {}\n", config.notification_cap);
-
-                // Initialize the SharedRing structure in shared memory with IPC notification
-                use kaal_sdk::ipc::SharedRing;
-                use core::ptr;
-
-                let ring_ptr = config.buffer_addr as *mut SharedRing<u8, 256>;
-                unsafe {
-                    // Initialize with the IPC notification (from channel config)
-                    // This notification will be signaled when we send data
-                    ptr::write(ring_ptr, SharedRing::with_notifications(
-                        config.notification_cap as u64,  // consumer_notify (notepad will wait on this)
-                        0,                                // producer_notify (not used)
-                    ));
-                    printf!("[uart_driver] Initialized SharedRing with IPC notification\n");
-                }
+                // Note: establish_channel() has already initialized SharedRing with notification
 
                 let msg_config = MsgChannelConfig {
                     shared_memory: config.buffer_addr,
