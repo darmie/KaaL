@@ -164,13 +164,21 @@ pub fn establish_channel(
             // Consumer extracts notification from SharedRing created by producer
             // The producer has already initialized the SharedRing with the notification
             use crate::ipc::SharedRing;
+            use crate::printf;
             let ring_ptr = virt_addr as *const SharedRing<u8, 256>;
             let ring = unsafe { &*ring_ptr };
 
+            printf!("[channel_setup] Consumer reading notification from SharedRing at {:#x}\n", ring_ptr as usize);
             // Extract the consumer_notify field that producer set up
             match ring.get_consumer_notify() {
-                Some(notify_cap) => notify_cap as usize,
-                None => return Err("Producer has not initialized SharedRing with notification"),
+                Some(notify_cap) => {
+                    printf!("[channel_setup] Consumer extracted notification: {}\n", notify_cap);
+                    notify_cap as usize
+                }
+                None => {
+                    printf!("[channel_setup] ERROR: SharedRing consumer_notify is None!\n");
+                    return Err("Producer has not initialized SharedRing with notification")
+                }
             }
         }
     };
