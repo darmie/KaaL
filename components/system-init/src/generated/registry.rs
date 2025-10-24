@@ -59,8 +59,22 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "notepad",
         priority: 110,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 9,
         binary_data: include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad"),
+    },
+    ComponentDescriptor {
+        name: "todo_app",
+        priority: 105,
+        autostart: false,
+        capabilities_bitmask: 9,
+        binary_data: include_bytes!("../../../../components/todo-app/target/aarch64-unknown-none/release/todo-app"),
+    },
+    ComponentDescriptor {
+        name: "system_monitor",
+        priority: 90,
+        autostart: true,
+        capabilities_bitmask: 9,
+        binary_data: include_bytes!("../../../../components/system-monitor/target/aarch64-unknown-none/release/system-monitor"),
     },
 ];

@@ -1,0 +1,25 @@
+[package]
+name = "system-monitor"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# Opt out of parent workspace
+
+[[bin]]
+name = "system-monitor"
+path = "src/main.rs"
+
+[dependencies]
+kaal-sdk = { path = "../../sdk/kaal-sdk" }
+kaal-tui = { path = "../../sdk/kaal-tui" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

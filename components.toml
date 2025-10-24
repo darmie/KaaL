@@ -203,7 +203,19 @@ name = "todo_app"
 binary = "todo-app"
 type = "application"
 priority = 105   # Medium priority - task manager
-autostart = true # Launch at boot to test TUI
+autostart = false # Can be launched from system monitor
+spawned_by = "system_init"
+capabilities = [
+    "memory:map",     # Needs to map shared IPC buffer from UART driver
+    "caps:allocate",  # Needs to allocate capability slot for notification
+]
+
+[[component]]
+name = "system_monitor"
+binary = "system-monitor"
+type = "application"
+priority = 90    # High priority - main UI
+autostart = true # Launch at boot as main interface
 spawned_by = "system_init"
 capabilities = [
     "memory:map",     # Needs to map shared IPC buffer from UART driver
