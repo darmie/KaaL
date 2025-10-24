@@ -690,7 +690,14 @@ pub mod memory_config;
     $mod_rs | save --force runtime/root-task/src/generated/mod.rs
 
     # Generate component descriptors
+    # Root-task should only spawn components with spawned_by="root" or no spawned_by field
     let descriptors = ($components | each { |comp|
+        # Skip components that should be spawned by system_init
+        let spawned_by = ($comp.spawned_by? | default "root")
+        if $spawned_by == "system_init" {
+            return null
+        }
+
         let caps = ($comp.capabilities | each { |cap| $"        \"($cap)\"" } | str join ",\n")
         let caps_array = if ($caps | is-empty) { "    &[]" } else { $"    &[\n($caps)\n    ]" }
 
@@ -717,9 +724,13 @@ pub mod memory_config;
         capabilities_bitmask: ($caps_bitmask),
         binary_data: ($binary_data),
     }"
-    } | str join ",\n")
+    } | compact | str join ",\n")
 
-    let comp_count = ($components | length)
+    # Count only components that will be included (after filtering system_init components)
+    let comp_count = ($components | each { |comp|
+        let spawned_by = ($comp.spawned_by? | default "root")
+        if $spawned_by != "system_init" { 1 } else { null }
+    } | compact | length)
     let registry_code = (
         "//! Component Registry\n" +
         "//!\n" +

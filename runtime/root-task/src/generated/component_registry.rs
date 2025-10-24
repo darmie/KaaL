@@ -80,36 +80,6 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: None,
     },
     ComponentDescriptor {
-        name: "ipc_producer",
-        binary: "ipc-producer",
-        component_type: ComponentType::Service,
-        priority: 100,
-        autostart: false,
-        capabilities:     &[
-        "memory:map",
-        "notification:signal",
-        "notification:wait",
-        "caps:allocate"
-    ],
-        capabilities_bitmask: 13,
-        binary_data: Some(include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer")),
-    },
-    ComponentDescriptor {
-        name: "ipc_consumer",
-        binary: "ipc-consumer",
-        component_type: ComponentType::Service,
-        priority: 100,
-        autostart: false,
-        capabilities:     &[
-        "memory:map",
-        "notification:signal",
-        "notification:wait",
-        "caps:allocate"
-    ],
-        capabilities_bitmask: 13,
-        binary_data: Some(include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer")),
-    },
-    ComponentDescriptor {
         name: "test_minimal",
         binary: "test-minimal",
         component_type: ComponentType::Service,
@@ -160,19 +130,6 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary_data: Some(include_bytes!("../../../../components/uart-driver/target/aarch64-unknown-none/release/uart-driver")),
     },
     ComponentDescriptor {
-        name: "notepad",
-        binary: "notepad",
-        component_type: ComponentType::Application,
-        priority: 110,
-        autostart: true,
-        capabilities:     &[
-        "memory:map",
-        "caps:allocate"
-    ],
-        capabilities_bitmask: 9,
-        binary_data: Some(include_bytes!("../../../../components/notepad/target/aarch64-unknown-none/release/notepad")),
-    },
-    ComponentDescriptor {
         name: "shell",
         binary: "shell",
         component_type: ComponentType::Application,
@@ -199,4 +156,4 @@ pub fn get_component(name: &str) -> Option<&'static ComponentDescriptor> {
 }
 
 /// Total number of components
-pub const COMPONENT_COUNT: usize = 13;
+pub const COMPONENT_COUNT: usize = 10;
