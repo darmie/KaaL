@@ -112,10 +112,28 @@ pub fn establish_channel(
         }
     };
 
-    // Step 3: Create notification for signaling
-    let notification_cap = match syscall::notification_create() {
-        Ok(cap) => cap,
-        Err(_) => return Err("Failed to create notification"),
+    // Step 3: Create or extract notification for signaling
+    let notification_cap = match role {
+        ChannelRole::Producer => {
+            // Producer creates the notification
+            match syscall::notification_create() {
+                Ok(cap) => cap,
+                Err(_) => return Err("Failed to create notification"),
+            }
+        }
+        ChannelRole::Consumer => {
+            // Consumer extracts notification from SharedRing created by producer
+            // The producer has already initialized the SharedRing with the notification
+            use crate::ipc::SharedRing;
+            let ring_ptr = virt_addr as *const SharedRing<u8, 256>;
+            let ring = unsafe { &*ring_ptr };
+
+            // Extract the consumer_notify field that producer set up
+            match ring.get_consumer_notify() {
+                Some(notify_cap) => notify_cap as usize,
+                None => return Err("Producer has not initialized SharedRing with notification"),
+            }
+        }
     };
 
     // WORKAROUND: This printf prevents a heisenbug where buffer_addr gets corrupted

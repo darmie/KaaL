@@ -164,7 +164,7 @@ pub static COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
         binary: "notepad",
         component_type: ComponentType::Application,
         priority: 110,
-        autostart: true,
+        autostart: false,
         capabilities:     &[
         "memory:map",
         "caps:allocate"

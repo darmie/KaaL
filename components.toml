@@ -191,7 +191,7 @@ name = "notepad"
 binary = "notepad"
 type = "application"
 priority = 110   # Medium priority - text editor
-autostart = true # Testing UART input/output
+autostart = false # Can be enabled for testing UART input/output
 spawned_by = "system_init" # Spawned by system_init using capability-based spawning
 capabilities = [
     "memory:map",     # Needs to map shared IPC buffer from UART driver

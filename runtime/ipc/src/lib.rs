@@ -235,6 +235,15 @@ impl<T: Copy, const N: usize> SharedRing<T, N> {
         (head + 1) % N == tail
     }
 
+    /// Get the consumer notification capability
+    ///
+    /// Returns the notification capability that the producer signals
+    /// when data is available. Used by consumers to extract the
+    /// notification from a SharedRing initialized by the producer.
+    pub fn get_consumer_notify(&self) -> Option<NotificationCap> {
+        self.consumer_notify
+    }
+
     /// Wait for consumer notification (blocking)
     ///
     /// Blocks the current thread until the consumer notification is signaled.
