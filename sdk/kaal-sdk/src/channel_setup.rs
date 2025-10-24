@@ -110,19 +110,34 @@ pub fn establish_channel(
             // - tail: 264..272
             // - consumer_notify: 272..288 (Option<u64> = 16 bytes with discriminant)
             // - producer_notify: 288..304
+            //
+            // Option<u64> layout in memory:
+            // - Byte 0: discriminant (0=None, 1=Some)
+            // - Bytes 1-7: padding
+            // - Bytes 8-15: u64 value
             let consumer_notify_offset = 256 + 8 + 8; // After buffer + head + tail
-            let consumer_notify_ptr = (buffer_virt + consumer_notify_offset) as *mut Option<u64>;
             unsafe {
-                ptr::write(consumer_notify_ptr, Some(notification_cap as u64));
+                // Write discriminant: 1 for Some
+                let discriminant_ptr = (buffer_virt + consumer_notify_offset) as *mut u8;
+                ptr::write(discriminant_ptr, 1);
+
+                // Write the u64 value at offset +8
+                let value_ptr = (buffer_virt + consumer_notify_offset + 8) as *mut u64;
+                ptr::write(value_ptr, notification_cap as u64);
             }
 
             // Register the physical address with the kernel broker
             // After this point, consumers can query and map the memory
+            use crate::printf;
+            printf!("[channel_setup] About to register with broker\n");
             unsafe {
                 syscall::shmem_register(channel_name, buffer_phys, buffer_size)
                     .map_err(|_| "Failed to register shared memory with broker")?;
             }
+            printf!("[channel_setup] Registered successfully\n");
 
+            printf!("[channel_setup] Returning: buffer_virt={:#x}, notification_cap={}\n",
+                    buffer_virt, notification_cap);
             (buffer_phys, buffer_virt, Some(notification_cap))
         }
         ChannelRole::Consumer => {
