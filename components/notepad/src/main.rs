@@ -111,6 +111,8 @@ impl Component for Notepad {
             match establish_channel("kaal.uart.output", IPC_BUFFER_SIZE, ChannelRole::Consumer) {
                 Ok(config) => {
                     printf!("[notepad] Connected to UART driver (buffer: {:#x})\n", config.buffer_addr);
+                    printf!("[notepad] Using notification cap: {}\n", config.notification_cap);
+
                     let msg_config = MsgChannelConfig {
                         shared_memory: config.buffer_addr,
                         receiver_notify: config.notification_cap as u64,

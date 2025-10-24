@@ -80,17 +80,17 @@ impl Component for UartDriver {
         unsafe { uart.init(); }
         printf!("[uart_driver] Initialized: 115200 8N1, FIFOs enabled\n");
 
-        // Create notification for UART IRQ
-        let notification_cap = syscall::notification_create()?;
+        // Create notification for UART IRQ (separate from IPC notification)
+        let irq_notification_cap = syscall::notification_create()?;
         let irq_handler_slot = syscall::cap_allocate()?;
 
-        // Bind UART IRQ to notification
+        // Bind UART IRQ to IRQ notification
         printf!("[uart_driver] Binding IRQ {} to notification\n", UART0_IRQ);
         match unsafe {
             syscall::irq_handler_get(
                 IRQ_CONTROL_SLOT,
                 UART0_IRQ,
-                notification_cap,
+                irq_notification_cap,
                 irq_handler_slot,
             )
         } {
@@ -110,15 +110,21 @@ impl Component for UartDriver {
         let output_channel = match establish_channel("kaal.uart.output", IPC_BUFFER_SIZE, ChannelRole::Producer) {
             Ok(config) => {
                 printf!("[uart_driver] Output channel established (buffer: {:#x})\n", config.buffer_addr);
+                printf!("[uart_driver] IPC notification cap: {}\n", config.notification_cap);
 
-                // Initialize the SharedRing structure in shared memory
+                // Initialize the SharedRing structure in shared memory with IPC notification
                 use kaal_sdk::ipc::SharedRing;
                 use core::ptr;
 
                 let ring_ptr = config.buffer_addr as *mut SharedRing<u8, 256>;
                 unsafe {
-                    ptr::write(ring_ptr, SharedRing::new());
-                    printf!("[uart_driver] Initialized SharedRing<u8, 256> in shared memory\n");
+                    // Initialize with the IPC notification (from channel config)
+                    // This notification will be signaled when we send data
+                    ptr::write(ring_ptr, SharedRing::with_notifications(
+                        config.notification_cap as u64,  // consumer_notify (notepad will wait on this)
+                        0,                                // producer_notify (not used)
+                    ));
+                    printf!("[uart_driver] Initialized SharedRing with IPC notification\n");
                 }
 
                 let msg_config = MsgChannelConfig {
@@ -138,7 +144,7 @@ impl Component for UartDriver {
         Ok(Self {
             uart,
             rx_buffer: RingBuffer::new(),
-            notification_cap,
+            notification_cap: irq_notification_cap,  // Use IRQ notification for waiting
             irq_handler_slot,
             irq_count: 0,
             char_count: 0,
