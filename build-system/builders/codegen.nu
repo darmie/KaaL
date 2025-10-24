@@ -252,8 +252,8 @@ pub mod registry;
                 name: $comp.name,
                 type: $comp.type,
                 priority: $comp.priority,
-                # Components with spawned_by="system_init" are autostart for system_init
-                autostart: $spawned_by_system_init,
+                # Component must have autostart=true AND spawned_by="system_init"
+                autostart: (($comp.autostart? | default false) and $spawned_by_system_init),
                 capabilities_bitmask: $caps_bitmask,
                 # Path is relative to components/system-init/src/generated/registry.rs
                 # Need to go up 4 levels to project root, then into components/

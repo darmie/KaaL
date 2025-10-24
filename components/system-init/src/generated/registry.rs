@@ -17,14 +17,14 @@ pub const COMPONENT_REGISTRY: &[ComponentDescriptor] = &[
     ComponentDescriptor {
         name: "ipc_producer",
         priority: 100,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-producer/target/aarch64-unknown-none/release/ipc-producer"),
     },
     ComponentDescriptor {
         name: "ipc_consumer",
         priority: 100,
-        autostart: true,
+        autostart: false,
         capabilities_bitmask: 13,
         binary_data: include_bytes!("../../../../components/ipc-consumer/target/aarch64-unknown-none/release/ipc-consumer"),
     },
